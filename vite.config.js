@@ -22,7 +22,7 @@ export default defineConfig({
       },
     }),
   ].filter(Boolean),
-  base: '/ICTlab/',
+  base: '/',
   build: {
     outDir: 'docs',
     sourcemap: false,
