@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { IconEye, IconEyeOff } from '../../components/Icons'
+import bcrypt from 'bcryptjs'
 
 export default function AdminLogin() {
   const { setSession } = useAppStore()
@@ -16,15 +17,14 @@ export default function AdminLogin() {
     if (!email.trim() || !password.trim()) { setError('Enter your email and password.'); return }
     setLoading(true); setError('')
 
-    const { data: authData, error: authError } = await sb.auth.signInWithPassword({
-      email: email.trim().toLowerCase(), password,
-    })
-    if (authError) { setError('Incorrect email or password.'); setLoading(false); return }
+    const { data: rows } = await sb.from('settings').select('key, value').in('key', ['admin_email', 'admin_password'])
+    const cfg = Object.fromEntries((rows || []).map(r => [r.key, r.value]))
 
-    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
-    if (saRow?.value !== authData.user.id) {
-      await sb.auth.signOut()
-      setError('This account does not have super admin access.')
+    const emailMatch = cfg.admin_email?.toLowerCase() === email.trim().toLowerCase()
+    const passMatch  = cfg.admin_password && await bcrypt.compare(password, cfg.admin_password)
+
+    if (!emailMatch || !passMatch) {
+      setError('Incorrect email or password.')
       setLoading(false); return
     }
 
