@@ -30,9 +30,9 @@ writeFileSync('docs/oauth-callback.html', `<!DOCTYPE html>
 </html>`)
 console.log('✓ docs/oauth-callback.html recreated')
 
-// CNAME — custom domain for GitHub Pages
-writeFileSync('docs/CNAME', 'ictlab.app')
-console.log('✓ docs/CNAME recreated')
+// CNAME — set when a custom domain is configured; omit for now to use GitHub Pages default URL
+// writeFileSync('docs/CNAME', 'ictlab.app')
+// console.log('✓ docs/CNAME recreated')
 
 // .nojekyll — prevents GitHub Pages from running Jekyll (which can strip/ignore files)
 writeFileSync('docs/.nojekyll', '')
