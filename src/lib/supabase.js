@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// TODO: Replace with your ICT-Lab Supabase project credentials
-const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT.supabase.co'
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'
+const SUPABASE_URL = 'https://ilqnwprvxwbhvrjstwsd.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8'
 
 // Auth storage adapter — powers the "Keep me signed in" checkbox.
 // Login sets ictlab_keep_signed_in BEFORE calling signInWithPassword.
