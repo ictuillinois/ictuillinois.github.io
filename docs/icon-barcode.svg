@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
+  <defs>
+    <linearGradient id="bcBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00897b"/>
+      <stop offset="100%" stop-color="#004d40"/>
+    </linearGradient>
+    <linearGradient id="scanLine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(0,230,180,0)"/>
+      <stop offset="50%" stop-color="rgba(0,230,180,0.95)"/>
+      <stop offset="100%" stop-color="rgba(0,230,180,0)"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="240" fill="url(#bcBg)"/>
+
+  <!-- Subtle radial glow center -->
+  <radialGradient id="cGlow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="rgba(0,230,180,0.12)"/>
+    <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+  </radialGradient>
+  <rect width="400" height="240" fill="url(#cGlow)"/>
+
+  <!-- Barcode bars — realistic varying widths centered on card -->
+  <!-- bars start at x=72, total width ~256, height 130 centered at y=120 -->
+  <!-- Pattern: alternating black/white bars of 1x, 2x, 3x widths -->
+  <g fill="rgba(255,255,255,0.9)" transform="translate(72, 55)">
+    <!-- bar sequence: w=3,gap=2,w=6,gap=2,w=3,gap=4,w=8,gap=2,w=4,gap=2,w=3,gap=4,w=6,gap=2,w=3,gap=2,w=8,gap=4,w=3,gap=2,w=5,gap=2,w=3,gap=4,w=6,gap=2,w=4,gap=2,w=3,gap=4,w=8,gap=2,w=3,gap=2,w=6 -->
+    <rect x="0"   y="0" width="4"  height="130"/>
+    <rect x="8"   y="0" width="7"  height="130"/>
+    <rect x="19"  y="0" width="3"  height="130"/>
+    <rect x="25"  y="0" width="9"  height="130"/>
+    <rect x="38"  y="0" width="4"  height="130"/>
+    <rect x="45"  y="0" width="3"  height="130"/>
+    <rect x="51"  y="0" width="7"  height="130"/>
+    <rect x="62"  y="0" width="4"  height="130"/>
+    <rect x="70"  y="0" width="9"  height="130"/>
+    <rect x="83"  y="0" width="3"  height="130"/>
+    <rect x="89"  y="0" width="5"  height="130"/>
+    <rect x="98"  y="0" width="8"  height="130"/>
+    <rect x="109" y="0" width="3"  height="130"/>
+    <rect x="115" y="0" width="6"  height="130"/>
+    <rect x="125" y="0" width="4"  height="130"/>
+    <rect x="133" y="0" width="3"  height="130"/>
+    <rect x="140" y="0" width="9"  height="130"/>
+    <rect x="152" y="0" width="4"  height="130"/>
+    <rect x="159" y="0" width="7"  height="130"/>
+    <rect x="169" y="0" width="3"  height="130"/>
+    <rect x="176" y="0" width="5"  height="130"/>
+    <rect x="184" y="0" width="8"  height="130"/>
+    <rect x="195" y="0" width="3"  height="130"/>
+    <rect x="201" y="0" width="4"  height="130"/>
+    <rect x="208" y="0" width="7"  height="130"/>
+    <rect x="219" y="0" width="9"  height="130"/>
+    <rect x="232" y="0" width="3"  height="130"/>
+    <rect x="238" y="0" width="6"  height="130"/>
+    <rect x="248" y="0" width="4"  height="130"/>
+    <rect x="255" y="0" width="3"  height="130"/>
+  </g>
+
+  <!-- Scanner frame corners -->
+  <g stroke="#00e5b4" stroke-width="3.5" fill="none" stroke-linecap="round" filter="url(#glow)">
+    <!-- Top-left -->
+    <path d="M60,30 L60,52 M60,30 L82,30"/>
+    <!-- Top-right -->
+    <path d="M340,30 L340,52 M340,30 L318,30"/>
+    <!-- Bottom-left -->
+    <path d="M60,210 L60,188 M60,210 L82,210"/>
+    <!-- Bottom-right -->
+    <path d="M340,210 L340,188 M340,210 L318,210"/>
+  </g>
+
+  <!-- Horizontal scan beam (glowing line across middle) -->
+  <rect x="60" y="118" width="280" height="5" rx="2" fill="url(#scanLine)" filter="url(#glow)" opacity="0.9"/>
+  <rect x="60" y="119" width="280" height="3" rx="1.5" fill="rgba(0,230,180,0.6)"/>
+</svg>

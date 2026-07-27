@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="240" fill="url(#bg)"/>
+  <!-- wave shapes -->
+  <path d="M0,160 Q100,120 200,150 Q300,180 400,140 L400,240 L0,240 Z" fill="rgba(0,0,0,0.25)"/>
+  <path d="M0,180 Q80,155 200,175 Q320,195 400,165 L400,240 L0,240 Z" fill="rgba(0,0,0,0.2)"/>
+  <!-- large avatar -->
+  <circle cx="200" cy="95" r="55" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.35)" stroke-width="2.5"/>
+  <!-- person silhouette -->
+  <circle cx="200" cy="80" r="22" fill="rgba(255,255,255,0.75)"/>
+  <path d="M200,102 m-30,0 q0,-22 30,-22 q30,0 30,22" fill="rgba(255,255,255,0.75)"/>
+  <!-- badge / verified -->
+  <circle cx="236" cy="128" r="12" fill="#4ade80" stroke="white" stroke-width="2"/>
+  <path d="M232,128 L235,132 L241,124" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- name -->
+  <rect x="148" y="162" width="104" height="12" rx="6" fill="rgba(255,255,255,0.7)"/>
+  <rect x="166" y="181" width="68" height="9" rx="4" fill="rgba(255,255,255,0.35)"/>
+  <!-- three dots decoration -->
+  <circle cx="183" cy="210" r="3.5" fill="rgba(255,255,255,0.5)"/>
+  <circle cx="200" cy="210" r="3.5" fill="rgba(255,255,255,0.8)"/>
+  <circle cx="217" cy="210" r="3.5" fill="rgba(255,255,255,0.5)"/>
+</svg>

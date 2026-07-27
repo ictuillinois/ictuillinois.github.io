@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">iLab</string>
+    <string name="title_activity_main">iLab</string>
+    <string name="package_name">com.motlagh.ilab</string>
+    <string name="custom_url_scheme">com.motlagh.ilab</string>
+</resources>

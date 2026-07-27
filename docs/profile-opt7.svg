@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.22)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0.06)"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="240" fill="url(#bg)"/>
+  <!-- floating blobs -->
+  <circle cx="50" cy="50" r="60" fill="rgba(255,255,255,0.07)"/>
+  <circle cx="370" cy="200" r="80" fill="rgba(255,255,255,0.07)"/>
+  <!-- centered card -->
+  <rect x="100" y="30" width="200" height="180" rx="20" fill="url(#card)" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+  <!-- avatar -->
+  <circle cx="200" cy="95" r="40" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+  <circle cx="200" cy="83" r="16" fill="rgba(255,255,255,0.85)"/>
+  <path d="M175,115 Q175,103 200,103 Q225,103 225,115" fill="rgba(255,255,255,0.85)"/>
+  <!-- online indicator -->
+  <circle cx="230" cy="68" r="7" fill="#4ade80" stroke="white" stroke-width="2"/>
+  <!-- name -->
+  <rect x="154" y="148" width="92" height="11" rx="5.5" fill="rgba(255,255,255,0.7)"/>
+  <!-- subtitle -->
+  <rect x="168" y="166" width="64" height="8" rx="4" fill="rgba(255,255,255,0.35)"/>
+  <!-- action buttons row -->
+  <rect x="118" y="188" width="68" height="14" rx="7" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <rect x="214" y="188" width="68" height="14" rx="7" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+</svg>

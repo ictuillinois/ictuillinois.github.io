@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iLab — Contact</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 60px auto; padding: 0 24px; color: #222; line-height: 1.7; }
+    h1 { font-size: 26px; color: #1D9E75; margin-bottom: 6px; }
+    .sub { font-size: 14px; color: #666; margin-bottom: 32px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 5px; margin-top: 18px; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; }
+    textarea { height: 120px; resize: vertical; }
+    button { margin-top: 20px; background: #1D9E75; color: #fff; border: none; border-radius: 8px; padding: 11px 28px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #178a64; }
+    .success { display: none; background: #e8f2ee; border: 1px solid #1D9E75; border-radius: 8px; padding: 16px; color: #085041; font-size: 14px; margin-top: 20px; }
+    a { color: #1D9E75; }
+  </style>
+</head>
+<body>
+  <h1>Contact iLab</h1>
+  <p class="sub">Have a question about your privacy, terms, or the app? Send us a message and we'll reply to your email.</p>
+
+  <form id="contactForm" action="https://formspree.io/f/mpqnkbpy" method="POST">
+    <label for="name">Your name</label>
+    <input type="text" id="name" name="name" required placeholder="Full name">
+
+    <label for="email">Your email</label>
+    <input type="email" id="email" name="email" required placeholder="you@example.com">
+
+    <label for="subject">Subject</label>
+    <input type="text" id="subject" name="subject" placeholder="e.g. Privacy question, Data deletion request…">
+
+    <label for="message">Message</label>
+    <textarea id="message" name="message" required placeholder="Describe your question or request…"></textarea>
+
+    <button type="submit">Send message</button>
+  </form>
+
+  <div class="success" id="successMsg">
+    ✅ Message sent! We'll reply to your email within 2 business days.
+  </div>
+
+  <p style="margin-top:40px;font-size:13px">
+    <a href="/ilab/privacy.html">Privacy Policy</a> ·
+    <a href="/ilab/terms.html">Terms of Service</a> ·
+    <a href="/ilab/">Back to iLab</a>
+  </p>
+
+  <script>
+    document.getElementById('contactForm').addEventListener('submit', async function(e) {
+      e.preventDefault()
+      const form = e.target
+      const data = new FormData(form)
+      const res = await fetch(form.action, { method: 'POST', body: data, headers: { Accept: 'application/json' } })
+      if (res.ok) {
+        form.style.display = 'none'
+        document.getElementById('successMsg').style.display = 'block'
+      } else {
+        alert('Something went wrong. Please try again.')
+      }
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>iLab — connecting…</title></head>
+<body>
+<p style="font-family:sans-serif;color:#555;margin:40px auto;text-align:center;">Completing sign-in…</p>
+<script>
+  var search = window.location.search;
+  if (search) {
+    // Native Capacitor in-app browser: deep link fires appUrlOpen in the app
+    window.location.href = 'ilab://oauth-callback' + search;
+    // Web fallback: redirect to SPA (handles both success ?code= and error ?error=)
+    setTimeout(function() {
+      window.location.href = 'https://ictlab.app/' + search;
+    }, 600);
+  }
+</script>
+</body>
+</html>

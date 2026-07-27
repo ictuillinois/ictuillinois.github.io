@@ -1,0 +1,13 @@
+{
+  "name": "LabHive",
+  "short_name": "LabHive",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0C1140",
+  "theme_color": "#0C1140",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/labhive_logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

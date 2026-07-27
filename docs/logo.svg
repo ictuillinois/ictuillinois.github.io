@@ -1,0 +1,173 @@
+<svg width="512" height="512" viewBox="0 0 680 860" xmlns="http://www.w3.org/2000/svg">
+  <title>LabHive Logo</title>
+  <desc>LabHive final logo: navy hexagon with orange border, physics/atom (purple), chemistry/flask+DNA (lime), mechanics/3 gears (coral) hexagons, white circuit board center hex, LabHive wordmark in Philosopher font</desc>
+
+  <g transform="translate(340,310)">
+
+    <!-- OUTER HEX -->
+    <polygon points="0,-260 225,-130 225,130 0,260 -225,130 -225,-130"
+             fill="#0C1140" stroke="#FF6B1A" stroke-width="16" stroke-linejoin="round"/>
+    <polygon points="0,-240 207,-120 207,120 0,240 -207,120 -207,-120"
+             fill="none" stroke="#FF9A4A" stroke-width="1" opacity="0.15"/>
+
+    <!-- corner small hexagons -->
+    <polygon points="0,-254 8,-249 8,-239 0,-234 -8,-239 -8,-249" fill="#FF9A4A"/>
+    <polygon points="218,-127 226,-122 226,-112 218,-107 210,-112 210,-122" fill="#FF9A4A"/>
+    <polygon points="218,107 226,112 226,122 218,127 210,122 210,112" fill="#FF9A4A"/>
+    <polygon points="0,234 8,239 8,249 0,254 -8,249 -8,239" fill="#FF9A4A"/>
+    <polygon points="-218,107 -210,112 -210,122 -218,127 -226,122 -226,112" fill="#FF9A4A"/>
+    <polygon points="-218,-127 -210,-122 -210,-112 -218,-107 -226,-112 -226,-122" fill="#FF9A4A"/>
+
+    <!-- CENTER HEX â white, background layer -->
+    <polygon points="0,-136 69,-96 69,-16 0,24 -69,-16 -69,-96" fill="#FFFFFF" stroke="#CCCCCC" stroke-width="2"/>
+    <!-- PCB chip body -->
+    <rect x="-26" y="-74" width="52" height="46" rx="5" fill="none" stroke="#333333" stroke-width="2.2"/>
+    <rect x="-18" y="-66" width="36" height="30" rx="3" fill="none" stroke="#555555" stroke-width="1.2"/>
+    <text x="0" y="-46" text-anchor="middle" font-family="monospace" font-size="14" font-weight="700" fill="#222222">LH</text>
+    <!-- left pins -->
+    <line x1="-26" y1="-62" x2="-40" y2="-62" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="-26" y1="-52" x2="-44" y2="-52" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="-26" y1="-42" x2="-40" y2="-42" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <!-- right pins -->
+    <line x1="26" y1="-62" x2="40" y2="-62" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="26" y1="-52" x2="44" y2="-52" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="26" y1="-42" x2="40" y2="-42" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <!-- top pins -->
+    <line x1="-12" y1="-74" x2="-12" y2="-88" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="0"   y1="-74" x2="0"   y2="-92" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="12"  y1="-74" x2="12"  y2="-88" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <!-- bottom pins -->
+    <line x1="-12" y1="-28" x2="-12" y2="-14" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="0"   y1="-28" x2="0"   y2="-10" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="12"  y1="-28" x2="12"  y2="-14" stroke="#444444" stroke-width="1.8" stroke-linecap="round"/>
+    <!-- pin end dots -->
+    <circle cx="-40" cy="-62" r="3" fill="#555555"/>
+    <circle cx="-44" cy="-52" r="3" fill="#555555"/>
+    <circle cx="-40" cy="-42" r="3" fill="#555555"/>
+    <circle cx="40"  cy="-62" r="3" fill="#555555"/>
+    <circle cx="44"  cy="-52" r="3" fill="#555555"/>
+    <circle cx="40"  cy="-42" r="3" fill="#555555"/>
+    <circle cx="-12" cy="-88" r="3" fill="#555555"/>
+    <circle cx="0"   cy="-92" r="3" fill="#555555"/>
+    <circle cx="12"  cy="-88" r="3" fill="#555555"/>
+    <circle cx="-12" cy="-14" r="3" fill="#555555"/>
+    <circle cx="0"   cy="-10" r="3" fill="#555555"/>
+    <circle cx="12"  cy="-14" r="3" fill="#555555"/>
+
+    <!-- LEFT HEX â Physics / Atom â electric purple -->
+    <polygon points="-110,-122 -56,-92 -56,-20 -110,10 -164,-20 -164,-92"
+             fill="#3A0A6B" stroke="#BB44FF" stroke-width="2.5"/>
+    <ellipse cx="-110" cy="-56" rx="40" ry="13" fill="none" stroke="#BB44FF" stroke-width="2"/>
+    <ellipse cx="-110" cy="-56" rx="40" ry="13" fill="none" stroke="#BB44FF" stroke-width="2" transform="rotate(60,-110,-56)"/>
+    <ellipse cx="-110" cy="-56" rx="40" ry="13" fill="none" stroke="#BB44FF" stroke-width="2" transform="rotate(120,-110,-56)"/>
+    <circle cx="-110" cy="-56" r="9"   fill="#9922DD"/>
+    <circle cx="-110" cy="-56" r="4.5" fill="#EECCFF"/>
+    <circle cx="-110" cy="-43" r="4.5" fill="#FFFFFF"/>
+    <circle cx="-148" cy="-63" r="4.5" fill="#FFFFFF"/>
+    <circle cx="-72"  cy="-63" r="4.5" fill="#FFFFFF"/>
+
+    <!-- RIGHT HEX â Chemistry / Flask + DNA â lime green -->
+    <polygon points="110,-122 164,-92 164,-20 110,10 56,-20 56,-92"
+             fill="#1A4A00" stroke="#88FF00" stroke-width="2.5"/>
+    <!-- flask -->
+    <rect x="77" y="-91" width="10" height="13" rx="2.5" fill="none" stroke="#88FF00" stroke-width="2"/>
+    <line x1="73" y1="-91" x2="91" y2="-91" stroke="#88FF00" stroke-width="3" stroke-linecap="round"/>
+    <path d="M77,-78 L61,-43 L105,-43 L89,-78 Z" fill="none" stroke="#88FF00" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M63,-55 L61,-43 L105,-43 L103,-55 Z" fill="#2A7A00" opacity="0.9"/>
+    <line x1="64" y1="-55" x2="102" y2="-55" stroke="#88FF00" stroke-width="1" opacity="0.7"/>
+    <circle cx="72" cy="-49" r="3"   fill="#88FF00" opacity="0.9"/>
+    <circle cx="84" cy="-46" r="2.5" fill="#88FF00" opacity="0.7"/>
+    <circle cx="95" cy="-50" r="2"   fill="#88FF00" opacity="0.6"/>
+    <!-- divider -->
+    <line x1="110" y1="-112" x2="110" y2="-22" stroke="#88FF00" stroke-width="1" opacity="0.35" stroke-dasharray="4,3"/>
+    <!-- DNA strand 1 -->
+    <path d="M118,-94 C108,-80 128,-66 118,-52 C108,-38 128,-30 118,-30" fill="none" stroke="#88FF00" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- DNA strand 2 -->
+    <path d="M142,-94 C152,-80 132,-66 142,-52 C152,-38 132,-30 142,-30" fill="none" stroke="#AAFFAA" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- DNA rungs -->
+    <line x1="118" y1="-88" x2="142" y2="-88" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="120" y1="-76" x2="140" y2="-76" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>
+    <line x1="118" y1="-64" x2="142" y2="-64" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="118" y1="-52" x2="142" y2="-52" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>
+    <line x1="120" y1="-40" x2="140" y2="-40" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="118" y1="-30" x2="142" y2="-30" stroke="#88FF00" stroke-width="1.8" stroke-linecap="round" opacity="0.75"/>
+    <!-- DNA node dots -->
+    <circle cx="118" cy="-88" r="3" fill="#88FF00"/>
+    <circle cx="142" cy="-88" r="3" fill="#AAFFAA"/>
+    <circle cx="118" cy="-64" r="3" fill="#88FF00"/>
+    <circle cx="142" cy="-64" r="3" fill="#AAFFAA"/>
+    <circle cx="118" cy="-52" r="3" fill="#88FF00"/>
+    <circle cx="142" cy="-52" r="3" fill="#AAFFAA"/>
+    <circle cx="118" cy="-40" r="3" fill="#88FF00"/>
+    <circle cx="142" cy="-40" r="3" fill="#AAFFAA"/>
+    <circle cx="118" cy="-30" r="3" fill="#88FF00"/>
+    <circle cx="142" cy="-30" r="3" fill="#AAFFAA"/>
+
+    <!-- TOP HEX â Mechanics / 3 Gears â coral -->
+    <polygon points="0,-192 54,-162 54,-102 0,-72 -54,-102 -54,-162"
+             fill="#7B2010" stroke="#FF6644" stroke-width="2.5"/>
+
+    <!-- GEAR 1 â yellow large, center -14,-138 -->
+    <g transform="translate(-14,-138)">
+      <circle cx="0" cy="0" r="26" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.8"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(30)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(60)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(90)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(120)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(150)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(180)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(210)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(240)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(270)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(300)"/>
+      <polygon points="-5,-26 5,-26 8,-37 -8,-37" fill="#F5C518" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(330)"/>
+      <circle cx="0" cy="0" r="13" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+    </g>
+
+    <!-- GEAR 2 â red medium, center 16,-110 -->
+    <g transform="translate(16,-110)">
+      <circle cx="0" cy="0" r="15" fill="#E84560" stroke="#1A1A1A" stroke-width="1.8"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(36)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(72)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(108)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(144)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(180)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(216)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(252)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(288)"/>
+      <polygon points="-4,-15 4,-15 6,-22 -6,-22" fill="#E84560" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(324)"/>
+      <circle cx="0" cy="0" r="8" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+    </g>
+
+    <!-- GEAR 3 â blue small, center -26,-130 -->
+    <g transform="translate(-26,-130)">
+      <circle cx="0" cy="0" r="13" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.8"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(36)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(72)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(108)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(144)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(180)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(216)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(252)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(288)"/>
+      <polygon points="-3,-13 3,-13 5,-20 -5,-20" fill="#2AABE4" stroke="#1A1A1A" stroke-width="1.2" stroke-linejoin="round" transform="rotate(324)"/>
+      <circle cx="0" cy="0" r="6" fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+    </g>
+
+    <!-- OVERLAP COLOR BLEED -->
+    <polygon points="-69,-96 -56,-92 -56,-20 -69,-16" fill="#BB44FF" opacity="0.35"/>
+    <polygon points="56,-92 69,-96 69,-16 56,-20"     fill="#88FF00" opacity="0.35"/>
+    <polygon points="-54,-102 54,-102 69,-96 0,-136 -69,-96" fill="#FF6644" opacity="0.35"/>
+
+    <!-- LabHive wordmark -->
+    <text x="0" y="110" text-anchor="middle"
+          font-family="Georgia, 'Times New Roman', serif"
+          font-size="90" font-weight="700"
+          fill="#F5F0DC">LabHive</text>
+
+  </g>
+
+</svg>
