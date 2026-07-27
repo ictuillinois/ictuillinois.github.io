@@ -4,3 +4,24 @@ dist/
 .env.local
 .DS_Store
 *.log
+
+# Mobile (not used in ICT-Lab)
+ios/
+android/
+capacitor.config.json
+
+# Sensitive credentials
+client_secret_*.json
+*.pem
+*.p12
+
+# LabHive project files (not part of ICT-Lab)
+LABHIVE_*.md
+LABHIVE_*.sh
+LabHive-*.md
+labhive_logo.svg
+labhive_provenance*.sh
+
+# Supabase CLI
+supabase/.branches
+supabase/.temp
