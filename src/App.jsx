@@ -71,14 +71,20 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
-      const [{ data: { session: authSession } }, { data: maintRow }] = await Promise.all([
-        sb.auth.getSession(),
-        sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle(),
-      ])
-      if (maintRow?.value === 'true') setMaintenanceMode(true)
-      if (authSession?.user) await restoreSessionFromAuth(authSession.user)
-      const timeout = new Promise(resolve => setTimeout(resolve, 8000))
-      Promise.race([refreshCache(), timeout]).finally(() => setLoading(false))
+      try {
+        const [authResult, maintResult] = await Promise.all([
+          sb.auth.getSession(),
+          sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle(),
+        ])
+        if (maintResult?.data?.value === 'true') setMaintenanceMode(true)
+        if (authResult?.data?.session?.user) await restoreSessionFromAuth(authResult.data.session.user)
+        const timeout = new Promise(resolve => setTimeout(resolve, 8000))
+        await Promise.race([refreshCache(), timeout])
+      } catch (e) {
+        console.error('ICT-Lab init error:', e)
+      } finally {
+        setLoading(false)
+      }
     }
     init()
   }, [])
