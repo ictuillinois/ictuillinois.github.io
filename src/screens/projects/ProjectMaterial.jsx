@@ -6,8 +6,6 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
-import TeammatesPanel from '../../components/TeammatesPanel'
-import TeamMembersPanel from '../../components/TeamMembersPanel'
 import ProjectMaterials from './ProjectMaterials'
 import MaterialStorage from '../storage/MaterialStorage'
 
@@ -2210,91 +2208,8 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 
 // ── Main Screen ────────────────────────────────────────────────
 export default function ProjectMaterial() {
-  const { session, sharedWorkspaces, viewingWorkspaceOwnerId, sidebarSubTab } = useAppStore()
+  const { session } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
-  const mainTab = sidebarSubTab || 'inventory'
-  const [allProjects, setAllProjects] = useState([])
-  const [allowedNames, setAllowedNames] = useState(undefined) // undefined = loading; null = admin (no filter); Set = filtered
-  const [userProjectGroup, setUserProjectGroup] = useState(undefined) // undefined = loading; null = no group; string = group name
-  const [userAssignedProjectIds, setUserAssignedProjectIds] = useState(undefined)
-
-  const accentColor = isSolo ? '#534AB7' : 'var(--accent)'
-
-  // Fetch the current user's project_group and assigned_project_ids directly from DB — don't rely on session (may be stale)
-  useEffect(() => {
-    if (!session?.userId) { setUserProjectGroup(null); setUserAssignedProjectIds(null); return }
-    sb.from('users').select('project_group, assigned_project_ids').eq('id', session.userId).single()
-      .then(({ data }) => {
-        setUserProjectGroup(data?.project_group || null)
-        setUserAssignedProjectIds(data?.assigned_project_ids?.length ? data.assigned_project_ids : null)
-      })
-  }, [session?.userId])
-
-  // Build the set of name/email identifiers for the current user + their teammates.
-  // Results, records and links are filtered to only this set.
-  useEffect(() => {
-    async function loadAllowedNames() {
-      // Only true org admins (dbRole==='admin' in DB, or super admin userId===null) bypass the filter.
-      // Lab managers promoted to role='admin' via adminLevel still get filtered — they should only see their own data.
-      const isTrueAdmin = session?.userId === null || session?.dbRole === 'admin'
-      if (isTrueAdmin) { setAllowedNames(null); return }
-      const myIds = [session?.username, session?.name, session?.email].filter(Boolean)
-      if (!session?.userId || myIds.length === 0) { setAllowedNames(new Set()); return } // empty = block all
-      const names = new Set(myIds)
-      if (!isSolo) {
-        const [{ data: asOwner }, { data: asMember }] = await Promise.all([
-          sb.from('team_workspace_members').select('member_id').eq('owner_id', session.userId),
-          sb.from('team_workspace_members').select('owner_id').eq('member_id', session.userId),
-        ])
-        const ids = [...(asOwner || []).map(m => m.member_id), ...(asMember || []).map(m => m.owner_id)]
-        if (ids.length) {
-          const { data: teammates } = await sb.from('users').select('name, email').in('id', ids)
-          ;(teammates || []).forEach(u => { if (u.name) names.add(u.name); if (u.email) names.add(u.email) })
-        }
-      }
-      setAllowedNames(names)
-    }
-    loadAllowedNames()
-  }, [session?.userId])
-
-  useEffect(() => { loadAllProjects() }, [viewingWorkspaceOwnerId])
-
-  async function loadAllProjects() {
-    const baseSelect = 'id, name, project_id, status, created_at, pi_user_id, student_ids, project_group'
-    let q = sb.from('projects').select(baseSelect).order('name')
-
-    if (isSolo && session?.userId) {
-      if (viewingWorkspaceOwnerId) {
-        q = q.eq('solo_owner_id', viewingWorkspaceOwnerId)
-      } else {
-        q = q.eq('solo_owner_id', session.userId)
-      }
-    } else if (!isSolo) {
-      q = q.is('solo_owner_id', null)
-      if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
-    }
-
-    const { data } = await q
-    setAllProjects(data || [])
-  }
-
-  const viewingShared = isSolo && !!viewingWorkspaceOwnerId
-
-  // Projects filtered to only those matching the current user's project group.
-  // userProjectGroup===undefined means still loading — use full list to avoid flash of empty dropdown.
-  // null means user has no group assigned — show all projects.
-  const assignedProjects = useMemo(() => {
-    // Admins (super + org), lab managers (dbRole='user'), and solo users see all projects
-    if (session?.userId === null || session?.dbRole === 'user' || session?.dbRole === 'admin' || isSolo) return allProjects
-    // If lab manager assigned specific projects, use that list
-    if (userAssignedProjectIds) return allProjects.filter(p => userAssignedProjectIds.includes(p.id))
-    // Fall back to project_group matching
-    if (userProjectGroup) return allProjects.filter(p => !p.project_group || p.project_group === userProjectGroup)
-    return allProjects
-  }, [allProjects, userProjectGroup, userAssignedProjectIds, session?.userId, session?.dbRole, isSolo])
-
-  const isLabUser = !isSolo && session?.dbRole === 'lab_user'
-  const hasProjectAccess = !isLabUser || !!userAssignedProjectIds
 
   return (
     <div>
@@ -2302,29 +2217,7 @@ export default function ProjectMaterial() {
         <div className="section-title">Project Workspace</div>
         <HelpPanel screen="projects" />
       </div>
-
-      {mainTab === 'inventory' && (
-        <MaterialInventoryTab session={session} isSolo={isSolo} onProjectCreated={loadAllProjects} />
-      )}
-
-      {mainTab === 'results' && (
-        <>
-          <ResultsTab projects={assignedProjects} session={session} allowedNames={allowedNames} />
-          {/* Records merged in from the old Workspace → Records tab */}
-          <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>📂 Record Files</div>
-            <RecordsPanel projects={assignedProjects} allowedNames={allowedNames} session={session} />
-          </div>
-        </>
-      )}
-
-      {mainTab === 'workspace' && (
-        <WorkspaceTab session={session} isSolo={isSolo} allowedNames={allowedNames} userProjectGroup={userProjectGroup} userAssignedProjectIds={userAssignedProjectIds} />
-      )}
-
-      {mainTab === 'members' && (
-        isSolo ? <TeammatesPanel session={session} /> : <TeamMembersPanel session={session} />
-      )}
+      <MaterialInventoryTab session={session} isSolo={isSolo} />
     </div>
   )
 }
