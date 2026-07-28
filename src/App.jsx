@@ -112,12 +112,18 @@ export default function App() {
   async function checkFirstLogin(userId) {
     try {
       if (!userId) { setShowIconPicker(false); return }
+      // localStorage is the fast/reliable source — immune to RLS issues on user_dashboard_prefs
+      if (localStorage.getItem(`ictlab_picker_done_${userId}`) === 'true') {
+        setShowIconPicker(false)
+        return
+      }
       const { data } = await sb.from('user_dashboard_prefs').select('active_modules, has_set_dashboard').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
       const row = data?.[0]
       const hasSaved = row && (
         (Array.isArray(row.active_modules) && row.active_modules.length > 0) ||
         row.has_set_dashboard === true
       )
+      if (hasSaved) localStorage.setItem(`ictlab_picker_done_${userId}`, 'true')
       setShowIconPicker(!hasSaved)
     } catch {
       setShowIconPicker(false)
@@ -224,6 +230,7 @@ export default function App() {
           session={session}
           loginMode={session.loginMode}
           onDone={(modules) => {
+            if (session.userId) localStorage.setItem(`ictlab_picker_done_${session.userId}`, 'true')
             if (!session.userId) {
               localStorage.setItem('ictlab_admin_dashboard_set', 'true')
             } else if (!modules || modules.length === 0) {

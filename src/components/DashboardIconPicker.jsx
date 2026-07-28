@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 
 // ICT-Lab modules — Supply Inventory, Project Workspace, Equipment Booking
 export const ALL_MODULES_META = [
-  { key: 'supply',    screen: 'home',      label: 'Supply Inventory',  sub: 'Weekly inspection & export',      icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'] },
+  { key: 'supply',    screen: 'home',      label: 'Supply Inventory',  sub: 'Weekly inspection & export',      icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
   { key: 'projects',  screen: 'projects',  label: 'Project Workspace', sub: 'Material inventory & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
   { key: 'booking',   screen: 'booking',   label: 'Reserve Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
   { key: 'barcode',   screen: 'barcode',   label: 'QR Scan',           sub: 'Scan & look up lab materials',    icon: '📷', bg: '#e0f7fa', color: '#00796b', roles: ['team'] },
