@@ -28,6 +28,16 @@ export default function AdminLogin() {
       setLoading(false); return
     }
 
+    // Sign into Supabase Auth so RLS policies (is_super_admin) work during this session.
+    // This requires a Supabase Auth user with the same email/password.
+    const { data: authData } = await sb.auth.signInWithPassword({
+      email: email.trim().toLowerCase(), password,
+    })
+    if (authData?.user?.id) {
+      // Auto-register this auth user as super admin on first login
+      await sb.from('settings').upsert({ key: 'super_admin_auth_id', value: authData.user.id })
+    }
+
     setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
     setLoading(false)
   }

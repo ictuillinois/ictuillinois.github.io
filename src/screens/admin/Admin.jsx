@@ -1734,35 +1734,6 @@ export default function Admin() {
             <button className="btn btn-primary btn-sm" onClick={() => setOrgModal('add')}>+ New organization</button>
           </div>
 
-          {/* Global app-level icon restriction */}
-          <div className="card" style={{ padding: '14px 16px', marginBottom: 10, border: '1.5px solid var(--accent)', background: 'var(--accent-light)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <button onClick={() => setAppModulesOpen(true)} style={{ fontWeight: 700, fontSize: 15, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, textAlign: 'left', textDecoration: 'underline dotted' }}>
-                  🌐 Main App (Global)
-                </button>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                  Global icon pool — applies to all organizations as the outermost boundary
-                </div>
-              </div>
-              <button className="btn btn-sm btn-primary" onClick={() => setAppModulesOpen(true)}>Icons</button>
-            </div>
-          </div>
-
-          {/* Global solo users icon restriction */}
-          <div className="card" style={{ padding: '14px 16px', marginBottom: 20, border: '1.5px solid #534AB7', background: '#EEEDFE' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <button onClick={() => setSoloModulesOpen(true)} style={{ fontWeight: 700, fontSize: 15, background: 'none', border: 'none', cursor: 'pointer', color: '#534AB7', padding: 0, textAlign: 'left', textDecoration: 'underline dotted' }}>
-                  👤 Solo Users (Global)
-                </button>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                  Icons available to all solo user accounts across the app
-                </div>
-              </div>
-              <button onClick={() => setSoloModulesOpen(true)} style={{ padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Icons</button>
-            </div>
-          </div>
 
           {orgs.length === 0 ? (
             <div className="empty-state"><div className="empty-icon">🏢</div>No organizations yet.</div>

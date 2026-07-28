@@ -3,7 +3,6 @@ import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
 import { IconAlert, IconEye, IconEyeOff, IconInfo, IconMail } from '../../components/Icons'
-import LoginBackground from '../../components/LoginBackground'
 
 export default function Login() {
   const { setSession } = useAppStore()
@@ -105,17 +104,13 @@ export default function Login() {
 
   return (
     <>
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', background: 'var(--bg)', padding: '8px 20px 8px' }}>
-      <LoginBackground />
-      <div style={{ width: '100%', maxWidth: 420, position: 'relative', zIndex: 1 }}>
-
-        <div style={{ textAlign: 'center', marginBottom: -40 }}>
-          <img src={`${import.meta.env.BASE_URL}ict-logo.png`} alt="ICT-Lab"
-            style={{ width: 200, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-        </div>
+    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '20px' }}>
+      <div style={{ width: '100%', maxWidth: 420 }}>
 
         <div className="card" style={{ padding: '28px 28px 12px' }}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <img src={`${import.meta.env.BASE_URL}ict-logo.png`} alt="ICT-Lab"
+              style={{ width: 160, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
             <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICT-Lab Sign In</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Access is managed by your organization admin</div>
           </div>
