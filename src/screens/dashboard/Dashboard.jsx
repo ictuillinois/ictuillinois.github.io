@@ -560,6 +560,7 @@ export default function Dashboard() {
       pm: `${base}icon-pm.svg`, barcode: `${base}icon-barcode.svg`,
       barcodeqr: `${base}icon-barcodeqr.svg`, profile: `${base}icon-profile.svg`,
       supply: `${base}icon-supply.svg`,
+      projects: `${base}icon-projects.svg`, booking: `${base}icon-booking.svg`,
     }
     try { return { ...defaults, ...(JSON.parse(localStorage.getItem(imgCacheKey) || 'null') || {}) } } catch { return defaults }
   })
@@ -724,6 +725,8 @@ export default function Dashboard() {
       barcodeqr: `${base}icon-barcodeqr.svg`,
       profile:   `${base}icon-profile.svg`,
       supply:    `${base}icon-supply.svg`,
+      projects:  `${base}icon-projects.svg`,
+      booking:   `${base}icon-booking.svg`,
     }
 
     const imgPrefix = isSolo ? 'solo_img_' : 'img_'

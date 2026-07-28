@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240">
+  <defs>
+    <linearGradient id="prBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e0b2e"/>
+      <stop offset="100%" stop-color="#1a1456"/>
+    </linearGradient>
+    <linearGradient id="flaskFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6d5fd6" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#3b2db0" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="240" fill="url(#prBg)"/>
+
+  <!-- Subtle grid lines -->
+  <g stroke="rgba(100,80,220,0.07)" stroke-width="1">
+    <line x1="0" y1="60" x2="400" y2="60"/>
+    <line x1="0" y1="120" x2="400" y2="120"/>
+    <line x1="0" y1="180" x2="400" y2="180"/>
+    <line x1="100" y1="0" x2="100" y2="240"/>
+    <line x1="200" y1="0" x2="200" y2="240"/>
+    <line x1="300" y1="0" x2="300" y2="240"/>
+  </g>
+
+  <!-- Molecule structure (top right) -->
+  <g stroke="rgba(167,139,250,0.4)" stroke-width="1.8" fill="none">
+    <line x1="330" y1="36" x2="362" y2="22"/>
+    <line x1="362" y1="22" x2="384" y2="46"/>
+    <line x1="384" y1="46" x2="368" y2="68"/>
+    <line x1="368" y1="68" x2="342" y2="58"/>
+    <line x1="342" y1="58" x2="330" y2="36"/>
+    <line x1="342" y1="58" x2="362" y2="22"/>
+  </g>
+  <circle cx="330" cy="36" r="8" fill="rgba(167,139,250,0.75)"/>
+  <circle cx="362" cy="22" r="6" fill="rgba(167,139,250,0.6)"/>
+  <circle cx="384" cy="46" r="5" fill="rgba(167,139,250,0.55)"/>
+  <circle cx="368" cy="68" r="7" fill="rgba(167,139,250,0.7)"/>
+  <circle cx="342" cy="58" r="5" fill="rgba(167,139,250,0.5)"/>
+
+  <!-- Materials table (left panel) -->
+  <rect x="20" y="28" width="168" height="194" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>
+  <!-- Header -->
+  <rect x="20" y="28" width="168" height="32" rx="10" fill="rgba(83,74,183,0.45)"/>
+  <rect x="20" y="50" width="168" height="10" fill="rgba(83,74,183,0.45)"/>
+  <rect x="34" y="38" width="76" height="7" rx="3" fill="rgba(255,255,255,0.55)"/>
+  <rect x="144" y="38" width="30" height="7" rx="3" fill="rgba(255,255,255,0.25)"/>
+  <!-- Column divider -->
+  <line x1="136" y1="60" x2="136" y2="222" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+  <!-- Rows -->
+  <line x1="20" y1="82" x2="188" y2="82" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="32" y="69" width="68" height="7" rx="2" fill="rgba(255,255,255,0.38)"/>
+  <rect x="142" y="67" width="32" height="10" rx="5" fill="rgba(52,211,153,0.55)"/>
+
+  <line x1="20" y1="102" x2="188" y2="102" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="32" y="89" width="52" height="7" rx="2" fill="rgba(255,255,255,0.28)"/>
+  <rect x="142" y="87" width="32" height="10" rx="5" fill="rgba(52,211,153,0.55)"/>
+
+  <line x1="20" y1="122" x2="188" y2="122" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="32" y="109" width="60" height="7" rx="2" fill="rgba(255,255,255,0.28)"/>
+  <rect x="142" y="107" width="32" height="10" rx="5" fill="rgba(251,191,36,0.55)"/>
+
+  <line x1="20" y1="142" x2="188" y2="142" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="32" y="129" width="44" height="7" rx="2" fill="rgba(255,255,255,0.28)"/>
+  <rect x="142" y="127" width="32" height="10" rx="5" fill="rgba(167,139,250,0.65)"/>
+
+  <line x1="20" y1="162" x2="188" y2="162" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="32" y="149" width="56" height="7" rx="2" fill="rgba(255,255,255,0.28)"/>
+  <rect x="142" y="147" width="32" height="10" rx="5" fill="rgba(167,139,250,0.65)"/>
+
+  <!-- Progress bars -->
+  <rect x="32" y="174" width="140" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
+  <rect x="32" y="174" width="96" height="6" rx="3" fill="rgba(167,139,250,0.7)"/>
+  <rect x="32" y="186" width="140" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
+  <rect x="32" y="186" width="52" height="6" rx="3" fill="rgba(167,139,250,0.5)"/>
+  <rect x="32" y="198" width="140" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
+  <rect x="32" y="198" width="118" height="6" rx="3" fill="rgba(167,139,250,0.65)"/>
+  <rect x="32" y="210" width="140" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
+  <rect x="32" y="210" width="74" height="6" rx="3" fill="rgba(167,139,250,0.55)"/>
+
+  <!-- Erlenmeyer Flask (right side) -->
+  <!-- Neck -->
+  <rect x="254" y="24" width="28" height="60" rx="6" fill="rgba(255,255,255,0.07)" stroke="rgba(167,139,250,0.3)" stroke-width="1.5"/>
+  <rect x="258" y="21" width="20" height="10" rx="5" fill="rgba(255,255,255,0.2)"/>
+  <!-- Flask body -->
+  <path d="M244,84 L200,190 Q196,202 210,203 L326,203 Q340,202 336,190 L292,84 Z" fill="url(#flaskFill)"/>
+  <!-- Liquid fill -->
+  <path d="M222,148 L204,190 Q200,202 214,203 L322,203 Q336,202 332,190 L310,148 Z" fill="url(#liquid)"/>
+  <!-- Flask highlight (left edge) -->
+  <path d="M250,90 L218,166" stroke="rgba(255,255,255,0.12)" stroke-width="10" stroke-linecap="round"/>
+  <!-- Bubbles -->
+  <circle cx="244" cy="178" r="5.5" fill="rgba(255,255,255,0.22)"/>
+  <circle cx="266" cy="168" r="3.5" fill="rgba(255,255,255,0.18)"/>
+  <circle cx="296" cy="182" r="4" fill="rgba(255,255,255,0.22)"/>
+  <circle cx="280" cy="166" r="2.5" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="312" cy="174" r="3" fill="rgba(255,255,255,0.18)"/>
+  <!-- Rising bubbles -->
+  <circle cx="256" cy="148" r="3" fill="rgba(255,255,255,0.14)"/>
+  <circle cx="276" cy="136" r="2.5" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="302" cy="144" r="2" fill="rgba(255,255,255,0.11)"/>
+  <!-- Scale marks -->
+  <line x1="296" y1="148" x2="308" y2="148" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+  <line x1="299" y1="162" x2="310" y2="162" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <line x1="302" y1="176" x2="312" y2="176" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <line x1="305" y1="190" x2="314" y2="190" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+</svg>
