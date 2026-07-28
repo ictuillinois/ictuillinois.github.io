@@ -23,6 +23,7 @@ function getModules(role, loginMode, activeModules) {
     PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
     if (isStaff) STAFF_PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
     if (role === 'admin') base.forEach(m => { if (m.adminOnly && !activeModules.includes(m.key)) ordered.push(m) })
+    if (isStaff) base.forEach(m => { if (m.studentLocked && !activeModules.includes(m.key)) ordered.push(m) })
     return ordered
   }
   return base
