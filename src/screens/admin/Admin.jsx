@@ -483,11 +483,11 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         .then(({ data }) => {
           const defaults = data?.student_default_modules?.length
             ? data.student_default_modules
-            : ['projects', 'training', 'booking', 'equipmenthub', 'remessages']
+            : ['projects', 'training', 'booking', 'equipmenthub', 'barcode', 'remessages']
           setSelectedIcons(new Set([...defaults, 'profile']))
         })
     } else if (!user && role === 'lab_user') {
-      setSelectedIcons(new Set(['projects', 'training', 'booking', 'equipmenthub', 'remessages', 'profile']))
+      setSelectedIcons(new Set(['projects', 'training', 'booking', 'equipmenthub', 'barcode', 'remessages', 'profile']))
     }
   }, [user?.id, user?.role, role, effectiveOrgId])
 

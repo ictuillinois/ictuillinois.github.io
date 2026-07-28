@@ -31,7 +31,6 @@ function getModules(role, loginMode, activeModules) {
 
 function getAllModulesForStudent() {
   return [
-    { key: 'supply',       screen: 'home',          label: 'Supply Inventory',          sub: 'Weekly inspection & export',       icon: '📦', bg: '#E1F5EE', color: '#1D9E75' },
     { key: 'projects',     screen: 'projects',      label: 'Project Workspace',        sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
     { key: 'training',     screen: 'training',      label: 'Training Records',          sub: 'Certs, equipment & alarm',         icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'equipment',    screen: 'equipment',     label: 'Equipment List',       sub: 'Lab equipment tracking',           icon: '🔧', bg: '#fef3c7', color: '#92400e', locked: true },
