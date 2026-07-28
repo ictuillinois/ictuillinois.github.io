@@ -18,14 +18,16 @@ const Results         = lazy(() => import('./screens/inspection/Results'))
 const History         = lazy(() => import('./screens/inspection/History'))
 const ProjectMaterial = lazy(() => import('./screens/projects/ProjectMaterial'))
 const ProjectDetail   = lazy(() => import('./screens/projects/ProjectDetail'))
-const BookingEquipment = lazy(() => import('./screens/equipment/BookingEquipment'))
-const Profile         = lazy(() => import('./screens/profile/Profile'))
-const Admin           = lazy(() => import('./screens/admin/Admin'))
+const BookingEquipment      = lazy(() => import('./screens/equipment/BookingEquipment'))
+const BarcodeScannerScreen  = lazy(() => import('./screens/barcode/BarcodeScannerScreen'))
+const BarcodeManager        = lazy(() => import('./screens/barcode/BarcodeManager'))
+const Profile               = lazy(() => import('./screens/profile/Profile'))
+const Admin                 = lazy(() => import('./screens/admin/Admin'))
 
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
 
 // ICT-LAB allowed screens — only 3 modules + admin + profile + inspection flow
-const INTERNAL = new Set(['dashboard', 'profile', 'orgadmin', 'home', 'inspection', 'results', 'history', 'projects', 'project-detail', 'booking'])
+const INTERNAL = new Set(['dashboard', 'profile', 'orgadmin', 'home', 'inspection', 'results', 'history', 'projects', 'project-detail', 'booking', 'barcode', 'barcodeqr'])
 
 export default function App() {
   const { session, screen, refreshCache, setScreen, setActiveModules, setSession, clearSession } = useAppStore()
@@ -200,6 +202,8 @@ export default function App() {
     projects:       <ProjectMaterial />,
     'project-detail': <ProjectDetail />,
     booking:        <BookingEquipment />,
+    barcode:        <BarcodeScannerScreen />,
+    barcodeqr:      <BarcodeManager />,
     profile:        <Profile />,
     orgadmin:       <Admin />,
   }
