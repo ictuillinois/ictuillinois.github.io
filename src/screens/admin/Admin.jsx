@@ -457,9 +457,10 @@ const STUDENT_ICON_OPTIONS = [
 // ── User modal ────────────────────────────────────────────────
 function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClose, onSaved }) {
   const { toast } = useAppStore()
-  const [name, setName]         = useState(user?.name || '')
-  const [email, setEmail]       = useState(user?.email || '')
-  const [password, setPassword] = useState('')
+  const [firstName, setFirstName] = useState(user?.name || '')
+  const [lastName, setLastName]   = useState(user?.last_name || '')
+  const [email, setEmail]         = useState(user?.email || '')
+  const [password, setPassword]   = useState('')
   const [role, setRole]         = useState(user?.role || defaultRole || 'user')
   const [orgId, setOrgId]       = useState(user?.organization_id || defaultOrgId || '')
   const [copied, setCopied]     = useState(false)
@@ -511,8 +512,9 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   }
 
   async function save() {
-    if (!name.trim())    { toast('Please enter a name.'); return }
-    if (!orgId)          { toast('Please select an organization.'); return }
+    if (!firstName.trim()) { toast('Please enter a first name.'); return }
+    if (!lastName.trim())  { toast('Please enter a last name.'); return }
+    if (!orgId)            { toast('Please select an organization.'); return }
     if (!user && !email.trim()) { toast('Please enter an email address.'); return }
     if (password) {
       if (password.length < 8)        { toast('Password must be at least 8 characters.'); return }
@@ -522,7 +524,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
     }
 
     if (user) {
-      const upd = { name: name.trim(), email: email.trim().toLowerCase() || null, role, organization_id: orgId, is_active: true }
+      const upd = { name: firstName.trim(), last_name: lastName.trim() || null, email: email.trim().toLowerCase() || null, role, organization_id: orgId, is_active: true }
       if (password) upd.must_change_password = true
       const { error } = await sb.from('users').update(upd).eq('id', user.id)
       if (error) { toast('Error updating user: ' + error.message); return }
@@ -541,16 +543,17 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
       // Use SECURITY DEFINER RPC to bypass RLS (admin session may shift during signUp)
       const { data: newUserId, error } = await sb.rpc('create_team_user', {
-        p_name: name.trim(), p_email: emailLC, p_auth_id: auth_id,
+        p_name: firstName.trim(), p_email: emailLC, p_auth_id: auth_id,
         p_role: role, p_organization_id: orgId,
+        p_last_name: lastName.trim() || null,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
 
       // Fetch the new user's ID to save icon prefs and queue welcome email
       const { data: newUser } = await sb.from('users').select('id').ilike('email', emailLC).maybeSingle()
       if (role === 'lab_user' && newUser?.id) await saveIconPrefs(newUser.id)
-      queueWelcomeEmail(sb, { name: name.trim(), toEmail: emailLC, orgId, userId: newUser?.id ?? null, password: tempPassword })
-      setSavedCreds({ name: name.trim(), email: emailLC, password: tempPassword })
+      queueWelcomeEmail(sb, { name: firstName.trim(), toEmail: emailLC, orgId, userId: newUser?.id ?? null, password: tempPassword })
+      setSavedCreds({ name: firstName.trim(), email: emailLC, password: tempPassword })
       onSaved()
     }
   }
@@ -588,8 +591,13 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
     <Modal onClose={onClose}>
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>{user ? 'Edit user' : 'Add new user'}</div>
 
-      <div className="field"><label>Full name *</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Dr. Smith" autoFocus />
+      <div className="grid-2">
+        <div className="field"><label>First name *</label>
+          <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="e.g. John" autoFocus />
+        </div>
+        <div className="field"><label>Last name *</label>
+          <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="e.g. Smith" />
+        </div>
       </div>
       <div className="field"><label>Email * (used to sign in)</label>
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="user@example.com" />
@@ -2003,7 +2011,7 @@ function FeedbackResponsesModal({ org, onClose }) {
       sb.from('users').select('id, name, last_name, nick_name').eq('organization_id', org.id),
     ])
     const userMap = {}
-    ;(orgUsers || []).forEach(u => { userMap[u.id] = u.nick_name?.trim() || [u.name, u.last_name].filter(Boolean).join(' ') || u.name })
+    ;(orgUsers || []).forEach(u => { userMap[u.id] = u.nick_name?.trim() || u.name })
     setUsers(userMap)
     setResponses(resps || [])
     setLoading(false)

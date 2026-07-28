@@ -1524,7 +1524,7 @@ export function StudentsPanel({ toast, session }) {
                 ? <img src={s.photo_url} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
                 : <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><PersonAvatar user={s} /></div>}
               <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.nick_name?.trim() || [sFirstName(s), sLastName(s)].filter(Boolean).join(' ') || '—'}
+                {s.nick_name?.trim() || sFirstName(s) || '—'}
               </div>
               {sEmail(s) && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sEmail(s)}</div>}
               <div style={{ marginTop: 4, marginBottom: 10, display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap', minHeight: 16 }}>
@@ -2013,7 +2013,7 @@ function StaffStudentIconManager() {
                 <div>
                   <div style={{ fontWeight: 600 }}>
                     <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginRight: 6 }}>#{idx + 1}</span>
-                    {s.nick_name?.trim() || [sFirstName(s), sLastName(s)].filter(Boolean).join(' ') || '—'}
+                    {s.nick_name?.trim() || sFirstName(s) || '—'}
                   </div>
                   {sEmail(s) && <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>📧 {sEmail(s)}</div>}
                 </div>
