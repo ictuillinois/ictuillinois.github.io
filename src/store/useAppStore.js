@@ -40,10 +40,13 @@ export const useAppStore = create((set, get) => ({
   // ── Toast ──
   toastMsg: '',
   toastVisible: false,
+  toastIsError: false,
   toast: (msg) => {
-    set({ toastMsg: msg, toastVisible: true })
-    setTimeout(() => set({ toastVisible: false }), 2500)
+    const isError = /^error|^please|^could not|^failed|^invalid|^unable/i.test(msg?.trim())
+    set({ toastMsg: msg, toastVisible: true, toastIsError: isError })
+    if (!isError) setTimeout(() => set({ toastVisible: false }), 2500)
   },
+  dismissToast: () => set({ toastVisible: false, toastIsError: false }),
 
   // ── Navigation ──
   screen: 'dashboard',
