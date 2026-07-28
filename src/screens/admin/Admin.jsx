@@ -539,10 +539,10 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         if (authUser) auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
 
-      // Plain insert — don't use .single() which fails under RLS
-      const { error } = await sb.from('users').insert({
-        name: name.trim(), email: emailLC, auth_id, role,
-        organization_id: orgId, is_active: true, must_change_password: true, terms_accepted_version: null,
+      // Use SECURITY DEFINER RPC to bypass RLS (admin session may shift during signUp)
+      const { data: newUserId, error } = await sb.rpc('create_team_user', {
+        p_name: name.trim(), p_email: emailLC, p_auth_id: auth_id,
+        p_role: role, p_organization_id: orgId,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
 
