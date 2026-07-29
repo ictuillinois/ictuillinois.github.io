@@ -22,7 +22,7 @@ writeFileSync('docs/oauth-callback.html', `<!DOCTYPE html>
     window.location.href = 'ilab://oauth-callback' + search;
     // Web fallback: redirect to SPA (handles both success ?code= and error ?error=)
     setTimeout(function() {
-      window.location.href = 'https://ictlab.app/' + search;
+      window.location.href = 'https://ictlab.labhive.app/' + search;
     }, 600);
   }
 </script>
