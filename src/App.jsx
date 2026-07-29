@@ -11,29 +11,74 @@ import CustomerServiceModal from './components/CustomerServiceModal'
 import TermsAcceptance from './components/TermsAcceptance'
 import { CURRENT_TERMS_VERSION } from './lib/termsVersion'
 
-const Dashboard       = lazy(() => import('./screens/dashboard/Dashboard'))
-const Home            = lazy(() => import('./screens/inspection/Home'))
-const Inspection      = lazy(() => import('./screens/inspection/Inspection'))
-const Results         = lazy(() => import('./screens/inspection/Results'))
-const History         = lazy(() => import('./screens/inspection/History'))
-const ProjectMaterial = lazy(() => import('./screens/projects/ProjectMaterial'))
-const ProjectDetail   = lazy(() => import('./screens/projects/ProjectDetail'))
-const BookingEquipment      = lazy(() => import('./screens/equipment/BookingEquipment'))
-const BarcodeScannerScreen  = lazy(() => import('./screens/barcode/BarcodeScannerScreen'))
-const BarcodeManager        = lazy(() => import('./screens/barcode/BarcodeManager'))
-const Profile               = lazy(() => import('./screens/profile/Profile'))
-const Admin                 = lazy(() => import('./screens/admin/Admin'))
+const Dashboard            = lazy(() => import('./screens/dashboard/Dashboard'))
+const Home                 = lazy(() => import('./screens/inspection/Home'))
+const Inspection           = lazy(() => import('./screens/inspection/Inspection'))
+const Results              = lazy(() => import('./screens/inspection/Results'))
+const History              = lazy(() => import('./screens/inspection/History'))
+const ProjectMaterial      = lazy(() => import('./screens/projects/ProjectMaterial'))
+const ProjectDetail        = lazy(() => import('./screens/projects/ProjectDetail'))
+const BookingEquipment     = lazy(() => import('./screens/equipment/BookingEquipment'))
+const EquipmentInventory   = lazy(() => import('./screens/equipment/EquipmentInventory'))
+const EquipmentHub         = lazy(() => import('./screens/equipment/EquipmentHub'))
+const BarcodeScannerScreen = lazy(() => import('./screens/barcode/BarcodeScannerScreen'))
+const BarcodeManager       = lazy(() => import('./screens/barcode/BarcodeManager'))
+const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecords'))
+const LabManagement        = lazy(() => import('./screens/labmanagement/LabManagement'))
+const PM                   = lazy(() => import('./screens/maintenance/PM'))
+const LabMessage           = lazy(() => import('./screens/messaging/LabMessage'))
+const LabSafety            = lazy(() => import('./screens/labsafety/LabSafety'))
+const Profile              = lazy(() => import('./screens/profile/Profile'))
+const Admin                = lazy(() => import('./screens/admin/Admin'))
 
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
 
-// ICT-LAB allowed screens — only 3 modules + admin + profile + inspection flow
-const INTERNAL = new Set(['dashboard', 'profile', 'orgadmin', 'home', 'inspection', 'results', 'history', 'projects', 'project-detail', 'booking', 'barcode', 'barcodeqr'])
+function TrainingOnboardingModal({ onGoToTraining, onDismiss }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 460, border: '1px solid var(--border)', boxShadow: '0 24px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #0369a1 100%)', padding: '32px 32px 28px', textAlign: 'center' }}>
+          <div style={{ fontSize: 52, marginBottom: 12 }}>🦺</div>
+          <div style={{ fontWeight: 700, fontSize: 22, color: '#fff', marginBottom: 8, letterSpacing: '-0.4px' }}>Safety Training Required</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.88)', lineHeight: 1.6 }}>
+            Welcome to ICT-Lab! Before using lab equipment you must complete all required safety steps. Your lab manager will approve each step.
+          </div>
+        </div>
+        <div style={{ padding: '24px 32px 28px' }}>
+          <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 20 }}>
+            Complete all 4 safety steps, then upload your certificates in Training Records once your lab manager approves them.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button onClick={onGoToTraining}
+              style={{ padding: '12px 24px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              Start Safety Training →
+            </button>
+            <button onClick={onDismiss}
+              style={{ padding: '10px 24px', background: 'none', color: 'var(--text3)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
+              I'll do this later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const INTERNAL = new Set([
+  'dashboard', 'profile', 'orgadmin',
+  'home', 'inspection', 'results', 'history',
+  'projects', 'project-detail',
+  'booking', 'barcode', 'barcodeqr',
+  'training', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'remessages',
+  'labsafety',
+])
 
 export default function App() {
   const { session, screen, refreshCache, setScreen, setActiveModules, setSession, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
+  const [showTrainingPrompt, setShowTrainingPrompt] = useState(false)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -108,6 +153,12 @@ export default function App() {
     if (!session?.loginMode) return
     checkFirstLogin(session.userId, session.loginMode)
   }, [session?.loginMode, session?.userId])
+
+  useEffect(() => {
+    if (session?.role !== 'lab_user' || !session?.userId || session?.mustChangePassword || !termsAccepted) return
+    if (localStorage.getItem(`ictlab_training_prompted_${session.userId}`) === 'true') return
+    setShowTrainingPrompt(true)
+  }, [session?.userId, session?.role, session?.mustChangePassword, termsAccepted])
 
   async function checkFirstLogin(userId) {
     try {
@@ -200,18 +251,25 @@ export default function App() {
   )
 
   const screens = {
-    dashboard:      <Dashboard />,
-    home:           <Home />,
-    inspection:     <Inspection />,
-    results:        <Results />,
-    history:        <History />,
-    projects:       <ProjectMaterial />,
+    dashboard:        <Dashboard />,
+    home:             <Home />,
+    inspection:       <Inspection />,
+    results:          <Results />,
+    history:          <History />,
+    projects:         <ProjectMaterial />,
     'project-detail': <ProjectDetail />,
-    booking:        <BookingEquipment />,
-    barcode:        <BarcodeScannerScreen />,
-    barcodeqr:      <BarcodeManager />,
-    profile:        <Profile />,
-    orgadmin:       <Admin />,
+    booking:          <BookingEquipment />,
+    equipment:        <EquipmentInventory />,
+    equipmenthub:     <EquipmentHub />,
+    barcode:          <BarcodeScannerScreen />,
+    barcodeqr:        <BarcodeManager />,
+    training:         <TrainingRecords />,
+    labmanagement:    <LabManagement />,
+    pm:               <PM />,
+    remessages:       <LabMessage />,
+    labsafety:        <LabSafety />,
+    profile:          <Profile />,
+    orgadmin:         <Admin />,
   }
 
   return (
@@ -224,6 +282,19 @@ export default function App() {
       <Toast />
       {!termsAccepted && session && <TermsAcceptance session={session} onAccept={() => setTermsAccepted(true)} />}
       {termsAccepted && session?.mustChangePassword && <ForcePasswordChange />}
+      {termsAccepted && !session?.mustChangePassword && showTrainingPrompt && showIconPicker !== true && (
+        <TrainingOnboardingModal
+          onGoToTraining={() => {
+            localStorage.setItem(`ictlab_training_prompted_${session.userId}`, 'true')
+            setShowTrainingPrompt(false)
+            setScreen('labsafety')
+          }}
+          onDismiss={() => {
+            localStorage.setItem(`ictlab_training_prompted_${session.userId}`, 'true')
+            setShowTrainingPrompt(false)
+          }}
+        />
+      )}
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
       {showIconPicker === true && (
         <DashboardIconPicker

@@ -262,7 +262,7 @@ function StudentDefaultIconsPanel({ orgId }) {
       .then(({ data }) => {
         const mods = data?.student_default_modules?.length
           ? data.student_default_modules
-          : ['projects', 'training', 'booking', 'equipmenthub', 'remessages']
+          : ['projects', 'booking', 'barcode', 'mileage', 'labsafety']
         setSelected(new Set(mods))
       })
   }, [orgId])
@@ -444,14 +444,11 @@ function OrgIconPoolsPanel({ orgId }) {
 }
 
 const STUDENT_ICON_OPTIONS = [
-  { key: 'projects',     label: 'Project Workspace',   icon: '🧪' },
-  { key: 'training',     label: 'Training Records',      icon: '🎓' },
-  { key: 'equipmenthub', label: 'Equipment',             icon: '📚' },
-  { key: 'booking',      label: 'Reserve Equipment',     icon: '📅' },
-  { key: 'barcode',      label: 'QR Scan',               icon: '📷' },
-  { key: 'remessages',   label: 'Lab Messages',   icon: '💬' },
-  { key: 'mileage',      label: 'Mileage Form',          icon: '🚗' },
-  { key: 'labsafety',    label: 'Lab Safety',            icon: '🦺' },
+  { key: 'projects',  label: 'Project Workspace', icon: '🧪' },
+  { key: 'booking',   label: 'Reserve Equipment', icon: '📅' },
+  { key: 'barcode',   label: 'QR Scan',           icon: '📷' },
+  { key: 'mileage',   label: 'Mileage Form',      icon: '🚗' },
+  { key: 'labsafety', label: 'Lab Safety',        icon: '🦺' },
 ]
 
 // ── User modal ────────────────────────────────────────────────
@@ -483,11 +480,11 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         .then(({ data }) => {
           const defaults = data?.student_default_modules?.length
             ? data.student_default_modules
-            : ['projects', 'training', 'booking', 'equipmenthub', 'barcode', 'remessages']
+            : ['projects', 'booking', 'barcode', 'mileage', 'labsafety']
           setSelectedIcons(new Set([...defaults, 'profile']))
         })
     } else if (!user && role === 'lab_user') {
-      setSelectedIcons(new Set(['projects', 'training', 'booking', 'equipmenthub', 'barcode', 'remessages', 'profile']))
+      setSelectedIcons(new Set(['projects', 'booking', 'barcode', 'mileage', 'labsafety', 'profile']))
     }
   }, [user?.id, user?.role, role, effectiveOrgId])
 
@@ -620,7 +617,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
           <select value={role} onChange={e => setRole(e.target.value)}>
             <option value="user">Lab Manager</option>
             <option value="admin">Org Admin</option>
-            <option value="student">Lab User</option>
+            <option value="lab_user">Lab User</option>
           </select>
         </div>
         {isSuperAdmin && (
@@ -1940,7 +1937,7 @@ export default function Admin() {
           orgs={orgs}
           defaultOrgId={addAdminOrgId || (isSuperAdmin ? orgFilter : myOrgId)}
           isSuperAdmin={isSuperAdmin}
-          defaultRole={isSuperAdmin ? 'admin' : 'user'}
+          defaultRole={isSuperAdmin ? 'admin' : tab === 'students' ? 'lab_user' : 'user'}
           onClose={() => { setUserModal(null); setAddAdminOrgId(null) }}
           onSaved={() => { loadUsers(); loadOrgs() }}
         />

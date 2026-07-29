@@ -61,10 +61,10 @@ async function createAuthUser(email, password) {
 // [TeammatesPanel imported from components/TeammatesPanel.jsx]
 // ══════════════════════════════════════════════════════════════
 
-const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','storage','privacy','password','danger']
-const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','storage','privacy','team','danger']
-const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','storage','privacy','team','danger']
-const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org','privacy']
+const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','storage','password','danger']
+const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','storage','team','danger']
+const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','storage','team','danger']
+const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org']
 
 // ══════════════════════════════════════════════════════════════
 // SOLO PROFILE — reads from solo_users table
@@ -189,7 +189,6 @@ function SoloProfile({ session }) {
           { key: 'dashboard',     label: '🎛️ Dashboard Icons' },
           { key: 'notifications', label: '🔔 Notifications' },
           { key: 'storage',       label: '🗄️ Storage' },
-          { key: 'privacy',       label: '🔒 Privacy' },
           { key: 'password',      label: '🔑 Password' },
           { key: 'danger',        label: '⚠️ Delete Account' },
         ].map(t => (
@@ -244,8 +243,6 @@ function SoloProfile({ session }) {
       {activeTab === 'notifications' && <NotificationPrefsPanel userId={session?.userId} role="solo" />}
 
       {activeTab === 'storage' && <StorageTab toast={toast} />}
-
-      {activeTab === 'privacy' && <PrivacyTab />}
 
       {activeTab === 'password' && (
         <div className="card">
@@ -1124,7 +1121,6 @@ function AdminProfile() {
     { key: 'dashboard', label: '🎛️ Dashboard Icons' },
     { key: 'notifs',    label: '🔔 Notifications' },
     { key: 'org',       label: '🏢 Organization' },
-    { key: 'privacy',   label: '🔒 Privacy' },
   ]
   return (
     <div>
@@ -1145,7 +1141,6 @@ function AdminProfile() {
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
       {adminTab === 'org'       && <OrgContactPanel session={session} toast={toast} />}
-      {adminTab === 'privacy'   && <PrivacyTab />}
     </div>
   )
 }
@@ -2121,7 +2116,6 @@ function StaffProfile({ session }) {
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'storage',   label: '🗄️ Storage' },
-          { key: 'privacy',   label: '🔒 Privacy' },
           { key: 'team',      label: '🤝 Project Team' },
           { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
@@ -2136,7 +2130,6 @@ function StaffProfile({ session }) {
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
       {activeTab === 'storage'   && <StorageTab toast={toast} />}
-      {activeTab === 'privacy'   && <PrivacyTab />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
@@ -2337,7 +2330,6 @@ function UserProfile({ session }) {
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'storage',   label: '🗄️ Storage' },
-          { key: 'privacy',   label: '🔒 Privacy' },
           { key: 'team',      label: '🤝 Project Team' },
           { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
@@ -2352,7 +2344,6 @@ function UserProfile({ session }) {
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="student" />}
       {activeTab === 'storage'   && <StorageTab toast={toast} />}
-      {activeTab === 'privacy'   && <PrivacyTab />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
@@ -2547,83 +2538,6 @@ export function ApprovalRequestsPanel({ toast, session, onCountChange }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN EXPORT — routes by role
 // ══════════════════════════════════════════════════════════════
-function PrivacyTab() {
-  const stored = localStorage.getItem('ictlab_cookie_consent')
-  const [pref, setPref] = useState(stored || null)
-
-  const choose = (val) => {
-    localStorage.setItem('ictlab_cookie_consent', val)
-    setPref(val)
-    if (val === 'all') {
-      import('../../../src/components/CookieConsent').then(m => m.loadGA()).catch(() => {})
-    }
-  }
-
-  const isAll = pref === 'all'
-  const isEssential = pref === 'essential'
-
-  return (
-    <div className="card" style={{ maxWidth: 560 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Cookie Preferences</div>
-      <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
-        Control what data ICT-Lab is allowed to collect on your device.
-      </div>
-
-      {/* Essential */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px', borderRadius: 10, border: '1.5px solid #b6e8d8', background: '#f0faf6', marginBottom: 10 }}>
-        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: '#0d6b50' }}>Essential Cookies</div>
-          <div style={{ fontSize: 12, color: '#6b6860', marginTop: 2 }}>Login sessions, app preferences, sidebar state. Always active — required for the app to work.</div>
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#0d6b50', background: '#d1f5e8', padding: '4px 8px', borderRadius: 99, flexShrink: 0 }}>Always on</span>
-      </div>
-
-      {/* Analytics */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px', borderRadius: 10, border: `1.5px solid ${isAll ? '#c5d0fa' : 'var(--border)'}`, background: isAll ? '#f0f4ff' : 'var(--surface2)', marginBottom: 24, transition: 'all 0.2s' }}>
-        <div style={{ width: 20, height: 20, borderRadius: '50%', background: isAll ? '#3b5bdb' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'background 0.2s' }}>
-          {isAll
-            ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-            : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          }
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: isAll ? '#3b5bdb' : 'var(--text)' }}>Analytics Cookies (Google Analytics)</div>
-          <div style={{ fontSize: 12, color: '#6b6860', marginTop: 2 }}>Helps us understand how the platform is used so we can improve it. No personal data is sold or shared with advertisers.</div>
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 600, color: isAll ? '#3b5bdb' : '#9ca3af', background: isAll ? '#dce4ff' : '#f3f4f6', padding: '4px 8px', borderRadius: 99, flexShrink: 0 }}>{isAll ? 'Enabled' : 'Disabled'}</span>
-      </div>
-
-      {/* Action buttons */}
-      {!pref && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12, fontWeight: 500 }}>You haven't set a preference yet.</div>}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => choose('all')}
-          disabled={isAll}
-          style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: isAll ? '#e8f7f2' : 'linear-gradient(135deg, #0d47a1, #1565c0)', color: isAll ? '#1D9E75' : '#fff', fontSize: 13, fontWeight: 700, cursor: isAll ? 'default' : 'pointer', transition: 'filter 0.15s' }}
-          onMouseEnter={e => { if (!isAll) e.currentTarget.style.filter = 'brightness(1.1)' }}
-          onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
-        >
-          {isAll ? '✓ Accept All (current)' : 'Accept All Cookies'}
-        </button>
-        <button
-          onClick={() => choose('essential')}
-          disabled={isEssential}
-          style={{ padding: '10px 20px', borderRadius: 10, border: '1.5px solid var(--border)', background: isEssential ? 'var(--surface2)' : '#fff', color: isEssential ? 'var(--text3)' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: isEssential ? 'default' : 'pointer', transition: 'background 0.15s' }}
-          onMouseEnter={e => { if (!isEssential) e.currentTarget.style.background = 'var(--surface2)' }}
-          onMouseLeave={e => { if (!isEssential) e.currentTarget.style.background = '#fff' }}
-        >
-          {isEssential ? '✓ Essential Only (current)' : 'Essential Only'}
-        </button>
-      </div>
-      <p style={{ marginTop: 16, fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
-        Read our <a href="/privacy" target="_blank" style={{ color: '#0d47a1', textDecoration: 'underline' }}>Privacy Policy</a> for full details on what data is collected and how it is used.
-      </p>
-    </div>
-  )
-}
 
 function StorageTab({ toast }) {
   const { session } = useAppStore()

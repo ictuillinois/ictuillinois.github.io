@@ -155,8 +155,6 @@ export default function Login() {
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
             <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
-              <a href="/privacy/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
-              <span style={{ margin: '0 6px' }}>·</span>
               <a href="/terms/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
             </div>
           </form>

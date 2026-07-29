@@ -6,7 +6,7 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects','training','booking','equipmenthub','mileage','labsafety','barcode','profile','pm']
+  const studentAllowed = ['projects', 'booking', 'mileage', 'labsafety', 'barcode', 'profile']
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
     if (role === 'lab_user' && !studentAllowed.includes(m.key)) return false
@@ -24,6 +24,7 @@ function getModules(role, loginMode, activeModules) {
     if (isStaff) STAFF_PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
     if (role === 'admin') base.forEach(m => { if (m.adminOnly && !activeModules.includes(m.key)) ordered.push(m) })
     if (isStaff) base.forEach(m => { if (m.studentLocked && !activeModules.includes(m.key)) ordered.push(m) })
+    if (isStaff) base.forEach(m => { if (m.staffOnly && !activeModules.includes(m.key)) ordered.push(m) })
     return ordered
   }
   return base
@@ -31,18 +32,13 @@ function getModules(role, loginMode, activeModules) {
 
 function getAllModulesForStudent() {
   return [
-    { key: 'projects',     screen: 'projects',      label: 'Project Workspace',        sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
-    { key: 'training',     screen: 'training',      label: 'Training Records',          sub: 'Certs, equipment & alarm',         icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'equipment',    screen: 'equipment',     label: 'Equipment List',       sub: 'Lab equipment tracking',           icon: '🔧', bg: '#fef3c7', color: '#92400e', locked: true },
-    { key: 'equipmenthub', screen: 'equipmenthub',  label: 'Equipment',                 sub: 'Info, SOP & standards',            icon: '📚', bg: '#E1F5EE', color: '#085041' },
-    { key: 'booking',      screen: 'booking',       label: 'Reserve Equipment',         sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'barcode',      screen: 'barcode',       label: 'QR Scan',                   sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
-    { key: 'mileage',      screen: null,            label: 'Mileage Form',              sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
-    { key: 'labsafety',    screen: null,            label: 'Lab Safety',                sub: 'Safety training & certification',  icon: '🦺', bg: '#fef3c7', color: '#92400e', external: true },
-    { key: 'remessages',   screen: 'remessages',    label: 'Lab Messages', sub: 'Notes, ideas & issue reports',     icon: '💬', bg: '#E1F5EE', color: '#1D9E75' },
-    { key: 'pm',           screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & team chat',      icon: '📋', bg: '#fff3e0', color: '#ff6b00', locked: true },
-    { key: 'profile',      screen: 'profile',       label: 'Profile',                   sub: 'Your info & settings',             icon: '👤', bg: '#EEEDFE', color: '#534AB7' },
-    { key: 'barcodeqr',   screen: 'barcodeqr',     label: 'QR Labels',                   sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
+    { key: 'projects',   screen: 'projects',   label: 'Project Workspace', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
+    { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
+    { key: 'barcode',    screen: 'barcode',    label: 'QR Scan',           sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
+    { key: 'mileage',    screen: null,         label: 'Mileage Form',      sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
+    { key: 'labsafety',  screen: 'labsafety',  label: 'Lab Safety',        sub: 'Safety steps & certification',     icon: '🦺', bg: '#fef3c7', color: '#92400e' },
+    { key: 'barcodeqr',  screen: 'barcodeqr',  label: 'QR Labels',         sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
+    { key: 'profile',    screen: 'profile',    label: 'Profile',           sub: 'Your info & settings',             icon: '👤', bg: '#EEEDFE', color: '#534AB7' },
   ]
 }
 
@@ -220,13 +216,11 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
   const trainingPct = Math.round((data.trainingsComplete/data.trainingsTotal)*100)
   const trainingColor = trainingPct===100?'#1D9E75':trainingPct>=50?'#0369a1':'#c84b2f'
   const allQuickLinks = [
-    { key:'projects',    icon:'🧪', label:'Project Workspace',   sub:'Inventory, results & workspace', screen:'projects',    color:'#534AB7' },
-    { key:'training',    icon:'🎓', label:'Training Records',     sub:'Check your certs',               screen:'training',    color:'#0369a1' },
-    { key:'booking',     icon:'📅', label:'Book Equipment',       sub:'Reserve lab equipment',          screen:'booking',     color:'#0369a1' },
-    { key:'equipmenthub',icon:'📚', label:'Equipment',            sub:'SOPs & standards',               screen:'equipmenthub',color:'#085041' },
-    { key:'barcode',     icon:'📷', label:'QR Scan',               sub:'Scan lab materials',             screen:'barcode',     color:'#00796b' },
-    { key:'remessages',  icon:'💬', label:'Lab Messages',  sub:'Ask REs a question',             screen:'remessages',  color:'#1D9E75' },
-    { key:'mileage',     icon:'🚗', label:'Mileage Form',         sub:'Submit reimbursement',           screen:null,          color:'#c84b2f', external:true },
+    { key:'projects',   icon:'🧪', label:'Project Workspace', sub:'Inventory, results & workspace', screen:'projects',   color:'#534AB7' },
+    { key:'booking',    icon:'📅', label:'Book Equipment',    sub:'Reserve lab equipment',          screen:'booking',    color:'#0369a1' },
+    { key:'barcode',    icon:'📷', label:'QR Scan',            sub:'Scan lab materials',             screen:'barcode',    color:'#00796b' },
+    { key:'labsafety',  icon:'🦺', label:'Lab Safety',         sub:'Safety steps & certification',   screen:'labsafety',  color:'#92400e' },
+    { key:'mileage',    icon:'🚗', label:'Mileage Form',      sub:'Submit reimbursement',           screen:null,         color:'#c84b2f', external:true },
   ]
   const assignedQuickLinks = (studentAllowedPool && studentAllowedPool.size > 0)
     ? allQuickLinks.filter(m => studentAllowedPool.has(m.key))
@@ -594,8 +588,6 @@ export default function Dashboard() {
       // If activeModules is already set (e.g., just saved from Profile), don't overwrite it
       // with a DB re-fetch. Only fetch when null (initial load, page reload, or after logout).
       if (activeModules !== null) return
-      // Students default to profile-only while prefs load so they never flash all icons
-      if (session?.role === 'lab_user') setActiveModules(['profile'])
       if (!session?.userId) {
         const saved = localStorage.getItem('ictlab_admin_modules')
         setActiveModules(saved ? JSON.parse(saved) : null)
@@ -656,9 +648,10 @@ export default function Dashboard() {
           const effectivePool = orgPool ?? appPool
           if (effectivePool !== null) {
             if (mods?.length) {
-              // Remove modules no longer in the pool; always keep profile and staff-pinned
+              // Remove modules no longer in the pool; always keep profile, staff-pinned, and staffOnly for staff
               const isStaffUser = session?.role === 'admin' || session?.role === 'user'
-              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)))
+              const staffOnlyKeys = new Set(ALL_MODULES_META.filter(m => m.staffOnly).map(m => m.key))
+              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)) || (isStaffUser && staffOnlyKeys.has(k)))
               if (userHasConfigured) {
                 mods = filtered
               } else {
@@ -671,8 +664,8 @@ export default function Dashboard() {
               mods = effectivePool
             }
           }
-          // For staff with no saved mods, default labmanagement to first position
-          if ((session?.role === 'admin' || session?.role === 'user') && !mods?.length) {
+          // For staff with no saved mods OR only default profile (not user-configured), default labmanagement to first position
+          if ((session?.role === 'admin' || session?.role === 'user') && (!mods?.length || (mods.length === 1 && mods[0] === 'profile' && !userHasConfigured))) {
             const staffPool = effectivePool ??
               ALL_MODULES_META.filter(m => !m.soloLocked && !m.studentOnly).map(m => m.key)
             const withLabFirst = staffPool.includes('labmanagement')
@@ -683,9 +676,8 @@ export default function Dashboard() {
           // Ensure profile is always present for all team users
           if (mods && !mods.includes('profile')) mods = [...mods, 'profile']
         } catch {}
-        // Students with no config see only Profile until admin assigns icons
-        const defaultMods = session?.role === 'lab_user' ? ['profile'] : null
-        setActiveModules(mods?.length ? mods : defaultMods)
+        // Lab users with no saved config see all their allowed modules
+        setActiveModules(mods?.length ? mods : null)
         if (session?.role === 'lab_user') {
           setStudentAllowedPool(new Set(row?.allowed_modules || []))
         }

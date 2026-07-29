@@ -2,15 +2,23 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
 
-// ICT-Lab modules — Supply Inventory, Project Workspace, Equipment Booking
+// ICT-Lab modules
 export const ALL_MODULES_META = [
-  { key: 'supply',    screen: 'home',      label: 'Supply Inventory',  sub: 'Weekly inspection & export',      icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
+  // ── Staff-only (admin / lab manager) ──────────────────────────────────
+  { key: 'training',      screen: 'training',      label: 'Training Records',  sub: 'Certs, equipment & alarm training',  icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team'], staffOnly: true },
+  { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',    sub: 'Users & lab managers',               icon: '👥', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
+  { key: 'pm',            screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & deadlines',        icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team'], staffOnly: true },
+  { key: 'equipment',     screen: 'equipment',     label: 'Equipment List',    sub: 'Lab equipment inventory tracking',   icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team'], staffOnly: true },
+  { key: 'equipmenthub',  screen: 'equipmenthub',  label: 'Equipment Hub',     sub: 'SOPs, videos & standards',           icon: '📚', bg: '#E1F5EE', color: '#085041', roles: ['team'], staffOnly: true },
+  { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
+  // ── All users ──────────────────────────────────────────────────────────
   { key: 'projects',  screen: 'projects',  label: 'Project Workspace', sub: 'Material inventory & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
   { key: 'booking',   screen: 'booking',   label: 'Reserve Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
   { key: 'barcode',   screen: 'barcode',   label: 'QR Scan',           sub: 'Scan & look up lab materials',    icon: '📷', bg: '#e0f7fa', color: '#00796b', roles: ['team'] },
   { key: 'barcodeqr', screen: 'barcodeqr', label: 'QR Labels',         sub: 'Generate & print QR codes',       icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team'], studentLocked: true },
+  { key: 'remessages', screen: 'remessages', label: 'Lab Messages',    sub: 'Internal chat between lab managers & admin', icon: '💬', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
   { key: 'mileage',   screen: null,        label: 'Mileage Form',      sub: 'Submit mileage reimbursement',    icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', roles: ['team'], external: true },
-  { key: 'labsafety', screen: null,        label: 'Lab Safety',        sub: 'Safety training & certification', icon: '🦺', bg: '#fef3c7', color: '#92400e', roles: ['team'], external: true },
+  { key: 'labsafety', screen: 'labsafety', label: 'Lab Safety',        sub: 'Safety steps & certification',    icon: '🦺', bg: '#fef3c7', color: '#92400e', roles: ['team'] },
   { key: 'profile',   screen: 'profile',   label: 'Profile',           sub: 'Your info & settings',            icon: '👤', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
 ]
 

@@ -141,7 +141,6 @@ function getScreenTabs(screen, session) {
       { key: 'dashboard',     icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifications', icon: '🔔', label: 'Notifications' },
       { key: 'storage',       icon: '🗄️', label: 'Storage' },
-      { key: 'privacy',       icon: '🔒', label: 'Privacy' },
       { key: 'password',      icon: '🔑', label: 'Password' },
       { key: 'danger',        icon: '⚠️', label: 'Delete Account' },
     ]
@@ -151,7 +150,6 @@ function getScreenTabs(screen, session) {
       { key: 'dashboard', icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifs',    icon: '🔔', label: 'Notifications' },
       { key: 'org',       icon: '🏢', label: 'Organization' },
-      { key: 'privacy',   icon: '🔒', label: 'Privacy' },
     ]
     return [
       { key: 'info',      icon: '👤', label: 'My Info' },
@@ -159,7 +157,6 @@ function getScreenTabs(screen, session) {
       { key: 'dashboard', icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifs',    icon: '🔔', label: 'Notifications' },
       { key: 'storage',   icon: '🗄️', label: 'Storage' },
-      { key: 'privacy',   icon: '🔒', label: 'Privacy' },
       { key: 'team',      icon: '🤝', label: 'Project Team' },
       { key: 'danger',    icon: '⚠️', label: 'Delete Account' },
     ]
@@ -594,8 +591,6 @@ export default function Layout({ children }) {
           {children}
           {!isMobile && !isProto && screen !== 'dashboard' && (
             <div style={{ textAlign: 'center', padding: '16px 0 4px', fontSize: 11, color: 'var(--text3)' }}>
-              <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Privacy Policy</a>
-              <span style={{ margin: '0 6px' }}>·</span>
               <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
             </div>
           )}

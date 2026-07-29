@@ -74,8 +74,7 @@ export default function CookieConsent() {
         {/* Text */}
         <div style={{ flex: 1, minWidth: 200 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1916' }}>We use cookies </span>
-          <span style={{ fontSize: 13, color: '#6b6860' }}>to keep the app running and understand how it's used (Google Analytics). No data is sold or used for ads. </span>
-          <a href="/privacy" target="_blank" style={{ fontSize: 12, color: '#0d47a1', textDecoration: 'underline', whiteSpace: 'nowrap' }}>Privacy Policy</a>
+          <span style={{ fontSize: 13, color: '#6b6860' }}>to keep the app running and understand how it's used (Google Analytics). No data is sold or used for ads.</span>
         </div>
 
         {/* Buttons */}
