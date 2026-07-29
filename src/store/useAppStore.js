@@ -79,6 +79,11 @@ export const useAppStore = create((set, get) => ({
   setScanEquipmentId: (id) => set({ scanEquipmentId: id }),
   clearScanEquipmentId: () => set({ scanEquipmentId: null }),
 
+  // ── Solo workspace sharing stubs (ICT-Lab is team-only; these keep ProjectMaterial from crashing) ──
+  sharedWorkspaces: [],
+  viewingWorkspaceOwnerId: null,
+  setViewingWorkspaceOwnerId: () => {},
+
   // ── Storage provider (mirrors localStorage ictlab_storage_provider) ──
   storageProviderKey: localStorage.getItem('ictlab_storage_provider') || 'supabase',
   setStorageProviderKey: (key) => {
