@@ -16,8 +16,15 @@ import TeamMembersPanel from '../../components/TeamMembersPanel'
 function PasswordInput({ value, onChange, placeholder, autoComplete, show, onToggle, id }) {
   return (
     <>
-      <input id={id} type={show ? 'text' : 'password'} value={value} onChange={onChange}
-        placeholder={placeholder} autoComplete={autoComplete} />
+      <input
+        key={show ? 'txt' : 'pwd'}
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+      />
       <button type="button" onClick={onToggle}
         style={{ marginTop: 4, fontSize: 12, color: 'var(--accent)', border: 'none', background: 'none', cursor: 'pointer', padding: '2px 0', fontFamily: 'var(--sans)', display: 'block' }}>
         {show ? 'Hide password' : 'Show password'}
