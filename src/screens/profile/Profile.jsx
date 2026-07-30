@@ -13,6 +13,23 @@ import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 
+// Password input with show/hide toggle — flex row so button never overlaps the input
+function PasswordInput({ value, onChange, placeholder, autoComplete, show, onToggle, id }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface)', transition: 'border-color 0.15s', overflow: 'hidden' }}
+      onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+      onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+      <input id={id} type={show ? 'text' : 'password'} value={value} onChange={onChange}
+        placeholder={placeholder} autoComplete={autoComplete}
+        style={{ flex: 1, border: 'none', outline: 'none', padding: '10px 0 10px 12px', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 15, color: 'var(--text)', minWidth: 0 }} />
+      <button type="button" onMouseDown={e => e.preventDefault()} onClick={onToggle}
+        style={{ padding: '0 12px', height: '100%', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+      </button>
+    </div>
+  )
+}
+
 async function notifyOrgManagers(organizationId, message, type = 'info', excludeUserId = null) {
   let q = sb.from('users').select('id').eq('organization_id', organizationId).in('role', ['user', 'admin']).eq('is_active', true)
   if (excludeUserId) q = q.neq('id', excludeUserId)
@@ -251,22 +268,12 @@ function SoloProfile({ session }) {
           <form onSubmit={e => { e.preventDefault(); savePassword() }} autoComplete="on">
             <div className="field">
               <label>Current password</label>
-              <div style={{ position: 'relative' }}>
-                <input type={showPinCur ? 'text' : 'password'} autoComplete="current-password" value={pinForm.current} onChange={e => { setPinForm(f => ({ ...f, current: e.target.value })); setPinError('') }} placeholder="••••••••" style={{ paddingRight: 40 }} />
-                <button type="button" onClick={() => setShowPinCur(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                  {showPinCur ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-                </button>
-              </div>
+              <PasswordInput show={showPinCur} onToggle={() => setShowPinCur(s => !s)} value={pinForm.current} onChange={e => { setPinForm(f => ({ ...f, current: e.target.value })); setPinError('') }} placeholder="••••••••" autoComplete="current-password" />
             </div>
             <div className="grid-2">
               <div className="field">
                 <label>New password</label>
-                <div style={{ position: 'relative' }}>
-                  <input type={showPinNew ? 'text' : 'password'} autoComplete="new-password" value={pinForm.newPin} onChange={e => { setPinForm(f => ({ ...f, newPin: e.target.value })); setPinError('') }} style={{ paddingRight: 40 }} />
-                  <button type="button" onClick={() => setShowPinNew(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                    {showPinNew ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-                  </button>
-                </div>
+                <PasswordInput show={showPinNew} onToggle={() => setShowPinNew(s => !s)} value={pinForm.newPin} onChange={e => { setPinForm(f => ({ ...f, newPin: e.target.value })); setPinError('') }} autoComplete="new-password" />
               </div>
               <div className="field"><label>Confirm</label><input type="password" autoComplete="new-password" value={pinForm.confirm} onChange={e => { setPinForm(f => ({ ...f, confirm: e.target.value })); setPinError('') }} /></div>
             </div>
@@ -1208,31 +1215,16 @@ function AdminSettings({ session: sessionProp, toast, isSuperAdmin = false }) {
         <form onSubmit={e => { e.preventDefault(); savePassword() }} autoComplete="on">
           <div className="field">
             <label>Current password</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showCurrent ? 'text' : 'password'} autoComplete="current-password" value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="••••••••" style={{ paddingRight: 40 }} />
-              <button type="button" onClick={() => setShowCurrent(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                {showCurrent ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-              </button>
-            </div>
+            <PasswordInput show={showCurrent} onToggle={() => setShowCurrent(s => !s)} value={form.currentPassword} onChange={e => setForm(f => ({ ...f, currentPassword: e.target.value }))} placeholder="••••••••" autoComplete="current-password" />
           </div>
           <div className="field">
             <label>New password</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showNew ? 'text' : 'password'} autoComplete="new-password" value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 8 characters" style={{ paddingRight: 40 }} />
-              <button type="button" onClick={() => setShowNew(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                {showNew ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-              </button>
-            </div>
+            <PasswordInput show={showNew} onToggle={() => setShowNew(s => !s)} value={form.newPassword} onChange={e => setForm(f => ({ ...f, newPassword: e.target.value }))} placeholder="Min. 8 characters" autoComplete="new-password" />
           </div>
           <PasswordStrengthHint password={form.newPassword} />
           <div className="field">
             <label>Confirm new password</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showConfirm ? 'text' : 'password'} autoComplete="new-password" value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} placeholder="••••••••" style={{ paddingRight: 40 }} />
-              <button type="button" onClick={() => setShowConfirm(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                {showConfirm ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-              </button>
-            </div>
+            <PasswordInput show={showConfirm} onToggle={() => setShowConfirm(s => !s)} value={form.confirmPassword} onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))} placeholder="••••••••" autoComplete="new-password" />
           </div>
           {error && <div style={{ fontSize: 13, color: 'var(--accent2)', marginBottom: 12 }}>⚠️ {error}</div>}
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Update password'}</button>
@@ -1591,12 +1583,7 @@ function StudentModal({ student, session, onClose, onSave }) {
         </div>
         <div className="field">
           <label>Password{student ? ' (leave blank to keep current)' : ' *'}</label>
-          <div style={{ position: 'relative' }}>
-            <input type={showPw ? 'text' : 'password'} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={student ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" style={{ paddingRight: 40 }} />
-            <button type="button" onClick={() => setShowPw(s => !s)} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-              {showPw ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-            </button>
-          </div>
+          <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={student ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
           <PasswordStrengthHint password={form.password} />
         </div>
         <div className="grid-2">
@@ -1784,12 +1771,7 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
         <div className="grid-2">
           <div className="field">
             <label>Password{staff ? ' (leave blank to keep)' : ' *'}</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showPw ? 'text' : 'password'} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={staff ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" style={{ paddingRight: 40 }} />
-              <button type="button" onClick={() => setShowPw(s => !s)} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                {showPw ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-              </button>
-            </div>
+            <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={staff ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
             <PasswordStrengthHint password={form.password} />
           </div>
           <div className="field"><label>Phone</label><input value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} /></div>
@@ -2061,22 +2043,12 @@ function PasswordChangePanel({ session, toast }) {
       <form onSubmit={e => { e.preventDefault(); save() }} autoComplete="on">
         <div className="field">
           <label>Current password</label>
-          <div style={{ position: 'relative' }}>
-            <input type={showCur ? 'text' : 'password'} autoComplete="current-password" value={form.current} onChange={e => { setForm(f => ({ ...f, current: e.target.value })); setError('') }} placeholder="••••••••" style={{ paddingRight: 40 }} />
-            <button type="button" onClick={() => setShowCur(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-              {showCur ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-            </button>
-          </div>
+          <PasswordInput show={showCur} onToggle={() => setShowCur(s => !s)} value={form.current} onChange={e => { setForm(f => ({ ...f, current: e.target.value })); setError('') }} placeholder="••••••••" autoComplete="current-password" />
         </div>
         <div className="grid-2">
           <div className="field">
             <label>New password</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showNew ? 'text' : 'password'} autoComplete="new-password" value={form.newPin} onChange={e => { setForm(f => ({ ...f, newPin: e.target.value })); setError('') }} style={{ paddingRight: 40 }} />
-              <button type="button" onClick={() => setShowNew(s => !s)} tabIndex={-1} onMouseDown={e => e.preventDefault()} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4, display: 'flex', alignItems: 'center', zIndex: 2 }}>
-                {showNew ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-              </button>
-            </div>
+            <PasswordInput show={showNew} onToggle={() => setShowNew(s => !s)} value={form.newPin} onChange={e => { setForm(f => ({ ...f, newPin: e.target.value })); setError('') }} placeholder="Min. 8 characters" autoComplete="new-password" />
           </div>
           <div className="field"><label>Confirm</label><input type="password" autoComplete="new-password" value={form.confirm} onChange={e => { setForm(f => ({ ...f, confirm: e.target.value })); setError('') }} /></div>
         </div>
