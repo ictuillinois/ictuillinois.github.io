@@ -13,20 +13,16 @@ import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 
-// Password input with show/hide toggle — flex row so button never overlaps the input
 function PasswordInput({ value, onChange, placeholder, autoComplete, show, onToggle, id }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface)', transition: 'border-color 0.15s', overflow: 'hidden' }}
-      onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-      onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+    <>
       <input id={id} type={show ? 'text' : 'password'} value={value} onChange={onChange}
-        placeholder={placeholder} autoComplete={autoComplete}
-        style={{ flex: 1, border: 'none', outline: 'none', padding: '10px 0 10px 12px', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 15, color: 'var(--text)', minWidth: 0 }} />
-      <button type="button" onMouseDown={e => e.preventDefault()} onClick={onToggle}
-        style={{ padding: '0 12px', height: '100%', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+        placeholder={placeholder} autoComplete={autoComplete} />
+      <button type="button" onClick={onToggle}
+        style={{ marginTop: 4, fontSize: 12, color: 'var(--accent)', border: 'none', background: 'none', cursor: 'pointer', padding: '2px 0', fontFamily: 'var(--sans)', display: 'block' }}>
+        {show ? 'Hide password' : 'Show password'}
       </button>
-    </div>
+    </>
   )
 }
 
