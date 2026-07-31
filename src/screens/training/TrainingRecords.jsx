@@ -1565,13 +1565,13 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
   async function loadStatuses() {
     const ids = students.map(s => s.id)
     if (!ids.length) { setStatuses({}); return }
-    const [fresh, golf, equip, alarm, lockers, safety] = await Promise.all([
+    const [fresh, golf, equip, alarm, lockers, safetyRes] = await Promise.all([
       sb.from('training_fresh').select('user_id, admin_approved, certificate_url').in('user_id', ids),
       sb.from('training_golf_car').select('user_id, trained').in('user_id', ids),
       sb.from('training_equipment').select('user_id, passed_exam').in('user_id', ids),
       sb.from('training_building_alarm').select('user_id, trained').in('user_id', ids),
       sb.from('student_lockers').select('user_id').in('user_id', ids),
-      sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids),
+      sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids).then(r => r, () => ({ data: null })),
     ])
     const map = {}
     const get = uid => map[uid] || (map[uid] = {})
@@ -1589,7 +1589,7 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
     agg(alarm, 'alarm', r => r.trained)
     ids.forEach(uid => { get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok' : 'none' })
     const safetyCount = {}
-    ;(safety.data || []).forEach(r => { if (r.completed) safetyCount[r.user_id] = (safetyCount[r.user_id] || 0) + 1 })
+    ;(safetyRes.data || []).forEach(r => { if (r.completed) safetyCount[r.user_id] = (safetyCount[r.user_id] || 0) + 1 })
     ids.forEach(uid => { const n = safetyCount[uid] || 0; get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend' })
     setStatuses(map)
     const fc = {}
@@ -1725,7 +1725,7 @@ export default function TrainingRecords() {
     if (localStorage.getItem('examEquipment') && !sidebarSubTab) setSidebarSubTab('exam')
   }, [])
 
-  const subTab = sidebarSubTab || 'safety'
+  const subTab = sidebarSubTab || 'fresh'
 
   useEffect(() => { loadStudents() }, [])
 
