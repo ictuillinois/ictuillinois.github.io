@@ -33,9 +33,9 @@ const STEPS = [
   {
     number: 4,
     title: 'Step 4',
-    icon: '✅',
-    description: 'Final certification',
-    type: 'placeholder',
+    icon: '🎬',
+    description: 'Watch the ICT Safety Training Video',
+    type: 'ict_video',
     content: null,
   },
 ]
@@ -107,9 +107,67 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
   )
 }
 
+// ── Step 4: ICT Safety Video ───────────────────────────────────────────────
+
+function Step4VideoContent({ userId }) {
+  const clickKey   = `ictlab_safety4_clicked_${userId}`
+  const confirmKey = `ictlab_safety4_confirmed_${userId}`
+  const [url, setUrl] = useState('')
+  const [hasClicked, setHasClicked]   = useState(() => !!localStorage.getItem(clickKey))
+  const [confirmed, setConfirmed]     = useState(() => !!localStorage.getItem(confirmKey))
+
+  useEffect(() => {
+    sb.from('settings').select('value').eq('key', 'labsafety_url').maybeSingle()
+      .then(({ data }) => { if (data?.value) setUrl(data.value) })
+  }, [])
+
+  function handleWatch() {
+    if (!url) return
+    localStorage.setItem(clickKey, '1')
+    setHasClicked(true)
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  function handleConfirm(e) {
+    const checked = e.target.checked
+    setConfirmed(checked)
+    if (checked) localStorage.setItem(confirmKey, '1')
+    else localStorage.removeItem(confirmKey)
+  }
+
+  return (
+    <div>
+      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 20, marginBottom: 12, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
+          Watch the required ICT Laboratory Safety Video. After watching, return here and check the confirmation box so your lab manager can approve this step.
+        </div>
+        <button onClick={handleWatch} disabled={!url}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: url ? 'pointer' : 'default', opacity: url ? 1 : 0.5 }}>
+          Watch ICT Safety Video ↗
+        </button>
+      </div>
+      {hasClicked ? (
+        <div style={{ background: confirmed ? '#E1F5EE' : 'var(--surface2)', border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', transition: 'all 0.2s' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, color: confirmed ? '#085041' : 'var(--text)', fontWeight: confirmed ? 600 : 400 }}>
+            <input type="checkbox" checked={confirmed} onChange={handleConfirm}
+              style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: 'pointer' }} />
+            I confirm I have watched the ICT safety video
+          </label>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
+          After clicking the link above, a confirmation checkbox will appear here.
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Step content renderer ──────────────────────────────────────────────────
 
-function StepContentArea({ step }) {
+function StepContentArea({ step, targetUserId }) {
+  if (step.type === 'ict_video') return <Step4VideoContent userId={targetUserId} />
+
   // ── PLACEHOLDER — replace with real content when step details are provided ──
   if (step.type === 'placeholder' || !step.content) {
     return (
@@ -235,7 +293,7 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, saving }) {
 
             {/* Step content area */}
             <div style={{ marginBottom: 20 }}>
-              <StepContentArea step={s} />
+              <StepContentArea step={s} targetUserId={user?.id} />
             </div>
 
             {/* Lab manager: approve / revoke */}
@@ -288,9 +346,9 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, saving }) {
   )
 }
 
-// ── Main screen ────────────────────────────────────────────────────────────
+// ── Main component (used standalone and as Training Records tab) ───────────
 
-export default function LabSafety() {
+export default function SafetyTab({ asTab = false }) {
   const { session } = useAppStore()
   const isStaff = session?.role === 'admin' || session?.role === 'user'
   const isLabUser = session?.role === 'lab_user'
@@ -402,16 +460,17 @@ export default function LabSafety() {
   )
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.4px', marginBottom: 4 }}>🦺 Safety Training</div>
-        <div style={{ fontSize: 13, color: 'var(--text3)' }}>
-          {isStaff
-            ? 'Review lab users\' safety training progress and approve each step.'
-            : 'Complete all 4 steps — your lab manager will approve each one before you proceed.'}
+    <div style={asTab ? {} : { maxWidth: 1000, margin: '0 auto' }}>
+      {!asTab && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.4px', marginBottom: 4 }}>🦺 Safety Training</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)' }}>
+            {isStaff
+              ? 'Review lab users\' safety training progress and approve each step.'
+              : 'Complete all 4 steps — your lab manager will approve each one before you proceed.'}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Lab user view — step panel only ── */}
       {isLabUser && selectedUser && (

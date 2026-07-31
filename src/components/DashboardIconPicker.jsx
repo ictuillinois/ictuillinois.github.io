@@ -18,7 +18,6 @@ export const ALL_MODULES_META = [
   { key: 'barcodeqr', screen: 'barcodeqr', label: 'QR Labels',         sub: 'Generate & print QR codes',       icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team'], studentLocked: true },
   { key: 'remessages', screen: 'remessages', label: 'Lab Messages',    sub: 'Internal chat between lab managers & admin', icon: '💬', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
   { key: 'mileage',   screen: null,        label: 'Mileage Form',      sub: 'Submit mileage reimbursement',    icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', roles: ['team'], external: true },
-  { key: 'labsafety', screen: 'labsafety', label: 'Lab Safety',        sub: 'Safety steps & certification',    icon: '🦺', bg: '#fef3c7', color: '#92400e', roles: ['team'] },
   { key: 'profile',   screen: 'profile',   label: 'Profile',           sub: 'Your info & settings',            icon: '👤', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
 ]
 

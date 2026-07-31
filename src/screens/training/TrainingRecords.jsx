@@ -3,6 +3,7 @@ import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import React from 'react'
 import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './TrainingSchedule'
+import SafetyTab from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -1541,6 +1542,7 @@ const HUB_TABS = [
   { key: 'equipment', label: 'Equipment' },
   { key: 'alarm',     label: 'Alarm' },
   { key: 'locker',    label: 'Locker' },
+  { key: 'safety',    label: 'Safety' },
 ]
 
 function UserTrainingHub({ students, session, subTab, setSubTab }) {
@@ -1562,12 +1564,13 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
   async function loadStatuses() {
     const ids = students.map(s => s.id)
     if (!ids.length) { setStatuses({}); return }
-    const [fresh, golf, equip, alarm, lockers] = await Promise.all([
+    const [fresh, golf, equip, alarm, lockers, safety] = await Promise.all([
       sb.from('training_fresh').select('user_id, admin_approved, certificate_url').in('user_id', ids),
       sb.from('training_golf_car').select('user_id, trained').in('user_id', ids),
       sb.from('training_equipment').select('user_id, passed_exam').in('user_id', ids),
       sb.from('training_building_alarm').select('user_id, trained').in('user_id', ids),
       sb.from('student_lockers').select('user_id').in('user_id', ids),
+      sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids),
     ])
     const map = {}
     const get = uid => map[uid] || (map[uid] = {})
@@ -1584,6 +1587,9 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
     agg(equip, 'equipment', r => r.passed_exam)
     agg(alarm, 'alarm', r => r.trained)
     ids.forEach(uid => { get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok' : 'none' })
+    const safetyByUser = {}
+    ;(safety.data || []).forEach(r => { if (!safetyByUser[r.user_id]) safetyByUser[r.user_id] = 0; if (r.completed) safetyByUser[r.user_id]++ })
+    ids.forEach(uid => { const n = safetyByUser[uid] || 0; get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend' })
     setStatuses(map)
     const fc = {}
     ids.forEach(uid => {
@@ -1618,6 +1624,7 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
         return su && selectedUser
           ? <StudentLocker session={session} panelUser={selectedUser} onChanged={loadStatuses} />
           : <StudentLocker session={session} onChanged={loadStatuses} />
+      case 'safety':    return <SafetyTab asTab />
       default:          return <FreshTraining {...props} />
     }
   }

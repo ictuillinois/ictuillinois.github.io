@@ -27,7 +27,6 @@ const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecor
 const LabManagement        = lazy(() => import('./screens/labmanagement/LabManagement'))
 const PM                   = lazy(() => import('./screens/maintenance/PM'))
 const LabMessage           = lazy(() => import('./screens/messaging/LabMessage'))
-const LabSafety            = lazy(() => import('./screens/labsafety/LabSafety'))
 const Profile              = lazy(() => import('./screens/profile/Profile'))
 const Admin                = lazy(() => import('./screens/admin/Admin'))
 
@@ -70,11 +69,10 @@ const INTERNAL = new Set([
   'projects', 'project-detail',
   'booking', 'barcode', 'barcodeqr',
   'training', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'remessages',
-  'labsafety',
 ])
 
 export default function App() {
-  const { session, screen, refreshCache, setScreen, setActiveModules, setSession, clearSession } = useAppStore()
+  const { session, screen, refreshCache, setScreen, setSidebarSubTab, setActiveModules, setSession, clearSession } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
@@ -267,7 +265,6 @@ export default function App() {
     labmanagement:    <LabManagement />,
     pm:               <PM />,
     remessages:       <LabMessage />,
-    labsafety:        <LabSafety />,
     profile:          <Profile />,
     orgadmin:         <Admin />,
   }
@@ -287,7 +284,8 @@ export default function App() {
           onGoToTraining={() => {
             localStorage.setItem(`ictlab_training_prompted_${session.userId}`, 'true')
             setShowTrainingPrompt(false)
-            setScreen('labsafety')
+            setSidebarSubTab('safety')
+            setScreen('training')
           }}
           onDismiss={() => {
             localStorage.setItem(`ictlab_training_prompted_${session.userId}`, 'true')
