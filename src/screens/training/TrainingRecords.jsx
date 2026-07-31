@@ -125,7 +125,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
     if (rec) {
       await sb.from('training_fresh').update({ instructions_read: !rec.instructions_read }).eq('id', rec.id)
     } else {
-      await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true })
+      await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true, organization_id: session?.organizationId || null })
     }
     load(); onChanged?.()
   }
@@ -141,7 +141,8 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
         user_id: userId,
         certificate_url: url,
         certificate_name: certLabel,
-        certificate_uploaded_at: new Date().toISOString()
+        certificate_uploaded_at: new Date().toISOString(),
+        organization_id: session?.organizationId || null
       })
       toast('Certification added.')
       setShowAddForm(false); setNewCertLabel('')
