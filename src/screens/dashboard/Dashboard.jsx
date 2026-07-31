@@ -153,8 +153,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
   }
 
   const adminManageCards = [
-    { key: 'mileage',   icon: '🚗', label: 'Mileage Form', sub: 'Manage link', bg: '#fdf0ed', color: '#c84b2f', screen: null },
-    { key: 'labsafety', icon: '🦺', label: 'Safety Video', sub: 'Step 4 video URL', bg: '#fef3c7', color: '#92400e', screen: null },
+    { key: 'mileage', icon: '🚗', label: 'Mileage Form', sub: 'Manage link', bg: '#fdf0ed', color: '#c84b2f', screen: null },
   ].filter(card => !activeModules || activeModules.includes(card.key))
 
   const visibleModules = isAdmin ? modules.filter(m => !m.external) : modules

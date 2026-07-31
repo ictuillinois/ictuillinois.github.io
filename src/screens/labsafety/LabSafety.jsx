@@ -109,16 +109,19 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
 
 // ── Step 4: ICT Safety Video ───────────────────────────────────────────────
 
-function Step4VideoContent({ userId }) {
+function Step4VideoContent({ userId, isManager }) {
   const clickKey   = `ictlab_safety4_clicked_${userId}`
   const confirmKey = `ictlab_safety4_confirmed_${userId}`
-  const [url, setUrl] = useState('')
+  const [url, setUrl]                 = useState('')
   const [hasClicked, setHasClicked]   = useState(() => !!localStorage.getItem(clickKey))
   const [confirmed, setConfirmed]     = useState(() => !!localStorage.getItem(confirmKey))
+  const [editingUrl, setEditingUrl]   = useState(false)
+  const [urlInput, setUrlInput]       = useState('')
+  const [saving, setSaving]           = useState(false)
 
   useEffect(() => {
     sb.from('settings').select('value').eq('key', 'labsafety_url').maybeSingle()
-      .then(({ data }) => { if (data?.value) setUrl(data.value) })
+      .then(({ data }) => { if (data?.value) { setUrl(data.value); setUrlInput(data.value) } })
   }, [])
 
   function handleWatch() {
@@ -135,18 +138,49 @@ function Step4VideoContent({ userId }) {
     else localStorage.removeItem(confirmKey)
   }
 
+  async function saveUrl() {
+    if (!urlInput.trim()) return
+    setSaving(true)
+    await sb.from('settings').upsert({ key: 'labsafety_url', value: urlInput.trim() }, { onConflict: 'key' })
+    setUrl(urlInput.trim())
+    setEditingUrl(false)
+    setSaving(false)
+  }
+
   return (
     <div>
       <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 20, marginBottom: 12, border: '1px solid var(--border)' }}>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
           Watch the required ICT Laboratory Safety Video. After watching, return here and check the confirmation box so your lab manager can approve this step.
         </div>
-        <button onClick={handleWatch} disabled={!url}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: url ? 'pointer' : 'default', opacity: url ? 1 : 0.5 }}>
-          Watch ICT Safety Video ↗
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={handleWatch} disabled={!url}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: url ? 'pointer' : 'default', opacity: url ? 1 : 0.5 }}>
+            Watch ICT Safety Video ↗
+          </button>
+          {isManager && !editingUrl && (
+            <button onClick={() => setEditingUrl(true)}
+              style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--sans)', textDecoration: 'underline' }}>
+              {url ? 'Edit URL' : 'Set video URL'}
+            </button>
+          )}
+        </div>
+        {isManager && editingUrl && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://..." autoFocus
+              style={{ flex: 1, minWidth: 200, fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+            <button onClick={saveUrl} disabled={saving || !urlInput.trim()}
+              style={{ padding: '7px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => { setEditingUrl(false); setUrlInput(url) }}
+              style={{ padding: '7px 12px', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
-      {hasClicked ? (
+      {!isManager && (hasClicked ? (
         <div style={{ background: confirmed ? '#E1F5EE' : 'var(--surface2)', border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', transition: 'all 0.2s' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, color: confirmed ? '#085041' : 'var(--text)', fontWeight: confirmed ? 600 : 400 }}>
             <input type="checkbox" checked={confirmed} onChange={handleConfirm}
@@ -158,15 +192,15 @@ function Step4VideoContent({ userId }) {
         <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
           After clicking the link above, a confirmation checkbox will appear here.
         </div>
-      )}
+      ))}
     </div>
   )
 }
 
 // ── Step content renderer ──────────────────────────────────────────────────
 
-function StepContentArea({ step, targetUserId }) {
-  if (step.type === 'ict_video') return <Step4VideoContent userId={targetUserId} />
+function StepContentArea({ step, targetUserId, isManager }) {
+  if (step.type === 'ict_video') return <Step4VideoContent userId={targetUserId} isManager={isManager} />
 
   // ── PLACEHOLDER — replace with real content when step details are provided ──
   if (step.type === 'placeholder' || !step.content) {
@@ -293,7 +327,7 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, saving }) {
 
             {/* Step content area */}
             <div style={{ marginBottom: 20 }}>
-              <StepContentArea step={s} targetUserId={user?.id} />
+              <StepContentArea step={s} targetUserId={user?.id} isManager={isStaff} />
             </div>
 
             {/* Lab manager: approve / revoke */}

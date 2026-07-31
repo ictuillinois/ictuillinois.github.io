@@ -1537,18 +1537,66 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
 // "All users" toggle renders the classic full-list audit view.
 // ══════════════════════════════════════════════════════════════
 const HUB_TABS = [
+  { key: 'safety',    label: 'Safety' },
   { key: 'fresh',     label: 'Documents' },
   { key: 'golf',      label: 'Vehicle' },
   { key: 'equipment', label: 'Equipment' },
   { key: 'alarm',     label: 'Alarm' },
   { key: 'locker',    label: 'Locker' },
-  { key: 'safety',    label: 'Safety' },
 ]
+
+function SafetyAllSummary({ students, safetySteps, onSelectUser }) {
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', marginBottom: 12 }}>Safety Training Overview — click a row to view details</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text2)', borderBottom: '2px solid var(--border)' }}>User</th>
+              {[1,2,3,4].map(n => (
+                <th key={n} style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600, color: 'var(--text2)', borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap' }}>Step {n}</th>
+              ))}
+              <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600, color: 'var(--text2)', borderBottom: '2px solid var(--border)' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((u, idx) => {
+              const steps = safetySteps[u.id] || {}
+              const doneCount = [1,2,3,4].filter(n => steps[n]).length
+              return (
+                <tr key={u.id} onClick={() => onSelectUser(u.id)}
+                  style={{ background: idx % 2 === 0 ? 'var(--row-a)' : 'var(--row-b)', cursor: 'pointer' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 500 }}>{fullName(u)}</td>
+                  {[1,2,3,4].map(n => (
+                    <td key={n} style={{ textAlign: 'center', padding: '10px 12px' }}>
+                      {steps[n]
+                        ? <span style={{ color: '#16a34a', fontSize: 16, fontWeight: 700 }}>✓</span>
+                        : <span style={{ color: 'var(--border)', fontSize: 16 }}>○</span>}
+                    </td>
+                  ))}
+                  <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                    <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 700,
+                      background: doneCount === 4 ? '#E1F5EE' : doneCount > 0 ? '#fef3c7' : 'var(--surface2)',
+                      color: doneCount === 4 ? '#085041' : doneCount > 0 ? '#92400e' : 'var(--text3)' }}>
+                      {doneCount}/4
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 function UserTrainingHub({ students, session, subTab, setSubTab }) {
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [viewMode, setViewMode] = useState('user')     // 'user' | 'all' (audit)
-  const [statuses, setStatuses] = useState(null)       // userId -> { fresh|golf|equipment|alarm|locker: ok|pend|none }
+  const [statuses, setStatuses] = useState(null)       // userId -> { fresh|golf|equipment|alarm|locker|safety: ok|pend|none }
+  const [safetySteps, setSafetySteps] = useState({})   // userId -> { 1: bool, 2: bool, 3: bool, 4: bool }
   const [freshCounts, setFreshCounts] = useState({})   // userId -> { approved, total } for card badges
   const [search, setSearch] = useState('')
 
@@ -1587,9 +1635,16 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
     agg(equip, 'equipment', r => r.passed_exam)
     agg(alarm, 'alarm', r => r.trained)
     ids.forEach(uid => { get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok' : 'none' })
-    const safetyByUser = {}
-    ;(safety.data || []).forEach(r => { if (!safetyByUser[r.user_id]) safetyByUser[r.user_id] = 0; if (r.completed) safetyByUser[r.user_id]++ })
-    ids.forEach(uid => { const n = safetyByUser[uid] || 0; get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend' })
+    const safetyStepsMap = {}
+    ;(safety.data || []).forEach(r => {
+      if (!safetyStepsMap[r.user_id]) safetyStepsMap[r.user_id] = {}
+      safetyStepsMap[r.user_id][r.step_number] = !!r.completed
+    })
+    ids.forEach(uid => {
+      const n = [1,2,3,4].filter(i => safetyStepsMap[uid]?.[i]).length
+      get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend'
+    })
+    setSafetySteps(safetyStepsMap)
     setStatuses(map)
     const fc = {}
     ids.forEach(uid => {
@@ -1624,7 +1679,9 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
         return su && selectedUser
           ? <StudentLocker session={session} panelUser={selectedUser} onChanged={loadStatuses} />
           : <StudentLocker session={session} onChanged={loadStatuses} />
-      case 'safety':    return <SafetyTab asTab />
+      case 'safety':
+        if (mode === 'all') return <SafetyAllSummary students={students} safetySteps={safetySteps} onSelectUser={id => { setSelectedUserId(id); setViewMode('user') }} />
+        return <SafetyTab asTab />
       default:          return <FreshTraining {...props} />
     }
   }
@@ -1639,24 +1696,27 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
       {/* ── Avatar card grid ── */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
         {searchFiltered.map(u => {
-          const fc = freshCounts[u.id] || { approved: 0, total: 0 }
-          const pct = fc.total ? Math.round(fc.approved / fc.total * 100) : 0
           const selected = u.id === effSelectedId
+          const steps = safetySteps[u.id] || {}
           return (
             <div key={u.id} className="manage-card" onClick={() => setSelectedUserId(selected ? null : u.id)}
               style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', cursor: 'pointer', ...(selected ? { borderColor: 'var(--accent)', background: 'var(--accent-light)', boxShadow: '0 6px 18px rgba(29,158,117,0.18)' } : {}) }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><UserAvatar user={u} size={56} /></div>
               <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName(u)}</div>
               {u.degree && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.degree}</div>}
-              <div style={{ marginTop: 8 }}><CompletionBadge approved={fc.approved} total={fc.total} /></div>
-              {fc.total > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#16a34a' : '#d97706', borderRadius: 99 }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{pct}%</span>
-                </div>
-              )}
+              <div style={{ marginTop: 10, display: 'flex', gap: 6, justifyContent: 'center' }}>
+                {[1,2,3,4].map(n => {
+                  const done = !!steps[n]
+                  return (
+                    <div key={n} title={`Step ${n}: ${done ? 'Approved' : 'Not yet approved'}`}
+                      style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: done ? 13 : 10, fontWeight: 700,
+                        background: done ? '#1D9E75' : 'var(--surface2)', color: done ? '#fff' : '#9ca3af',
+                        border: `2px solid ${done ? '#1D9E75' : 'var(--border)'}`, flexShrink: 0 }}>
+                      {done ? '✓' : n}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )
         })}
