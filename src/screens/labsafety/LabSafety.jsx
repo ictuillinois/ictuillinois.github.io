@@ -342,12 +342,6 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, saving }) {
               </div>
             )}
 
-            {/* Lab user: waiting for approval notice */}
-            {!isStaff && !done && (
-              <div style={{ background: '#FEF3C7', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#92400e', lineHeight: 1.6, fontWeight: 500 }}>
-                ⏳ Complete this step, then ask your lab manager to approve it for you.
-              </div>
-            )}
           </div>
         )
       })}
