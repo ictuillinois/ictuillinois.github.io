@@ -377,7 +377,7 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, saving }) {
 
 // ── Main component (used standalone and as Training Records tab) ───────────
 
-export default function SafetyTab({ asTab = false }) {
+export default function SafetyTab({ asTab = false, targetUser = null }) {
   const { session } = useAppStore()
   const isStaff = session?.role === 'admin' || session?.role === 'user'
   const isLabUser = session?.role === 'lab_user'
@@ -388,6 +388,9 @@ export default function SafetyTab({ asTab = false }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+
+  // When a specific user is passed from Training Hub, pre-select them
+  useEffect(() => { if (targetUser) setSelectedUser(targetUser) }, [targetUser?.id])
 
   useEffect(() => { load() }, [])
 
@@ -516,36 +519,28 @@ export default function SafetyTab({ asTab = false }) {
       {/* ── Lab manager / admin view ── */}
       {isStaff && (
         <>
-          {/* Search */}
-          {users.length > 6 && (
-            <div style={{ marginBottom: 16 }}>
-              <input
-                type="search"
-                placeholder="Search lab users…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width: '100%', maxWidth: 300, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--sans)', color: 'var(--text)', background: 'var(--surface)' }}
-              />
-            </div>
-          )}
-
-          {/* User card grid */}
-          {filteredUsers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text3)', fontSize: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 20 }}>
-              {users.length === 0 ? 'No lab users in this organization yet.' : 'No results for your search.'}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
-              {filteredUsers.map(u => (
-                <UserSafetyCard
-                  key={u.id}
-                  user={u}
-                  progress={progress}
-                  selected={selectedUser?.id === u.id}
-                  onClick={() => setSelectedUser(prev => prev?.id === u.id ? null : u)}
-                />
-              ))}
-            </div>
+          {/* User card grid — hidden when a specific user is pre-selected (targetUser mode) */}
+          {!targetUser && (
+            <>
+              {users.length > 6 && (
+                <div style={{ marginBottom: 16 }}>
+                  <input type="search" placeholder="Search lab users…" value={search} onChange={e => setSearch(e.target.value)}
+                    style={{ width: '100%', maxWidth: 300, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--sans)', color: 'var(--text)', background: 'var(--surface)' }} />
+                </div>
+              )}
+              {filteredUsers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text3)', fontSize: 14, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 20 }}>
+                  {users.length === 0 ? 'No lab users in this organization yet.' : 'No results for your search.'}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 20 }}>
+                  {filteredUsers.map(u => (
+                    <UserSafetyCard key={u.id} user={u} progress={progress} selected={selectedUser?.id === u.id}
+                      onClick={() => setSelectedUser(prev => prev?.id === u.id ? null : u)} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Selected user step panel */}
