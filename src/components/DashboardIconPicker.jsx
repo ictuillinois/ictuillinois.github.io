@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 // ICT-Lab modules
 export const ALL_MODULES_META = [
   // ── Staff-only (admin / lab manager) ──────────────────────────────────
-  { key: 'training',      screen: 'training',      label: 'Training Records',  sub: 'Certs, equipment & alarm training',  icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team'], staffOnly: true },
+  { key: 'training',      screen: 'training',      label: 'Training Records',  sub: 'Certs, equipment & alarm training',  icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
   { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',    sub: 'Users & lab managers',               icon: '👥', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
   { key: 'pm',            screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & deadlines',        icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team'], staffOnly: true },
   { key: 'equipment',     screen: 'equipment',     label: 'Equipment List',    sub: 'Lab equipment inventory tracking',   icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team'], staffOnly: true },

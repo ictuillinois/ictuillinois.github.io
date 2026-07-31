@@ -6,7 +6,7 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects', 'booking', 'mileage', 'barcode', 'profile']
+  const studentAllowed = ['projects', 'booking', 'mileage', 'barcode', 'training', 'profile']
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
     if (role === 'lab_user' && !studentAllowed.includes(m.key)) return false
@@ -35,6 +35,7 @@ function getAllModulesForStudent() {
     { key: 'projects',   screen: 'projects',   label: 'Project Workspace', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
     { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'barcode',    screen: 'barcode',    label: 'QR Scan',           sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
+    { key: 'training',   screen: 'training',   label: 'Training Records',  sub: 'Safety steps & certifications',    icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'mileage',    screen: null,         label: 'Mileage Form',      sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
     { key: 'barcodeqr',  screen: 'barcodeqr',  label: 'QR Labels',         sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
     { key: 'profile',    screen: 'profile',    label: 'Profile',           sub: 'Your info & settings',             icon: '👤', bg: '#EEEDFE', color: '#534AB7' },
@@ -217,6 +218,7 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     { key:'projects',   icon:'🧪', label:'Project Workspace', sub:'Inventory, results & workspace', screen:'projects',   color:'#534AB7' },
     { key:'booking',    icon:'📅', label:'Book Equipment',    sub:'Reserve lab equipment',          screen:'booking',    color:'#0369a1' },
     { key:'barcode',    icon:'📷', label:'QR Scan',            sub:'Scan lab materials',             screen:'barcode',    color:'#00796b' },
+    { key:'training',   icon:'🎓', label:'Training Records',  sub:'Safety steps & certifications',  screen:'training',   color:'#0369a1' },
     { key:'mileage',    icon:'🚗', label:'Mileage Form',      sub:'Submit reimbursement',           screen:null,         color:'#c84b2f', external:true },
   ]
   const assignedQuickLinks = (studentAllowedPool && studentAllowedPool.size > 0)

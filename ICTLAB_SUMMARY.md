@@ -111,14 +111,14 @@ Defined in `src/components/DashboardIconPicker.jsx`.
 | `projects` | projects | Project workspace |
 | `booking` | booking | Reserve equipment |
 | `barcode` | barcode | QR scan |
+| `training` | training | Training Records (Safety tab + own certs) — no longer staffOnly |
 | `barcodeqr` | barcodeqr | QR labels — `studentLocked: true` (visible but locked for lab users) |
 | `mileage` | null | External link (mileage form) |
-| `labsafety` | labsafety | Safety training steps — internal screen |
 | `profile` | profile | Always shown |
 
 ### `studentAllowed` list (Dashboard.jsx)
 ```js
-['projects', 'booking', 'mileage', 'labsafety', 'barcode', 'profile']
+['projects', 'booking', 'mileage', 'barcode', 'training', 'profile']
 ```
 Lab users ONLY see modules in this list. `remessages` is NOT in this list.
 
