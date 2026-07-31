@@ -1,6 +1,6 @@
 # ICT-Lab — Project Summary & Session Handoff
 
-**Last updated:** July 2026  
+**Last updated:** July 30, 2026  
 **For:** Claude Code sessions working on the ICT-Lab project
 
 ---
@@ -31,33 +31,49 @@ It is a **single-organization, team-only** deployment — no solo mode, no multi
 |---|---|
 | **Production URL** | https://ictlab.labhive.app |
 | **Admin URL** | https://ictlab.labhive.app/admin |
-| **Hosting** | Cloudflare Pages (project: `ictlab`, drag-and-drop upload) |
+| **Hosting** | Cloudflare Pages (project: `ictlab`) — **auto-deploy via GitHub Actions** |
 | **Source repo** | https://github.com/ictuillinois/ictuillinois.github.io (PRIVATE) |
 | **Domain DNS** | Cloudflare — `ictlab.labhive.app` is a subdomain of `labhive.app` |
 | **Build output** | `docs/` folder |
 | **Vite base** | `/` |
 
-### Deploy workflow (manual — no CI)
+### Deploy workflow (automatic — push to main triggers CI)
 ```bash
-# 1. Make changes in /Users/mohsenmotlagh/Desktop/ictlab/
+# In /Users/mohsenmotlagh/Desktop/ictlab/
 npm run build
-# 2. Drag docs/ folder to Cloudflare Pages → Create deployment
-# 3. Push source backup to GitHub:
 git add docs/ src/ scripts/
 git commit -m "..."
-git push https://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@github.com/ictuillinois/ictuillinois.github.io.git main
+git push
+# → GitHub Actions builds + deploys to Cloudflare Pages automatically
 ```
 
-**Note:** Cloudflare Pages is not connected to GitHub — it is upload-only. GitHub is only used as a private source backup.
+**GitHub push authentication:** The org has SAML SSO enforced. VS Code OAuth occasionally expires and blocks push. Use the PAT directly in the remote URL if that happens:
+```bash
+git remote set-url origin https://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@github.com/ictuillinois/ictuillinois.github.io.git
+git push
+```
+
+**GitHub Actions workflow:** `.github/workflows/deploy.yml` — uses secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set in the repo settings.
+- Cloudflare API Token: `cfut_bfMgjEENoPfyLtOHoOghwOo2a4aiXJxZmvISavPL769a805c`
+- Cloudflare Account ID: `464bca1d681e599979d588a5f1c39ab2`
 
 ---
 
 ## Supabase
 
-- **Project URL:** (same Supabase project as LabHive — check `src/lib/supabase.js`)
+- **Project URL:** `https://ilqnwprvxwbhvrjstwsd.supabase.co` — **separate project from LabHive**
+- **Anon key:** `sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8` (in `src/lib/supabase.js`)
 - **Auth:** `signInWithPassword` → `users` table → `auth_id` links to Supabase auth
 - **RLS:** Enforced on all tables via `rls_phase1.sql`
 - **Helper functions (SECURITY DEFINER):** `my_org_id()`, `my_user_id()`, `is_super_admin()`
+- **Super admin credentials:** email `admin@ictlab.app`, password bcrypt-hashed in `settings.admin_password`
+
+### Module images
+Module card background images are stored as `img_{key}` rows in the `settings` table. Currently **all point to labhive's public Supabase storage** (`qhsxtpywfczqopcimykk.supabase.co`) — this is intentional and works because labhive's `project-files` bucket is public.
+
+The 8 images already set: `img_projects`, `img_booking`, `img_supply`, `img_barcode`, `img_barcodeqr`, `img_profile`, `img_mileage`, `img_labsafety`.
+
+To write to the settings table from code or API, you need an authenticated super-admin JWT (anon key has no write access). Use the **Supabase SQL Editor** to insert/update settings directly (bypasses RLS).
 
 ---
 
@@ -183,6 +199,29 @@ When a new lab user logs in (after password change + terms), a "Safety Training 
 
 ---
 
+## Bugs Fixed (this session)
+
+### 1. ProjectMaterial blank page for lab managers
+`ProjectMaterial.jsx` imports `sharedWorkspaces` from the Zustand store (a solo-workspace feature). ICT-Lab's store didn't define it, causing `undefined.find()` crash on load.
+
+**Fix:** Added safe stubs to `src/store/useAppStore.js`:
+```js
+sharedWorkspaces: [],
+viewingWorkspaceOwnerId: null,
+setViewingWorkspaceOwnerId: () => {},
+```
+
+### 2. Password Show/Hide toggle not working
+The eye button on password fields was not revealing the password. Three root causes were found and fixed together:
+
+1. **Browser native controls** blocked the click (CSS fix added to `src/index.css`)
+2. **Browser security restriction** — browsers refuse to change `type="password"` to `type="text"` on an existing DOM element in-place
+3. **Fix:** Replaced all absolute-positioned eye-button patterns with a `PasswordInput` component using `key={show ? 'txt' : 'pwd'}` — the key change forces React to unmount/remount the input as a fresh element, bypassing the browser restriction. Toggle is now a "Show password" / "Hide password" text link below the input field.
+
+Applies to all password fields: solo password change, admin account settings, staff modal, user modal, `PasswordChangePanel`.
+
+---
+
 ## Pending Work
 
 1. **Lab Safety step content** — User said "I will give you more details for each step later." Update `STEPS` array in `LabSafety.jsx` with real content (video URLs, PDF links, download files) for each of the 4 steps.
@@ -192,6 +231,17 @@ When a new lab user logs in (after password change + terms), a "Safety Training 
    - `UPDATE users SET role = 'lab_user' WHERE role = 'student';` (fixes users created with wrong role before the bug was fixed)
    - `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labusers JSONB DEFAULT NULL;`
    - `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labmanagers JSONB DEFAULT NULL;`
+   - Add the 6 missing module images (run in SQL Editor — see Module images section above):
+     ```sql
+     INSERT INTO settings (key, value) VALUES
+       ('img_equipment',    'https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_equipment-1780783736553.jpg'),
+       ('img_training',     'https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_training-1780784615661.jpg'),
+       ('img_labmanagement','https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_labmanagement-1780779972069.jpg'),
+       ('img_equipmenthub', 'https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_equipmenthub-1780781440126.jpg'),
+       ('img_remessages',   'https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_remessages-1780783744599.jpg'),
+       ('img_pm',           'https://qhsxtpywfczqopcimykk.supabase.co/storage/v1/object/public/project-files/module-images/global/img_pm-1780785108745.jpg')
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+     ```
 
 3. **Lab Messages screen** — Currently using the LabHive `REMessages` component. May need ICT-specific customization (staff-to-staff internal chat).
 
@@ -204,4 +254,5 @@ When a new lab user logs in (after password change + terms), a "Safety Training 
 3. **`remessages` is staff-only** — Do not add it back to `studentAllowed` or lab user defaults.
 4. **`staffOnly` modules** — Any new staff-only module must have `staffOnly: true` in `ALL_MODULES_META` AND must not appear in `studentAllowed` in Dashboard.jsx.
 5. **Lab user defaults** — `setActiveModules(null)` (not `['profile']`) when no saved prefs, so `getModules()` returns the full `studentAllowed` list.
-6. **Deploy = drag docs/ to Cloudflare** — Not GitHub Pages. The GitHub repo is source backup only.
+6. **Deploy = push to GitHub** — GitHub Actions auto-deploys to Cloudflare Pages. Never drag-and-drop anymore.
+7. **Settings table writes need SQL Editor** — The anon key cannot write to the `settings` table. Use the Supabase SQL Editor (service role) for any direct settings inserts/updates.
