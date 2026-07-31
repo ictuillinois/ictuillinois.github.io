@@ -76,9 +76,7 @@ function StepDot({ number, completed }) {
 
 function UserSafetyCard({ user, progress, selected, onClick }) {
   const userProg = progress[user.id] || {}
-  const approvedCount = STEPS.filter(s => userProg[s.number]).length
   const fullName = [user.nick_name?.trim() || user.name, user.last_name].filter(Boolean).join(' ')
-  const allDone = approvedCount === STEPS.length
 
   return (
     <div
@@ -95,9 +93,6 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
         <UserAvatar user={user} size={36} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</div>
-          <div style={{ fontSize: 11, color: allDone ? '#1D9E75' : 'var(--text3)', fontWeight: allDone ? 600 : 400 }}>
-            {allDone ? '✓ All steps approved' : `${approvedCount} / ${STEPS.length} approved`}
-          </div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
