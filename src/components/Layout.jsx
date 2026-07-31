@@ -74,6 +74,7 @@ function getScreenTabs(screen, session) {
   const isStaff   = session?.role === 'user'
 
   if (screen === 'training') return [
+    { key: 'safety',    icon: '🦺', label: 'Safety' },
     { key: 'fresh',     icon: '📄', label: 'Lab User Documents' },
     ...(!isSolo ? [{ key: 'golf',  icon: '🚗', label: 'Vehicle' }] : []),
     { key: 'equipment', icon: '🔧', label: 'Equipment' },

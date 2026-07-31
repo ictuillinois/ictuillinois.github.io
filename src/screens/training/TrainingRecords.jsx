@@ -1724,7 +1724,7 @@ export default function TrainingRecords() {
     if (localStorage.getItem('examEquipment') && !sidebarSubTab) setSidebarSubTab('exam')
   }, [])
 
-  const subTab = sidebarSubTab || 'fresh'
+  const subTab = sidebarSubTab || 'safety'
 
   useEffect(() => { loadStudents() }, [])
 
