@@ -155,7 +155,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       setShowAddForm(false); setNewCertLabel('')
       setAddingFor(null); setAddingLabel('')
       load(); onChanged?.()
-    } catch (e) { toast('Upload failed.') }
+    } catch (e) { toast('Upload failed: ' + (e?.message || String(e))) }
     setUploading(null)
   }
 
