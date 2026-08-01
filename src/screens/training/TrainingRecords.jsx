@@ -123,11 +123,15 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
 
   async function toggleInstructions(user) {
     const rec = getRecord(user.id)
+    let err
     if (rec) {
-      await sb.from('training_fresh').update({ instructions_read: !rec.instructions_read }).eq('id', rec.id)
+      const { error } = await sb.from('training_fresh').update({ instructions_read: !rec.instructions_read }).eq('id', rec.id)
+      err = error
     } else {
-      await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true })
+      const { error } = await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true })
+      err = error
     }
+    if (err) { toast('Failed: ' + err.message); return }
     load(); onChanged?.()
   }
 
