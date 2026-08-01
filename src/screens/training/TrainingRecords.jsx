@@ -553,8 +553,12 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
                       <td>
                         {canEdit(session) ? (
                           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
-                            <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} style={{ width: 'auto' }} />
-                            <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
+                            <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} style={{ width: 'auto', flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, color: rec.trained ? '#16a34a' : 'var(--text2)', fontWeight: rec.trained ? 600 : 400 }}>
+                              {rec.trained
+                                ? `✓ I confirmed ${fullName(u)} has been trained for this vehicle.`
+                                : `I confirm ${fullName(u)} has been trained for this vehicle.`}
+                            </span>
                           </label>
                         ) : (
                           <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
