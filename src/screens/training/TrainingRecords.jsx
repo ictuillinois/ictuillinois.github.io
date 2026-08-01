@@ -110,30 +110,10 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
     setLoading(false)
   }
 
-  function getRecord(userId) {
-    return records.find(r => r.user_id === userId && !r.certificate_url)
-      || records.find(r => r.user_id === userId)
-      || null
-  }
-
   async function toggleApprove(rec) {
     const { error } = await sb.from('training_fresh').update({ admin_approved: !rec.admin_approved, admin_approved_by: session.username, admin_approved_at: new Date().toISOString() }).eq('id', rec.id)
     if (error) { toast('Approval failed: ' + error.message); return }
     toast(rec.admin_approved ? 'Approval removed.' : 'Certificate approved ✓')
-    load(); onChanged?.()
-  }
-
-  async function toggleInstructions(user) {
-    const rec = getRecord(user.id)
-    let err
-    if (rec) {
-      const { error } = await sb.from('training_fresh').update({ instructions_read: !rec.instructions_read }).eq('id', rec.id)
-      err = error
-    } else {
-      const { error } = await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true })
-      err = error
-    }
-    if (err) { toast('Failed: ' + err.message); return }
     load(); onChanged?.()
   }
 
@@ -328,7 +308,6 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
         const isOwn = session.userId === u.id || session.username === u.name
         const canAdd = editable || isOwn
         const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
-        const masterRec = getRecord(u.id)
         const approvedCount = userRecs.filter(r => r.admin_approved).length
         const pct = userRecs.length ? Math.round((approvedCount / userRecs.length) * 100) : 0
         const rowBg = 'var(--row-a)'
@@ -357,19 +336,6 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                {editable ? (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}
-                    title="Lab user has read all provided lab documents and files (beyond uploaded certificates)">
-                    <input type="checkbox" checked={masterRec?.instructions_read || false} onChange={() => toggleInstructions(u)} style={{ width: 'auto' }} />
-                    <span style={{ color: masterRec?.instructions_read ? '#16a34a' : 'var(--text2)', fontWeight: masterRec?.instructions_read ? 600 : 400 }}>
-                      {masterRec?.instructions_read ? '✓ File review confirmed' : 'Confirm file review'}
-                    </span>
-                  </label>
-                ) : isOwn && (
-                  <span style={{ fontSize: 13, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    File review: <StatusBadge done={masterRec?.instructions_read} />
-                  </span>
-                )}
                 {canAdd && (
                   <button className="btn btn-sm btn-primary" onClick={() => { setAddingFor(u.id); setAddingLabel('') }}>+ Add cert</button>
                 )}
