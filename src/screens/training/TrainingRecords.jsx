@@ -115,7 +115,8 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   }
 
   async function toggleApprove(rec) {
-    await sb.from('training_fresh').update({ admin_approved: !rec.admin_approved, admin_approved_by: session.username, admin_approved_at: new Date().toISOString() }).eq('id', rec.id)
+    const { error } = await sb.from('training_fresh').update({ admin_approved: !rec.admin_approved, admin_approved_by: session.username, admin_approved_at: new Date().toISOString() }).eq('id', rec.id)
+    if (error) { toast('Approval failed: ' + error.message); return }
     toast(rec.admin_approved ? 'Approval removed.' : 'Certificate approved ✓')
     load(); onChanged?.()
   }
@@ -125,7 +126,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
     if (rec) {
       await sb.from('training_fresh').update({ instructions_read: !rec.instructions_read }).eq('id', rec.id)
     } else {
-      await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true, organization_id: session?.organizationId || null })
+      await sb.from('training_fresh').insert({ user_id: user.id, instructions_read: true })
     }
     load(); onChanged?.()
   }
@@ -137,13 +138,13 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       const certLabel = (label || '').trim() || file.name
       const path = `fresh/${userId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const { url } = await StorageService.upload('project-files', path, file, { personal: true })
-      await sb.from('training_fresh').insert({
+      const { error: insertErr } = await sb.from('training_fresh').insert({
         user_id: userId,
         certificate_url: url,
         certificate_name: certLabel,
         certificate_uploaded_at: new Date().toISOString(),
-        organization_id: session?.organizationId || null
       })
+      if (insertErr) { toast('Save failed: ' + insertErr.message); setUploading(null); return }
       toast('Certification added.')
       setShowAddForm(false); setNewCertLabel('')
       setAddingFor(null); setAddingLabel('')
