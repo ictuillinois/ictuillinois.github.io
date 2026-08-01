@@ -438,13 +438,14 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
 
   async function addVehicleRecord() {
     if (!form.vehicleName.trim()) { toast('Vehicle name required.'); return }
-    await sb.from('training_golf_car').insert({
+    const { error } = await sb.from('training_golf_car').insert({
       user_id: addingFor,
       vehicle_name: form.vehicleName.trim(),
       trained: form.trained,
       trained_date: form.trained ? (form.date || null) : null,
       trained_by: form.trained ? (form.trainedBy || session.username) : null,
     })
+    if (error) { toast('Failed: ' + error.message); return }
     toast('Vehicle training record added.')
     setAddingFor(null)
     setForm({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
@@ -541,7 +542,6 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
                     <th>Group</th>
                     <th>Status</th>
                     <th>Date</th>
-                    <th>Trained By</th>
                     {canEdit(session) && <th></th>}
                   </tr>
                 </thead>
@@ -552,16 +552,26 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
                       <td><span style={{ fontSize: 12, color: 'var(--text2)' }}>{u.project_group || '—'}</span></td>
                       <td>
                         {canEdit(session) ? (
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
-                            <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} style={{ width: 'auto', flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, color: rec.trained ? '#16a34a' : 'var(--text2)', fontWeight: rec.trained ? 600 : 400 }}>
-                              {rec.trained
-                                ? `✓ I confirmed ${fullName(u)} has been trained for this vehicle.`
-                                : `I confirm ${fullName(u)} has been trained for this vehicle.`}
-                            </span>
-                          </label>
+                          <div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
+                              <input type="checkbox" checked={rec.trained || false} onChange={() => toggleTrained(rec)} style={{ width: 'auto', flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, color: rec.trained ? '#16a34a' : 'var(--text2)', fontWeight: rec.trained ? 600 : 400 }}>
+                                {rec.trained
+                                  ? `✓ I confirmed ${fullName(u)} has been trained for this vehicle.`
+                                  : `I confirm ${fullName(u)} has been trained for this vehicle.`}
+                              </span>
+                            </label>
+                            {rec.trained && rec.trained_by && (
+                              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, paddingLeft: 22 }}>Confirmed by: {rec.trained_by}</div>
+                            )}
+                          </div>
                         ) : (
-                          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
+                          <div>
+                            <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: rec.trained ? '#d1fae5' : '#fef3c7', color: rec.trained ? '#065f46' : '#92400e' }}>{rec.trained ? 'Trained' : 'Pending'}</span>
+                            {rec.trained && rec.trained_by && (
+                              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Confirmed by: {rec.trained_by}</div>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td>
@@ -569,7 +579,6 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
                           <input type="date" value={rec.trained_date || ''} onChange={e => updateDate(rec, e.target.value)} style={{ width: 140, fontSize: 13, padding: '4px 8px' }} />
                         ) : <span style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec.trained_date || '—'}</span>}
                       </td>
-                      <td style={{ fontSize: 13, color: 'var(--text2)' }}>{rec.trained_by || '—'}</td>
                       {canEdit(session) && <td><button className="btn btn-sm btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => deleteRecord(rec.id)}>✕</button></td>}
                     </tr>
                   ))}
