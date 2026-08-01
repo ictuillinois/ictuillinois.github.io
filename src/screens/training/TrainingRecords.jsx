@@ -111,7 +111,9 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   }
 
   function getRecord(userId) {
-    return records.find(r => r.user_id === userId) || null
+    return records.find(r => r.user_id === userId && !r.certificate_url)
+      || records.find(r => r.user_id === userId)
+      || null
   }
 
   async function toggleApprove(rec) {
@@ -237,7 +239,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
     : students
 
   const filteredStudents = allFiltered.filter(u => {
-    const userRecs = records.filter(r => r.user_id === u.id)
+    const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
     if (statusFilter === 'none')     return userRecs.length === 0
     if (statusFilter === 'pending')  return userRecs.some(r => !r.admin_approved)
     if (statusFilter === 'approved') return userRecs.length > 0 && userRecs.every(r => r.admin_approved)
@@ -246,9 +248,9 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
 
   const filterCounts = {
     all:      allFiltered.length,
-    pending:  allFiltered.filter(u => records.filter(r => r.user_id === u.id).some(r => !r.admin_approved)).length,
-    none:     allFiltered.filter(u => records.filter(r => r.user_id === u.id).length === 0).length,
-    approved: allFiltered.filter(u => { const r = records.filter(x => x.user_id === u.id); return r.length > 0 && r.every(x => x.admin_approved) }).length,
+    pending:  allFiltered.filter(u => records.filter(r => r.user_id === u.id && r.certificate_url).some(r => !r.admin_approved)).length,
+    none:     allFiltered.filter(u => records.filter(r => r.user_id === u.id && r.certificate_url).length === 0).length,
+    approved: allFiltered.filter(u => { const r = records.filter(x => x.user_id === u.id && x.certificate_url); return r.length > 0 && r.every(x => x.admin_approved) }).length,
   }
 
   const filterPills = [
@@ -292,7 +294,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       {/* ── User card grid (Supply-tab style) — click a card for details ── */}
       {!hideChrome && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
         {filteredStudents.map(u => {
-          const userRecs = records.filter(r => r.user_id === u.id)
+          const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
           const approvedCount = userRecs.filter(r => r.admin_approved).length
           const pct = userRecs.length ? Math.round((approvedCount / userRecs.length) * 100) : 0
           const selected = u.id === effSelectedId
@@ -325,7 +327,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       {(hideChrome ? students : filteredStudents).filter(u => u.id === effSelectedId).map(u => {
         const isOwn = session.userId === u.id || session.username === u.name
         const canAdd = editable || isOwn
-        const userRecs = records.filter(r => r.user_id === u.id)
+        const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
         const masterRec = getRecord(u.id)
         const approvedCount = userRecs.filter(r => r.admin_approved).length
         const pct = userRecs.length ? Math.round((approvedCount / userRecs.length) * 100) : 0
