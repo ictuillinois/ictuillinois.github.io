@@ -337,7 +337,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 {canAdd && (
-                  <button className="btn btn-sm btn-primary" onClick={() => { setAddingFor(u.id); setAddingLabel('') }}>+ Add cert</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => { setAddingFor(u.id); setAddingLabel('') }}>{editable ? '+ Add certification for lab user' : '+ Add cert'}</button>
                 )}
               </div>
             </div>
