@@ -599,9 +599,13 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
               </div>
             </div>
             <div className="field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 0 }}>
-                <input type="checkbox" checked={form.trained} onChange={e => setForm(f => ({ ...f, trained: e.target.checked }))} style={{ width: 'auto' }} />
-                Trained
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
+                <input type="checkbox" checked={form.trained} onChange={e => setForm(f => ({ ...f, trained: e.target.checked }))} style={{ width: 'auto', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: form.trained ? '#16a34a' : 'var(--text2)', fontWeight: form.trained ? 600 : 400 }}>
+                  {form.trained
+                    ? `✓ I confirmed ${fullName(students.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`
+                    : `I confirm ${fullName(students.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`}
+                </span>
               </label>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
