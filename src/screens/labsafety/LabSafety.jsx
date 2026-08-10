@@ -188,7 +188,11 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       setLoadingPDF(true)
       setPdfError(null)
       try {
-        const doc = await pdfjsLib.getDocument('/ict-safety-part1.pdf').promise
+        // Fetch PDF manually so browser includes session cookies (site is private)
+        const res = await fetch('/ict-safety-part1.pdf')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.arrayBuffer()
+        const doc = await pdfjsLib.getDocument({ data }).promise
         if (cancelled) return
         setPdfDoc(doc)
         setTotalPages(doc.numPages)
