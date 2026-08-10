@@ -500,9 +500,9 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         When you reach the last slide, a certificate will be generated for your lab manager to approve.
       </div>
 
-      {/* Already submitted */}
-      {hasCert ? (
-        <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      {/* Certificate status — shown independently of the viewer */}
+      {hasCert && (
+        <div style={{ background: isApproved ? '#E1F5EE' : '#f0fdf4', border: `1px solid ${isApproved ? '#9FE1CB' : '#bbf7d0'}`, borderRadius: 10, padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 4 }}>
               {isApproved ? '✓ Step 1 approved by your lab manager!' : '✓ Certificate submitted — awaiting lab manager approval'}
@@ -513,34 +513,51 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
               </div>
             )}
           </div>
-          <a
-            href={stepRow.certificate_url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a
+              href={stepRow.certificate_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              View Certificate ↗
+            </a>
+            {!isApproved && (
+              <button
+                onClick={generateCertificate}
+                disabled={generating}
+                style={{ padding: '8px 14px', background: 'none', border: '1px solid #1D9E75', color: '#085041', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1, whiteSpace: 'nowrap', fontFamily: 'var(--sans)' }}
+              >
+                {generating ? '⏳ Updating…' : '🔄 Update Certificate'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {genError && (
+        <div style={{ marginBottom: 12, fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px' }}>
+          {genError}
+        </div>
+      )}
+
+      {/* PDF viewer — always available so lab users can re-read anytime */}
+      {!viewerOpen ? (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => setViewerOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
           >
-            View My Certificate ↗
-          </a>
+            <span style={{ fontSize: 20 }}>📖</span>
+            {hasCert ? 'Review Training Material Again' : hasReachedEnd ? 'Review Training Material' : 'Open Safety Training — Part I (46 slides)'}
+          </button>
+          {hasReachedEnd && !hasCert && (
+            <div style={{ marginTop: 10, fontSize: 13, color: '#085041', fontWeight: 600 }}>
+              ✓ You've reached the last slide. Generate your certificate below.
+            </div>
+          )}
         </div>
       ) : (
-        <>
-          {/* PDF viewer toggle */}
-          {!viewerOpen ? (
-            <div style={{ marginBottom: 12 }}>
-              <button
-                onClick={() => setViewerOpen(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-              >
-                <span style={{ fontSize: 20 }}>📖</span>
-                {hasReachedEnd ? 'Review Training Material' : 'Open Safety Training — Part I (46 slides)'}
-              </button>
-              {hasReachedEnd && (
-                <div style={{ marginTop: 10, fontSize: 13, color: '#085041', fontWeight: 600 }}>
-                  ✓ You've reached the last slide. Generate your certificate below.
-                </div>
-              )}
-            </div>
-          ) : (
             <div ref={viewerBoxRef} style={{ border: '1px solid var(--border)', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', marginBottom: 12, display: 'flex', flexDirection: 'column', background: isFullscreen ? '#525659' : undefined }}>
               {/* PDF canvas area */}
               <div
@@ -634,30 +651,23 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
             </div>
           )}
 
-          {/* Generate certificate button when end has been reached */}
-          {hasReachedEnd && (
-            <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 8 }}>
-                ✅ You've read all 46 slides!
-              </div>
-              <div style={{ fontSize: 13, color: '#085041', marginBottom: 12, lineHeight: 1.6 }}>
-                Your completion certificate is ready. Click below to generate it and submit to your lab manager.
-              </div>
-              {genError && (
-                <div style={{ marginBottom: 10, fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px' }}>
-                  {genError}
-                </div>
-              )}
-              <button
-                onClick={generateCertificate}
-                disabled={generating}
-                style={{ padding: '10px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}
-              >
-                {generating ? '⏳ Generating…' : '📜 Generate & Submit Certificate'}
-              </button>
-            </div>
-          )}
-        </>
+      {/* Generate certificate — only when reached end and no cert submitted yet */}
+      {hasReachedEnd && !hasCert && (
+        <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16, marginTop: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 8 }}>
+            ✅ You've read all 46 slides!
+          </div>
+          <div style={{ fontSize: 13, color: '#085041', marginBottom: 12, lineHeight: 1.6 }}>
+            Your completion certificate is ready. Click below to generate it and submit to your lab manager.
+          </div>
+          <button
+            onClick={generateCertificate}
+            disabled={generating}
+            style={{ padding: '10px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}
+          >
+            {generating ? '⏳ Generating…' : '📜 Generate & Submit Certificate'}
+          </button>
+        </div>
       )}
 
       {/* Completion popup overlay */}
