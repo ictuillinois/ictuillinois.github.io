@@ -184,8 +184,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       setPdfError(null)
       try {
         const pdfjs = await import('pdfjs-dist')
-        pdfjs.GlobalWorkerOptions.workerSrc =
-          `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
         const doc = await pdfjs.getDocument('/ict-safety-part1.pdf').promise
         if (cancelled) return
         setPdfDoc(doc)
