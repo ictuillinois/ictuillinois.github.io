@@ -1511,7 +1511,7 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
 // ── Step panel (tabs + content + actions) ─────────────────────────────────
 
 function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerated, saving }) {
-  const { setScreen } = useAppStore()
+  const { setScreen, setSidebarSubTab } = useAppStore()
   const [activeStep, setActiveStep] = useState(1)
   const userProg = progress[user?.id] || {}
   const allApproved = STEPS.every(s => userProg[s.number]?.completed)
@@ -1608,14 +1608,14 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
             <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>🎉 All 4 steps approved!</div>
             <div style={{ fontSize: 12, color: '#085041', marginTop: 2 }}>
               {isStaff
-                ? `${user.nick_name?.trim() || user.name} can now upload their safety certificates in Training Records.`
-                : 'You can now upload your safety certificates in Training Records.'}
+                ? `${user.nick_name?.trim() || user.name}'s certificates have been saved to their Documents tab in Training Records.`
+                : 'Your certificates have been saved to your Documents tab in Training Records.'}
             </div>
           </div>
           {!isStaff && (
-            <button onClick={() => setScreen('training')}
+            <button onClick={() => { setSidebarSubTab('fresh'); setScreen('training') }}
               style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              Upload Certificates →
+              View Your Certificates →
             </button>
           )}
         </div>
