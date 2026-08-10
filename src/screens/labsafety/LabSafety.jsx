@@ -1074,7 +1074,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
     return (
       <div>
         <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
-          Lab users must: (1) read the <strong>ICT Safety Rules 2025</strong> document, (2) digitally sign and submit the <strong>compliance form</strong> (Appendix D), and (3) complete two online DRS training modules and upload their completion certificates.
+          Lab users must: (1) read the <strong>ICT Safety Rules 2026</strong> document, (2) digitally sign and submit the <strong>compliance form</strong> (Appendix D), and (3) complete two online DRS training modules and upload their completion certificates.
         </div>
         {!hasAny ? (
           <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, border: '2px dashed var(--border)', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
@@ -1127,7 +1127,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
-            Read all 6 pages of the <strong>ICT Safety Rules in Laboratories — 2025</strong>, including General Safety Rules, PPE requirements (Appendix A), Electrical Rules (Appendix B), and the Compliance Form template (Appendix D).
+            Read all 6 pages of the <strong>ICT Safety Rules in Laboratories — 2026</strong>, including General Safety Rules, PPE requirements (Appendix A), Electrical Rules (Appendix B), and the Compliance Form template (Appendix D).
           </div>
           <SimplePDFViewer
             pdfPath="/ict-safety-rules.pdf"
