@@ -8,13 +8,24 @@ import { jsPDF } from 'jspdf'
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 async function autoSaveToDocumentsTab(userId, certUrl, certName) {
-  if (!userId || !certUrl) return
-  const { data: existing } = await sb.from('training_fresh').select('id')
-    .eq('user_id', userId).eq('certificate_name', certName).maybeSingle()
-  if (existing) {
-    await sb.from('training_fresh').update({ certificate_url: certUrl, certificate_uploaded_at: new Date().toISOString() }).eq('id', existing.id)
-  } else {
-    await sb.from('training_fresh').insert({ user_id: userId, certificate_url: certUrl, certificate_name: certName, certificate_uploaded_at: new Date().toISOString() })
+  if (!userId || !certUrl) { console.warn('[autoSave] skipped — missing userId or certUrl', { userId, certUrl, certName }); return }
+  try {
+    const { data: rows, error: selErr } = await sb.from('training_fresh').select('id')
+      .eq('user_id', userId).eq('certificate_name', certName).limit(1)
+    if (selErr) { console.error('[autoSave] select error:', selErr); }
+    const existing = rows?.[0]
+    if (existing) {
+      const { error: updErr } = await sb.from('training_fresh')
+        .update({ certificate_url: certUrl, certificate_uploaded_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (updErr) console.error('[autoSave] update error:', updErr)
+    } else {
+      const { error: insErr } = await sb.from('training_fresh')
+        .insert({ user_id: userId, certificate_url: certUrl, certificate_name: certName, certificate_uploaded_at: new Date().toISOString() })
+      if (insErr) console.error('[autoSave] insert error:', insErr)
+    }
+  } catch (e) {
+    console.error('[autoSave] unexpected error:', e)
   }
 }
 
