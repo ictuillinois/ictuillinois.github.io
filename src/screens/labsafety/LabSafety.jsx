@@ -1309,120 +1309,97 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
 // ── Step 4: ICT Safety Video ───────────────────────────────────────────────
 
+const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
+
 function Step4VideoContent({ user, isManager }) {
   const userId     = user?.id
-  const clickKey   = `ictlab_safety4_clicked_${userId}`
+  const watchedKey = `ictlab_safety4_watched_${userId}`
   const confirmKey = `ictlab_safety4_confirmed_${userId}`
-  const [url, setUrl]                 = useState('')
-  const [hasClicked, setHasClicked]   = useState(() => !!localStorage.getItem(clickKey))
-  const [confirmed, setConfirmed]     = useState(() => !!localStorage.getItem(confirmKey))
-  const [editingUrl, setEditingUrl]   = useState(false)
-  const [urlInput, setUrlInput]       = useState('')
-  const [saving, setSaving]           = useState(false)
+  const [videoWatched, setVideoWatched] = useState(() => !!localStorage.getItem(watchedKey))
+  const [confirmed, setConfirmed]       = useState(false)
+  const [saving, setSaving]             = useState(false)
 
   useEffect(() => {
-    sb.from('settings').select('value').eq('key', 'labsafety_url').maybeSingle()
-      .then(({ data }) => { if (data?.value) { setUrl(data.value); setUrlInput(data.value) } })
-    // Also check if already completed in DB
-    if (userId) {
-      sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 4).maybeSingle()
-        .then(({ data }) => { if (data?.completed) setConfirmed(true) })
-    }
+    if (!userId) return
+    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 4).maybeSingle()
+      .then(({ data }) => {
+        if (data?.completed) {
+          setVideoWatched(true)
+          setConfirmed(true)
+        }
+      })
   }, [userId])
 
-  function handleWatch() {
-    if (!url) return
-    localStorage.setItem(clickKey, '1')
-    setHasClicked(true)
-    window.open(url, '_blank', 'noopener,noreferrer')
+  function handleVideoEnded() {
+    localStorage.setItem(watchedKey, '1')
+    setVideoWatched(true)
   }
 
   async function handleConfirm(e) {
+    if (saving) return
     const checked = e.target.checked
     setConfirmed(checked)
-    if (checked) {
-      localStorage.setItem(confirmKey, '1')
-      const orgId = user?.organizationId || null
-      await sb.from('lab_safety_progress').upsert({
-        user_id: userId,
-        step_number: 4,
-        completed: true,
-        submitted_at: new Date().toISOString(),
-        organization_id: orgId,
-      }, { onConflict: 'user_id,step_number' })
-      if (orgId && userId) {
-        const { data: managers } = await sb.from('users').select('id')
-          .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
-        if (managers?.length) {
-          const name = user?.username || 'A lab user'
-          await sb.from('notifications').insert(managers.map(m => ({
-            user_id: m.id,
-            message: `${name} has confirmed watching the ICT safety video (Step 4). Please review and approve.`,
-            type: 'safety_step_submitted',
-            read: false,
-          })))
-        }
-      }
-    } else {
-      localStorage.removeItem(confirmKey)
-    }
-  }
-
-  async function saveUrl() {
-    if (!urlInput.trim()) return
+    if (!checked) return
     setSaving(true)
-    await sb.from('settings').upsert({ key: 'labsafety_url', value: urlInput.trim() }, { onConflict: 'key' })
-    setUrl(urlInput.trim())
-    setEditingUrl(false)
+    const orgId = user?.organizationId || null
+    await sb.from('lab_safety_progress').upsert({
+      user_id: userId,
+      step_number: 4,
+      completed: true,
+      submitted_at: new Date().toISOString(),
+      organization_id: orgId,
+    }, { onConflict: 'user_id,step_number' })
+    if (orgId && userId) {
+      const { data: managers } = await sb.from('users').select('id')
+        .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
+      if (managers?.length) {
+        const name = user?.username || 'A lab user'
+        await sb.from('notifications').insert(managers.map(m => ({
+          user_id: m.id,
+          message: `${name} has confirmed watching the ICT safety video (Step 4). Please review and approve.`,
+          type: 'safety_step_submitted',
+          read: false,
+        })))
+      }
+    }
     setSaving(false)
   }
 
   return (
     <div>
-      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 20, marginBottom: 12, border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
-          Watch the required ICT Laboratory Safety Video. After watching, return here and check the confirmation box so your lab manager can approve this step.
+      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 12, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
+          Watch the ICT Building Safety Video below. The confirmation checkbox will unlock once you have watched the entire video.
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={handleWatch} disabled={!url}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: url ? 'pointer' : 'default', opacity: url ? 1 : 0.5 }}>
-            Watch ICT Safety Video ↗
-          </button>
-          {isManager && !editingUrl && (
-            <button onClick={() => setEditingUrl(true)}
-              style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--sans)', textDecoration: 'underline' }}>
-              {url ? 'Edit URL' : 'Set video URL'}
-            </button>
-          )}
-        </div>
-        {isManager && editingUrl && (
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://..." autoFocus
-              style={{ flex: 1, minWidth: 200, fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
-            <button onClick={saveUrl} disabled={saving || !urlInput.trim()}
-              style={{ padding: '7px 16px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button onClick={() => { setEditingUrl(false); setUrlInput(url) }}
-              style={{ padding: '7px 12px', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
-              Cancel
-            </button>
+        <video
+          src={VIDEO_SRC}
+          controls
+          controlsList="nodownload"
+          onContextMenu={e => e.preventDefault()}
+          onEnded={handleVideoEnded}
+          style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block', maxHeight: 480 }}
+        />
+        {!videoWatched && (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center' }}>
+            Watch the full video to unlock the confirmation below.
           </div>
         )}
       </div>
-      {!isManager && (hasClicked ? (
-        <div style={{ background: confirmed ? '#E1F5EE' : 'var(--surface2)', border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', transition: 'all 0.2s' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14, color: confirmed ? '#085041' : 'var(--text)', fontWeight: confirmed ? 600 : 400 }}>
-            <input type="checkbox" checked={confirmed} onChange={handleConfirm}
-              style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: 'pointer' }} />
-            I confirm I have watched the ICT safety video
+
+      {!isManager && (
+        <div style={{
+          background: confirmed ? '#E1F5EE' : videoWatched ? 'var(--surface2)' : '#f5f5f5',
+          border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`,
+          borderRadius: 8, padding: '12px 16px', transition: 'all 0.2s',
+          opacity: videoWatched ? 1 : 0.5,
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: videoWatched ? 'pointer' : 'not-allowed', fontSize: 14, color: confirmed ? '#085041' : 'var(--text)', fontWeight: confirmed ? 600 : 400 }}>
+            <input type="checkbox" checked={confirmed} onChange={videoWatched ? handleConfirm : undefined} disabled={!videoWatched || saving}
+              style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: videoWatched ? 'pointer' : 'not-allowed' }} />
+            {saving ? 'Saving…' : 'I confirm I have watched the ICT Building Safety Video in full'}
           </label>
         </div>
-      ) : (
-        <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
-          After clicking the link above, a confirmation checkbox will appear here.
-        </div>
-      ))}
+      )}
     </div>
   )
 }
