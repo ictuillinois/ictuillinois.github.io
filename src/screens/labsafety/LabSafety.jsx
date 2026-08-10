@@ -1696,6 +1696,25 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         })
         setProgress({ [session.userId]: progMap })
         setSelectedUser({ id: session.userId, name: session.username, nick_name: session.username })
+        // One-time backfill: sync existing certs to Documents tab for users who completed steps before auto-save was added
+        const syncKey = `ictlab_docs_synced_${session.userId}`
+        if (!localStorage.getItem(syncKey)) {
+          ;(prog || []).forEach(async r => {
+            if (r.step_number === 1 && r.certificate_url)
+              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part I — All ICT Users')
+            if (r.step_number === 2 && r.certificate_url)
+              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part II — Lab Users')
+            if (r.step_number === 3 && r.certificate_url) {
+              try {
+                const urls = JSON.parse(r.certificate_url)
+                if (urls.form) await autoSaveToDocumentsTab(session.userId, urls.form, 'ICT Safety Rules — Compliance Form (Appendix D)')
+                if (urls.ext1) await autoSaveToDocumentsTab(session.userId, urls.ext1, 'DRS Online Training — Part 1 Certificate')
+                if (urls.ext2) await autoSaveToDocumentsTab(session.userId, urls.ext2, 'DRS Online Training — Part 2 Certificate')
+              } catch {}
+            }
+          })
+          localStorage.setItem(syncKey, '1')
+        }
       }
     } catch (e) {
       console.error('LabSafety load error:', e)
