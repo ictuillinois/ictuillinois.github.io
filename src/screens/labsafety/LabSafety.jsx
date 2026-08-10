@@ -392,7 +392,7 @@ function PDFSafetyContent({
       ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 4, 'F'))
 
       // Header band
-      doc.setFillColor(8, 80, 65)
+      doc.setFillColor(13, 71, 161)
       doc.rect(8, 8, W - 16, 32, 'F')
 
       doc.setTextColor(255, 255, 255)
@@ -714,7 +714,7 @@ function PDFSafetyContent({
 
 // ── Reusable PDF viewer (no cert generation) ──────────────────────────────
 
-function SimplePDFViewer({ pdfPath, localKey, onLastPage }) {
+function SimplePDFViewer({ pdfPath, localKey, onLastPage, maxPages }) {
   const [pdfDoc, setPdfDoc]       = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages]   = useState(0)
@@ -802,10 +802,12 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage }) {
     return () => { cancelled = true }
   }, [pdfDoc, currentPage, open, isFullscreen])
 
+  const effectiveLast = maxPages ? Math.min(totalPages, maxPages) : totalPages
+
   function goToPage(n) {
-    if (!pdfDoc || n < 1 || n > totalPages) return
+    if (!pdfDoc || n < 1 || n > effectiveLast) return
     setCurrentPage(n)
-    if (n === totalPages && !done) {
+    if (n === effectiveLast && !done) {
       localStorage.setItem(localKey, '1')
       setDone(true)
       onLastPage?.()
@@ -826,7 +828,7 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage }) {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
           >
             <span style={{ fontSize: 18 }}>📄</span>
-            {done ? 'Review Document Again' : `Open Safety Rules PDF (${totalPages || 6} pages)`}
+            {done ? 'Review Document Again' : `Open Safety Rules PDF (${maxPages || totalPages || 5} pages)`}
           </button>
         </div>
       ) : (
@@ -847,12 +849,12 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage }) {
               </button>
               <div style={{ flex: 1 }}>
                 <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 4 }}>
-                  <div style={{ width: `${(currentPage / totalPages) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
+                  <div style={{ width: `${(currentPage / effectiveLast) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
                 </div>
-                <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>Page {currentPage} / {totalPages}</div>
+                <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>Page {currentPage} / {effectiveLast}</div>
               </div>
-              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}
-                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: currentPage < totalPages ? '#1D9E75' : 'var(--surface)', color: currentPage < totalPages ? '#fff' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage >= totalPages ? 'default' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, fontFamily: 'var(--sans)' }}>
+              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= effectiveLast}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: currentPage < effectiveLast ? '#1D9E75' : 'var(--surface)', color: currentPage < effectiveLast ? '#fff' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage >= effectiveLast ? 'default' : 'pointer', opacity: currentPage >= effectiveLast ? 0.4 : 1, fontFamily: 'var(--sans)' }}>
                 Next →
               </button>
               <button onClick={() => { if (!document.fullscreenElement) viewerRef.current?.requestFullscreen?.(); else document.exitFullscreen?.() }}
@@ -958,7 +960,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 3, 'F'))
 
       // Header band
-      doc.setFillColor(8, 80, 65); doc.rect(8, 8, W - 16, 28, 'F')
+      doc.setFillColor(13, 71, 161); doc.rect(8, 8, W - 16, 28, 'F')
       doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
       doc.text('Civil and Environmental Engineering ICT Laboratory', W/2, 19, { align: 'center' })
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
@@ -1131,6 +1133,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
             pdfPath="/ict-safety-rules.pdf"
             localKey={`ictlab_step3_read_${user?.id}`}
             onLastPage={() => {}}
+            maxPages={5}
           />
         </div>
       </div>
@@ -1152,8 +1155,12 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
         <div style={{ padding: 16 }}>
           {!formUrl ? (
             <>
+              <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
+                <span style={{ fontWeight: 700 }}>Compliance Statement (Appendix D):</span><br />
+                "I have read, understood, and will comply with the rules outlined in the Civil and Environmental Engineering ICT Laboratory Safety Rules. I will take full responsibility for any action that may happen while using the ICT Laboratories."
+              </div>
               <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
-                Fill in your details below. Your typed name serves as your electronic signature. This generates a signed PDF version of Appendix D from the Safety Rules and submits it to your lab manager.
+                Fill in your details below. Your typed name serves as your electronic signature. This generates a signed PDF version of Appendix D and submits it to your lab manager.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
                 {[
