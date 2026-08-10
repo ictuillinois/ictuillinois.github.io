@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { jsPDF } from 'jspdf'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 // Required SQL (run once in Supabase SQL Editor):
 // ALTER TABLE lab_safety_progress
@@ -183,13 +188,12 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       setLoadingPDF(true)
       setPdfError(null)
       try {
-        const pdfjs = await import('pdfjs-dist')
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-        const doc = await pdfjs.getDocument('/ict-safety-part1.pdf').promise
+        const doc = await pdfjsLib.getDocument('/ict-safety-part1.pdf').promise
         if (cancelled) return
         setPdfDoc(doc)
         setTotalPages(doc.numPages)
-      } catch {
+      } catch (e) {
+        console.error('PDF load error:', e)
         if (!cancelled) setPdfError('Failed to load the PDF. Please check your connection and try again.')
       }
       if (!cancelled) setLoadingPDF(false)
@@ -255,7 +259,6 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
       // Generate certificate PDF
-      const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const W = doc.internal.pageSize.getWidth()   // 297
       const H = doc.internal.pageSize.getHeight()  // 210
