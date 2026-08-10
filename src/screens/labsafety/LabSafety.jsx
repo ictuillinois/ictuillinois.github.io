@@ -173,14 +173,16 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(null)
 
-  const storageKey = `ictlab_step1_done_${user?.id}`
+  const storageKey  = `ictlab_step1_done_${user?.id}`
+  const certV2Key   = `ictlab_cert_v2_${user?.id}`
   const [hasReachedEnd, setHasReachedEnd] = useState(() => !!localStorage.getItem(storageKey))
+  const [autoUpdating, setAutoUpdating]   = useState(false)
 
-  const canvasRef = useRef(null)
-  const canvasWrapperRef = useRef(null)  // wraps canvas; annotation links go here
-  const renderTaskRef = useRef(null)
-  const containerRef = useRef(null)
-  const viewerBoxRef = useRef(null)      // fullscreen target
+  const canvasRef       = useRef(null)
+  const canvasWrapperRef = useRef(null)
+  const renderTaskRef   = useRef(null)
+  const containerRef    = useRef(null)
+  const viewerBoxRef    = useRef(null)
 
   // Track fullscreen state changes
   useEffect(() => {
@@ -295,8 +297,16 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     }
   }
 
-  async function generateCertificate() {
-    setGenerating(true)
+  // Auto-regenerate old-style certs to new design on first load (no download)
+  useEffect(() => {
+    if (!user?.id || !stepRow?.certificate_url || stepRow?.completed || isManager) return
+    if (localStorage.getItem(certV2Key)) return
+    generateCertificate({ autoUpdate: true })
+  }, [])
+
+  async function generateCertificate({ autoUpdate = false } = {}) {
+    if (autoUpdate) setAutoUpdating(true)
+    else setGenerating(true)
     setGenError(null)
     try {
       const firstName = user.nick_name?.trim() || user.name || ''
@@ -440,14 +450,16 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         submitted_at: new Date().toISOString(),
       }, { onConflict: 'user_id,step_number' })
 
-      doc.save(`ICT-Safety-Part1-${fullName.replace(/\s+/g, '-')}.pdf`)
+      if (!autoUpdate) doc.save(`ICT-Safety-Part1-${fullName.replace(/\s+/g, '-')}.pdf`)
+      if (autoUpdate) localStorage.setItem(certV2Key, '1')
       setShowCompletion(false)
       onCertGenerated({ certificate_url: certUrl, submitted_at: new Date().toISOString() })
     } catch (e) {
       console.error('Certificate error:', e)
-      setGenError('Failed to submit certificate. Please try again.')
+      if (!autoUpdate) setGenError('Failed to submit certificate. Please try again.')
     }
-    setGenerating(false)
+    if (autoUpdate) setAutoUpdating(false)
+    else setGenerating(false)
   }
 
   const hasCert = !!stepRow?.certificate_url
@@ -513,7 +525,9 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {autoUpdating ? (
+            <span style={{ fontSize: 13, color: '#085041', fontStyle: 'italic' }}>⏳ Updating certificate…</span>
+          ) : (
             <a
               href={stepRow.certificate_url}
               target="_blank"
@@ -522,16 +536,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
             >
               View Certificate ↗
             </a>
-            {!isApproved && (
-              <button
-                onClick={generateCertificate}
-                disabled={generating}
-                style={{ padding: '8px 14px', background: 'none', border: '1px solid #1D9E75', color: '#085041', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.6 : 1, whiteSpace: 'nowrap', fontFamily: 'var(--sans)' }}
-              >
-                {generating ? '⏳ Updating…' : '🔄 Update Certificate'}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       )}
 
