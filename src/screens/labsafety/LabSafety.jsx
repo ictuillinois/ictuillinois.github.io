@@ -7,6 +7,17 @@ import { jsPDF } from 'jspdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
+async function autoSaveToDocumentsTab(userId, certUrl, certName) {
+  if (!userId || !certUrl) return
+  const { data: existing } = await sb.from('training_fresh').select('id')
+    .eq('user_id', userId).eq('certificate_name', certName).maybeSingle()
+  if (existing) {
+    await sb.from('training_fresh').update({ certificate_url: certUrl, certificate_uploaded_at: new Date().toISOString() }).eq('id', existing.id)
+  } else {
+    await sb.from('training_fresh').insert({ user_id: userId, certificate_url: certUrl, certificate_name: certName, certificate_uploaded_at: new Date().toISOString() })
+  }
+}
+
 // ── Step configuration ─────────────────────────────────────────────────────
 const STEPS = [
   {
@@ -468,6 +479,8 @@ function PDFSafetyContent({
         submitted_at: new Date().toISOString(),
       }, { onConflict: 'user_id,step_number' })
 
+      await autoSaveToDocumentsTab(user.id, certUrl, certTitle)
+
       if (!autoUpdate) doc.save(`ICT-Safety-${partLabel.replace(/\s+/g, '-')}-${fullName.replace(/\s+/g, '-')}.pdf`)
       if (autoUpdate) localStorage.setItem(certV2Key, '1')
       setShowCompletion(false)
@@ -544,14 +557,17 @@ function PDFSafetyContent({
           {autoUpdating ? (
             <span style={{ fontSize: 13, color: '#085041', fontStyle: 'italic' }}>⏳ Updating certificate…</span>
           ) : (
-            <a
-              href={stepRow.certificate_url}
-              target="_blank"
-              rel="noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
-            >
-              View Certificate ↗
-            </a>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+              <a
+                href={stepRow.certificate_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+              >
+                View Certificate ↗
+              </a>
+              <span style={{ fontSize: 11, color: '#085041', opacity: 0.8 }}>Also saved in Training Records → Documents tab</span>
+            </div>
           )}
         </div>
       )}
@@ -1036,6 +1052,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       const url = urlData?.publicUrl
       setFormUrl(url)
       await saveProgress({ form: url })
+      await autoSaveToDocumentsTab(user.id, url, 'ICT Safety Rules — Compliance Form (Appendix D)')
     } catch (e) {
       console.error('Compliance form error:', e)
       setFormError('Failed to generate or upload the form. Please try again.')
@@ -1055,8 +1072,8 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       if (upErr) throw upErr
       const { data: urlData } = sb.storage.from('project-files').getPublicUrl(fileName)
       const url = urlData?.publicUrl
-      if (part === 1) { setExt1Url(url); await saveProgress({ ext1: url }) }
-      else            { setExt2Url(url); await saveProgress({ ext2: url }) }
+      if (part === 1) { setExt1Url(url); await saveProgress({ ext1: url }); await autoSaveToDocumentsTab(user.id, url, 'DRS Online Training — Part 1 Certificate') }
+      else            { setExt2Url(url); await saveProgress({ ext2: url }); await autoSaveToDocumentsTab(user.id, url, 'DRS Online Training — Part 2 Certificate') }
     } catch (e) {
       console.error('Upload error:', e)
       setUploadError(`Failed to upload Part ${part} certificate. Please try again.`)
@@ -1114,8 +1131,9 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
       {/* Submitted banner */}
       {isSubmitted && (
-        <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#085041' }}>
-          ✓ All Step 3 documents submitted — awaiting lab manager approval.
+        <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
+          <span style={{ fontWeight: 700 }}>✓ All Step 3 documents submitted — awaiting lab manager approval.</span><br />
+          All certificates have been saved to your <strong>Training Records → Documents tab</strong>.
         </div>
       )}
 
@@ -1213,7 +1231,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
             </>
           ) : (
             <div style={{ fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
-              Your signed compliance form has been submitted. Click <strong>View Form ↗</strong> above to download a copy.
+              Your signed compliance form has been submitted and saved to your <strong>Documents tab</strong>. Click <strong>View Form ↗</strong> above to download a copy.
             </div>
           )}
         </div>
@@ -1229,7 +1247,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
-            Complete both online training modules from the Division of Research Safety (DRS). After completing each module, download your certificate and upload it here.
+            Complete both online training modules from the Division of Research Safety (DRS). After completing each module, download your certificate and upload it below — it will be automatically saved to your <strong>Documents tab</strong>.
           </div>
           {uploadError && <div style={{ fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>{uploadError}</div>}
 
