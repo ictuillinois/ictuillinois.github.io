@@ -51,14 +51,13 @@ const MODULE_META = {
   inspection:       { icon: '🔍', label: 'Inspections' },
   results:          { icon: '🔍', label: 'Inspections' },
   history:          { icon: '🔍', label: 'Inspections' },
-  equipment:        { icon: '🔧', label: 'Equipment' },
-  equipmenthub:     { icon: '📖', label: 'Equipment Hub' },
+  equipment:        { icon: '🔧', label: 'Equipment & Maintenance' },
+  equipmenthub:     { icon: '📖', label: 'Equipment SOP' },
   equipmentscan:    { icon: '📷', label: 'Equipment Scan' },
   booking:          { icon: '📅', label: 'Booking' },
   training:         { icon: '📚', label: 'Training Records' },
   projects:         { icon: '🧪', label: 'Project Workspace' },
   'project-detail': { icon: '🧪', label: 'Project Workspace' },
-  remessages:       { icon: '💬', label: 'Lab Messages' },
   pm:               { icon: '📋', label: 'Task Board' },
   barcodeqr:        { icon: '🔲', label: 'QR Labels' },
   barcode:          { icon: '📷', label: 'Barcode Scanner' },
@@ -89,10 +88,16 @@ function getScreenTabs(screen, session) {
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
   ]
 
+  if (screen === 'booking') return [
+    { key: 'calendar', icon: '📅', label: 'Book Equipment' },
+    { key: 'history',  icon: '📋', label: 'History & Usage' },
+    ...((isAdmin || isStaff) ? [{ key: 'eq_notes', icon: '⚠️', label: 'Special Treatment' }] : []),
+    ...(isAdmin ? [{ key: 'settings', icon: '⚙️', label: 'Settings' }] : []),
+  ]
+
   if (screen === 'equipment') return [
     { key: 'list',        icon: '📋', label: 'List of Equipment' },
     ...((isAdmin || isStaff) ? [
-      { key: 'calibration', icon: '🧪', label: 'Calibration' },
       { key: 'records',     icon: '📊', label: 'Maintenance Records' },
     ] : []),
     { key: 'settings',    icon: '⚙️', label: 'Settings' },
@@ -169,8 +174,8 @@ function getScreenTabs(screen, session) {
 // ── Screens that use the full viewport (no sidebar layout wrapper needed) ──
 const PROTO_SCREENS = new Set(['layout-proto', 'training-proto'])
 
-function IctLabLogo({ size = 40 }) {
-  return <img src={import.meta.env.BASE_URL + 'ict-logo.png'} width={size} height={size} style={{ display: 'block', objectFit: 'contain' }} alt="ICT-Lab" />
+function IctLabLogo({ height = 40 }) {
+  return <img src={import.meta.env.BASE_URL + 'ict-logo.png'} style={{ display: 'block', height, width: 'auto', objectFit: 'contain' }} alt="ICT-Lab" />
 }
 
 // ── Sidebar ────────────────────────────────────────────────────
@@ -498,7 +503,7 @@ export default function Layout({ children }) {
           </button>
         )}
         <div onClick={() => setScreen('dashboard')} style={{ cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ marginTop: 20 }}><IctLabLogo size={79} /></div>
+          <IctLabLogo height={38} />
           {!isMobile && (
             <div>
               <div style={{ fontFamily: 'var(--sans)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.3px', color: '#ffffff', lineHeight: 1.1 }}>ICT-Lab</div>
@@ -604,7 +609,7 @@ export default function Layout({ children }) {
           <div style={{ display: 'flex', height: 56 }}>
             {NAV_TABS.map(tab => {
               const isActive = tab.screens.includes(screen)
-              const dest = tab.id === 'home' ? 'dashboard' : tab.id === 'booking' ? 'booking' : tab.id === 'messages' ? 'remessages' : tab.id === 'projects' ? 'projects' : 'profile'
+              const dest = tab.id === 'home' ? 'dashboard' : tab.id === 'supply' ? 'home' : tab.id === 'booking' ? 'booking' : tab.id === 'projects' ? 'projects' : 'profile'
               return (
                 <button key={tab.id} onClick={() => setScreen(dest)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 2px 4px', position: 'relative', WebkitTapHighlightColor: 'transparent' }}>
                   {isActive && <span style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', width: 40, height: 32, background: accentLight, borderRadius: 10 }} />}
