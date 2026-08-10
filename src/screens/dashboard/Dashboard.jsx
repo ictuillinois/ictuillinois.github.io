@@ -563,8 +563,25 @@ function SuperAdminDashboard({ session, setScreen, greeting, dateStr }) {
   )
 }
 
+function SafetyGate({ onGoToTraining }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 32, textAlign: 'center', gap: 16 }}>
+      <div style={{ fontSize: 64 }}>🔒</div>
+      <div style={{ fontWeight: 700, fontSize: 22, color: 'var(--text)', letterSpacing: '-0.4px' }}>Safety Training Required</div>
+      <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.8, maxWidth: 400 }}>
+        You must complete all 4 ICT safety training steps before accessing lab features.
+        Your progress is saved — pick up where you left off.
+      </div>
+      <button onClick={onGoToTraining}
+        style={{ padding: '12px 32px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 8, boxShadow: '0 4px 12px rgba(29,158,117,0.3)' }}>
+        Go to Safety Training →
+      </button>
+    </div>
+  )
+}
+
 export default function Dashboard() {
-  const { session, screen, setScreen, activeModules, setActiveModules } = useAppStore()
+  const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules } = useAppStore()
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
   const [mileageUrl, setMileageUrl] = useState('https://bw4qh7p8sn.us-east-1.awsapprunner.com/')
   const [labSafetyUrl, setLabSafetyUrl] = useState('https://canvas.illinois.edu/')
@@ -573,6 +590,7 @@ export default function Dashboard() {
   const [savingUrl, setSavingUrl] = useState(false)
   const [userAccess, setUserAccess] = useState(null)
   const [studentAllowedPool, setStudentAllowedPool] = useState(null)
+  const [safetyComplete, setSafetyComplete] = useState(null)
   // Module card images: seed from localStorage cache (stale-while-revalidate)
   // so repeat visits paint images on the first frame instead of flashing the
   // emoji fallback while loadSettings() round-trips to Supabase.
@@ -604,6 +622,19 @@ export default function Dashboard() {
   }, [session?.userId])
 
   useEffect(() => { loadDashboardPrefs() }, [session?.userId, session?.loginMode])
+
+  useEffect(() => {
+    if (!isStudent || !session?.userId) { setSafetyComplete(true); return }
+    sb.from('lab_safety_progress')
+      .select('step_number')
+      .eq('user_id', session.userId)
+      .eq('completed', true)
+      .then(({ data }) => {
+        const done = new Set((data || []).map(r => r.step_number))
+        setSafetyComplete([1, 2, 3, 4].every(n => done.has(n)))
+      })
+      .catch(() => setSafetyComplete(true))
+  }, [session?.userId, isStudent, screen])
 
   async function loadDashboardPrefs() {
     try {
@@ -865,10 +896,15 @@ export default function Dashboard() {
       )}
 
       <div style={{ flex: 1, minHeight: 0 }}>
-        {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
-        {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
-        {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
-        {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
+        {isStudent && safetyComplete === false
+          ? <SafetyGate onGoToTraining={() => { setSidebarSubTab('safety'); setScreen('training') }} />
+          : <>
+              {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
+              {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
+              {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
+              {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
+            </>
+        }
       </div>
 
       {editingUrl !== null && (

@@ -1309,7 +1309,8 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
 // ── Step 4: ICT Safety Video ───────────────────────────────────────────────
 
-function Step4VideoContent({ userId, isManager }) {
+function Step4VideoContent({ user, isManager }) {
+  const userId     = user?.id
   const clickKey   = `ictlab_safety4_clicked_${userId}`
   const confirmKey = `ictlab_safety4_confirmed_${userId}`
   const [url, setUrl]                 = useState('')
@@ -1322,7 +1323,12 @@ function Step4VideoContent({ userId, isManager }) {
   useEffect(() => {
     sb.from('settings').select('value').eq('key', 'labsafety_url').maybeSingle()
       .then(({ data }) => { if (data?.value) { setUrl(data.value); setUrlInput(data.value) } })
-  }, [])
+    // Also check if already completed in DB
+    if (userId) {
+      sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 4).maybeSingle()
+        .then(({ data }) => { if (data?.completed) setConfirmed(true) })
+    }
+  }, [userId])
 
   function handleWatch() {
     if (!url) return
@@ -1331,11 +1337,35 @@ function Step4VideoContent({ userId, isManager }) {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  function handleConfirm(e) {
+  async function handleConfirm(e) {
     const checked = e.target.checked
     setConfirmed(checked)
-    if (checked) localStorage.setItem(confirmKey, '1')
-    else localStorage.removeItem(confirmKey)
+    if (checked) {
+      localStorage.setItem(confirmKey, '1')
+      const orgId = user?.organizationId || null
+      await sb.from('lab_safety_progress').upsert({
+        user_id: userId,
+        step_number: 4,
+        completed: true,
+        submitted_at: new Date().toISOString(),
+        organization_id: orgId,
+      }, { onConflict: 'user_id,step_number' })
+      if (orgId && userId) {
+        const { data: managers } = await sb.from('users').select('id')
+          .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
+        if (managers?.length) {
+          const name = user?.username || 'A lab user'
+          await sb.from('notifications').insert(managers.map(m => ({
+            user_id: m.id,
+            message: `${name} has confirmed watching the ICT safety video (Step 4). Please review and approve.`,
+            type: 'safety_step_submitted',
+            read: false,
+          })))
+        }
+      }
+    } else {
+      localStorage.removeItem(confirmKey)
+    }
   }
 
   async function saveUrl() {
@@ -1424,7 +1454,7 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
   }
 
   if (step.type === 'ict_video') {
-    return <Step4VideoContent userId={user?.id} isManager={isManager} />
+    return <Step4VideoContent user={user} isManager={isManager} />
   }
 
   if (step.type === 'placeholder' || !step.content) {

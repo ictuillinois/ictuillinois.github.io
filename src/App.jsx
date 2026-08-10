@@ -26,11 +26,24 @@ const BarcodeManager       = lazy(() => import('./screens/barcode/BarcodeManager
 const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecords'))
 const LabManagement        = lazy(() => import('./screens/labmanagement/LabManagement'))
 const PM                   = lazy(() => import('./screens/maintenance/PM'))
-const LabMessage           = lazy(() => import('./screens/messaging/LabMessage'))
 const Profile              = lazy(() => import('./screens/profile/Profile'))
 const Admin                = lazy(() => import('./screens/admin/Admin'))
 
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
+
+async function notifyManagersSafetySkipped(session) {
+  if (!session?.organizationId || !session?.userId) return
+  const { data: managers } = await sb.from('users').select('id')
+    .eq('organization_id', session.organizationId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', session.userId)
+  if (!managers?.length) return
+  const name = session.username || 'A lab user'
+  await sb.from('notifications').insert(managers.map(m => ({
+    user_id: m.id,
+    message: `${name} skipped safety training and requested to use the lab without completing all steps. Please review and contact them if needed.`,
+    type: 'safety_skip_request',
+    read: false,
+  })))
+}
 
 function TrainingOnboardingModal({ onGoToTraining, onDismiss }) {
   return (
@@ -68,7 +81,7 @@ const INTERNAL = new Set([
   'home', 'inspection', 'results', 'history',
   'projects', 'project-detail',
   'booking', 'barcode', 'barcodeqr',
-  'training', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'remessages',
+  'training', 'labmanagement', 'pm', 'equipment', 'equipmenthub',
 ])
 
 export default function App() {
@@ -264,7 +277,6 @@ export default function App() {
     training:         <TrainingRecords />,
     labmanagement:    <LabManagement />,
     pm:               <PM />,
-    remessages:       <LabMessage />,
     profile:          <Profile />,
     orgadmin:         <Admin />,
   }
@@ -290,6 +302,7 @@ export default function App() {
           onDismiss={() => {
             localStorage.setItem(`ictlab_training_prompted_${session.userId}`, 'true')
             setShowTrainingPrompt(false)
+            notifyManagersSafetySkipped(session)
           }}
         />
       )}
