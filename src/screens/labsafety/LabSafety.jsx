@@ -51,9 +51,8 @@ const STEPS = [
     number: 3,
     title: 'Step 3',
     icon: '📝',
-    description: 'Policy review and acknowledgment',
-    type: 'placeholder',
-    content: null,
+    description: 'Read Safety Rules, sign compliance form & complete online training',
+    type: 'safety_rules',
   },
   {
     number: 4,
@@ -713,6 +712,594 @@ function PDFSafetyContent({
   )
 }
 
+// ── Reusable PDF viewer (no cert generation) ──────────────────────────────
+
+function SimplePDFViewer({ pdfPath, localKey, onLastPage }) {
+  const [pdfDoc, setPdfDoc]       = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages]   = useState(0)
+  const [loading, setLoading]     = useState(false)
+  const [pdfError, setPdfError]   = useState(null)
+  const [open, setOpen]           = useState(false)
+  const [rendering, setRendering] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [done, setDone] = useState(() => !!localStorage.getItem(localKey))
+
+  const canvasRef    = useRef(null)
+  const wrapperRef   = useRef(null)
+  const renderRef    = useRef(null)
+  const containerRef = useRef(null)
+  const viewerRef    = useRef(null)
+
+  useEffect(() => {
+    const fn = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', fn)
+    return () => document.removeEventListener('fullscreenchange', fn)
+  }, [])
+
+  useEffect(() => {
+    if (!open || pdfDoc) return
+    let cancelled = false
+    async function init() {
+      setLoading(true)
+      setPdfError(null)
+      try {
+        const res = await fetch(pdfPath)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.arrayBuffer()
+        const doc = await pdfjsLib.getDocument({ data }).promise
+        if (!cancelled) { setPdfDoc(doc); setTotalPages(doc.numPages) }
+      } catch (e) {
+        if (!cancelled) setPdfError('Failed to load PDF. Please check your connection and try again.')
+      }
+      if (!cancelled) setLoading(false)
+    }
+    init()
+    return () => { cancelled = true }
+  }, [open])
+
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current || !open) return
+    let cancelled = false
+    async function render() {
+      if (renderRef.current) { try { renderRef.current.cancel() } catch {} renderRef.current = null }
+      setRendering(true)
+      try {
+        const page = await pdfDoc.getPage(currentPage)
+        if (cancelled || !canvasRef.current) return
+        const containerW = containerRef.current?.clientWidth || (isFullscreen ? window.innerWidth : 680)
+        const containerH = isFullscreen ? (containerRef.current?.clientHeight || window.innerHeight - 60) - 24 : Infinity
+        const baseVP = page.getViewport({ scale: 1 })
+        const scaleByW = (containerW - 24) / baseVP.width
+        const scaleByH = containerH < Infinity ? containerH / baseVP.height : Infinity
+        const scale    = Math.min(scaleByW, scaleByH, isFullscreen ? 4 : 1.8)
+        const viewport = page.getViewport({ scale })
+        const canvas = canvasRef.current
+        canvas.width  = viewport.width
+        canvas.height = viewport.height
+        const task = page.render({ canvasContext: canvas.getContext('2d'), viewport })
+        renderRef.current = task
+        await task.promise
+        renderRef.current = null
+        if (cancelled) return
+        // Clickable links
+        if (wrapperRef.current) {
+          wrapperRef.current.querySelectorAll('.pdf-link').forEach(el => el.remove())
+          const anns = await page.getAnnotations()
+          anns.filter(a => a.subtype === 'Link' && a.url).forEach(ann => {
+            const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(ann.rect)
+            const a = document.createElement('a')
+            a.className = 'pdf-link'
+            a.href = ann.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = ann.url
+            a.style.cssText = `position:absolute;left:${Math.min(x1,x2)}px;top:${Math.min(y1,y2)}px;width:${Math.abs(x2-x1)}px;height:${Math.abs(y2-y1)}px;cursor:pointer;`
+            wrapperRef.current.appendChild(a)
+          })
+        }
+      } catch (e) { if (e?.name !== 'RenderingCancelledException') console.error(e) }
+      if (!cancelled) setRendering(false)
+    }
+    render()
+    return () => { cancelled = true }
+  }, [pdfDoc, currentPage, open, isFullscreen])
+
+  function goToPage(n) {
+    if (!pdfDoc || n < 1 || n > totalPages) return
+    setCurrentPage(n)
+    if (n === totalPages && !done) {
+      localStorage.setItem(localKey, '1')
+      setDone(true)
+      onLastPage?.()
+    }
+  }
+
+  return (
+    <div>
+      {done && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 8, padding: '6px 14px', marginBottom: 10, fontSize: 13, fontWeight: 600, color: '#085041' }}>
+          ✓ Document read in full
+        </div>
+      )}
+      {!open ? (
+        <div>
+          <button
+            onClick={() => setOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+          >
+            <span style={{ fontSize: 18 }}>📄</span>
+            {done ? 'Review Document Again' : `Open Safety Rules PDF (${totalPages || 6} pages)`}
+          </button>
+        </div>
+      ) : (
+        <div ref={viewerRef} style={{ border: '1px solid var(--border)', borderRadius: isFullscreen ? 0 : 10, overflow: 'hidden', marginTop: 10, display: 'flex', flexDirection: 'column', background: '#525659', ...(isFullscreen ? { width: '100%', height: '100%' } : {}) }}>
+          <div ref={containerRef} style={{ background: '#525659', padding: 12, minHeight: 180, position: 'relative', display: 'flex', justifyContent: 'center', alignItems: isFullscreen ? 'center' : 'flex-start', flex: 1, overflow: isFullscreen ? 'hidden' : 'visible' }}>
+            {loading && <div style={{ color: '#fff', padding: 40, fontSize: 14 }}>Loading PDF… please wait</div>}
+            {pdfError && <div style={{ color: '#fca5a5', padding: 40, fontSize: 14 }}>{pdfError}</div>}
+            <div ref={wrapperRef} style={{ position: 'relative', display: pdfDoc ? 'block' : 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.4)', borderRadius: 2 }}>
+              <canvas ref={canvasRef} style={{ display: 'block' }} />
+            </div>
+            {rendering && <div style={{ position: 'absolute', bottom: 16, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}>Loading…</div>}
+          </div>
+          {pdfDoc && (
+            <div style={{ background: isFullscreen ? '#1a1a1a' : 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage <= 1 ? 'default' : 'pointer', opacity: currentPage <= 1 ? 0.4 : 1, fontFamily: 'var(--sans)' }}>
+                ← Prev
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 4 }}>
+                  <div style={{ width: `${(currentPage / totalPages) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
+                </div>
+                <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>Page {currentPage} / {totalPages}</div>
+              </div>
+              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: currentPage < totalPages ? '#1D9E75' : 'var(--surface)', color: currentPage < totalPages ? '#fff' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage >= totalPages ? 'default' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, fontFamily: 'var(--sans)' }}>
+                Next →
+              </button>
+              <button onClick={() => { if (!document.fullscreenElement) viewerRef.current?.requestFullscreen?.(); else document.exitFullscreen?.() }}
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 15, cursor: 'pointer', lineHeight: 1, fontFamily: 'var(--sans)' }}>
+                {isFullscreen ? '⤡' : '⤢'}
+              </button>
+            </div>
+          )}
+          {!isFullscreen && (
+            <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setOpen(false)} style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: '4px 8px' }}>
+                Close viewer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Step 3: Safety Rules + Compliance Form + External Training ─────────────
+
+function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
+  const { session } = useAppStore()
+
+  // Parse saved URLs from DB (stored as JSON in certificate_url)
+  const savedUrls = (() => { try { return JSON.parse(stepRow?.certificate_url || '{}') } catch { return {} } })()
+
+  // Form state
+  const [formData, setFormData] = useState({
+    firstName: user?.nick_name?.trim() || user?.name || '',
+    lastName:  user?.last_name || '',
+    email:     user?.email || '',
+    piFirst:   '',
+    piLast:    '',
+  })
+  const [formUrl, setFormUrl]         = useState(savedUrls.form || null)
+  const [generatingForm, setGeneratingForm] = useState(false)
+  const [formError, setFormError]     = useState(null)
+
+  // External cert uploads
+  const [ext1Url, setExt1Url]   = useState(savedUrls.ext1 || null)
+  const [ext2Url, setExt2Url]   = useState(savedUrls.ext2 || null)
+  const [uploading1, setUploading1] = useState(false)
+  const [uploading2, setUploading2] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const ext1InputRef = useRef(null)
+  const ext2InputRef = useRef(null)
+
+  async function saveProgress(updates) {
+    const urls = { form: formUrl, ext1: ext1Url, ext2: ext2Url, ...updates }
+    const allDone = !!urls.form && !!urls.ext1 && !!urls.ext2
+    const submittedAt = allDone ? (stepRow?.submitted_at || new Date().toISOString()) : (stepRow?.submitted_at || null)
+    const payload = {
+      user_id: user.id,
+      organization_id: session.organizationId,
+      step_number: 3,
+      completed: false,
+      certificate_url: JSON.stringify(urls),
+      submitted_at: submittedAt,
+    }
+    await sb.from('lab_safety_progress').upsert(payload, { onConflict: 'user_id,step_number' })
+    onCertGenerated({ certificate_url: JSON.stringify(urls), submitted_at: submittedAt })
+  }
+
+  async function generateComplianceForm() {
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim() || !formData.piLast.trim() || !formData.piFirst.trim()) {
+      setFormError('Please fill in all fields before generating the form.')
+      return
+    }
+    setGeneratingForm(true)
+    setFormError(null)
+    try {
+      // ICT logo watermark
+      let logoDataUrl = null
+      try {
+        const res = await fetch('/ict-logo.png')
+        if (res.ok) {
+          const blob = await res.blob()
+          const objUrl = URL.createObjectURL(blob)
+          const img = await new Promise(resolve => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = objUrl })
+          if (img?.naturalWidth > 0) {
+            const cvs = document.createElement('canvas'); cvs.width = img.naturalWidth; cvs.height = img.naturalHeight
+            const ctx = cvs.getContext('2d'); ctx.globalAlpha = 0.07; ctx.drawImage(img, 0, 0)
+            logoDataUrl = cvs.toDataURL('image/png')
+          }
+          URL.revokeObjectURL(objUrl)
+        }
+      } catch {}
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const W = 210, H = 297
+
+      doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F')
+      if (logoDataUrl) { const s = 120; doc.addImage(logoDataUrl, 'PNG', W/2 - s/2, H/2 - s/2 + 20, s, s) }
+
+      // Border
+      doc.setDrawColor(29, 158, 117); doc.setLineWidth(2); doc.rect(8, 8, W - 16, H - 16)
+      doc.setLineWidth(0.5); doc.rect(11, 11, W - 22, H - 22)
+      doc.setFillColor(29, 158, 117)
+      ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 3, 'F'))
+
+      // Header band
+      doc.setFillColor(8, 80, 65); doc.rect(8, 8, W - 16, 28, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
+      doc.text('Civil and Environmental Engineering ICT Laboratory', W/2, 19, { align: 'center' })
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
+      doc.text('Safety Rules — COMPLIANCE FORM', W/2, 29, { align: 'center' })
+
+      // Body text
+      doc.setTextColor(50, 50, 50); doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
+      const body = 'I have read, understood, and will comply with the rules outlined in the Civil and Environmental Engineering ICT Laboratory Safety Rules. I will take full responsibility for any action that may happen while using the ICT Laboratories.'
+      doc.text(body, 20, 50, { maxWidth: W - 40 })
+
+      // STUDENT section
+      let y = 82
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20)
+      doc.text('STUDENT:', 20, y); y += 14
+
+      const lineColor = [29, 158, 117]
+      doc.setDrawColor(...lineColor); doc.setLineWidth(0.4)
+
+      // Last / First name row
+      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
+      doc.text(formData.lastName, 20, y - 2)
+      doc.text(formData.firstName, 105, y - 2)
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text('Last Name (print)', 20, y + 4)
+      doc.text('First Name (print)', 105, y + 4)
+      y += 18
+
+      // Signature / Date row
+      doc.setDrawColor(...lineColor)
+      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
+      doc.text(`${formData.firstName} ${formData.lastName}`, 20, y - 2)
+      doc.setFont('helvetica', 'normal')
+      doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 105, y - 2)
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text('Signature (Electronic)', 20, y + 4)
+      doc.text('Date Signed', 105, y + 4)
+      y += 18
+
+      // Email row
+      doc.setDrawColor(...lineColor); doc.line(20, y, 130, y)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
+      doc.text(formData.email, 20, y - 2)
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text('UIUC Email address', 20, y + 4)
+      y += 24
+
+      // PI section
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20)
+      doc.text('PRINCIPAL INVESTIGATOR:', 20, y); y += 14
+
+      doc.setDrawColor(...lineColor)
+      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
+      doc.text(formData.piLast, 20, y - 2)
+      doc.text(formData.piFirst, 105, y - 2)
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text('Last Name (print)', 20, y + 4)
+      doc.text('First Name (print)', 105, y + 4)
+
+      // Footer
+      doc.setFillColor(29, 158, 117); doc.rect(8, H - 20, W - 16, 12, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
+      doc.text('ICT Laboratory · College of Engineering · University of Illinois Urbana-Champaign', W/2, H - 12, { align: 'center' })
+
+      const blob = doc.output('blob')
+      const fileName = `safety-certs/step3/${user.id}-compliance-${Date.now()}.pdf`
+      const { error: upErr } = await sb.storage.from('project-files').upload(fileName, blob, { contentType: 'application/pdf', upsert: false })
+      if (upErr) throw upErr
+
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(fileName)
+      const url = urlData?.publicUrl
+      setFormUrl(url)
+      await saveProgress({ form: url })
+    } catch (e) {
+      console.error('Compliance form error:', e)
+      setFormError('Failed to generate or upload the form. Please try again.')
+    }
+    setGeneratingForm(false)
+  }
+
+  async function uploadExtCert(part, file) {
+    if (!file) return
+    setUploadError(null)
+    const setter = part === 1 ? setUploading1 : setUploading2
+    setter(true)
+    try {
+      const ext = file.name.split('.').pop().toLowerCase()
+      const fileName = `safety-certs/step3/${user.id}-ext${part}-${Date.now()}.${ext}`
+      const { error: upErr } = await sb.storage.from('project-files').upload(fileName, file, { contentType: file.type, upsert: false })
+      if (upErr) throw upErr
+      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(fileName)
+      const url = urlData?.publicUrl
+      if (part === 1) { setExt1Url(url); await saveProgress({ ext1: url }) }
+      else            { setExt2Url(url); await saveProgress({ ext2: url }) }
+    } catch (e) {
+      console.error('Upload error:', e)
+      setUploadError(`Failed to upload Part ${part} certificate. Please try again.`)
+    }
+    setter(false)
+  }
+
+  // ── Manager view ──
+  if (isManager) {
+    const urls = (() => { try { return JSON.parse(stepRow?.certificate_url || '{}') } catch { return {} } })()
+    const hasForm = !!urls.form
+    const hasExt1 = !!urls.ext1
+    const hasExt2 = !!urls.ext2
+    const hasAny  = hasForm || hasExt1 || hasExt2
+    return (
+      <div>
+        <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
+          Lab users must: (1) read the <strong>ICT Safety Rules 2025</strong> document, (2) digitally sign and submit the <strong>compliance form</strong> (Appendix D), and (3) complete two online DRS training modules and upload their completion certificates.
+        </div>
+        {!hasAny ? (
+          <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, border: '2px dashed var(--border)', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
+            No documents submitted yet.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { label: 'Compliance Form (Appendix D)', url: urls.form, done: hasForm },
+              { label: 'DRS Online Training Part 1 Certificate', url: urls.ext1, done: hasExt1 },
+              { label: 'DRS Online Training Part 2 Certificate', url: urls.ext2, done: hasExt2 },
+            ].map(({ label, url, done }, i) => (
+              <div key={i} style={{ background: done ? '#E1F5EE' : 'var(--surface2)', border: `1px solid ${done ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: done ? '#085041' : 'var(--text3)' }}>
+                  {done ? '✓' : '⏳'} {label}
+                </div>
+                {done && (
+                  <a href={url} target="_blank" rel="noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    View ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Lab user view ──
+  const isSubmitted = !!stepRow?.submitted_at
+  const allDone = !!formUrl && !!ext1Url && !!ext2Url
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Submitted banner */}
+      {isSubmitted && (
+        <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: '12px 16px', fontSize: 13, fontWeight: 600, color: '#085041' }}>
+          ✓ All Step 3 documents submitted — awaiting lab manager approval.
+        </div>
+      )}
+
+      {/* ── Card 1: Read Safety Rules PDF ── */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#E1F5EE', border: '2px solid #1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#1D9E75', flexShrink: 0 }}>1</div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Read the ICT Safety Rules Document</div>
+        </div>
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
+            Read all 6 pages of the <strong>ICT Safety Rules in Laboratories — 2025</strong>, including General Safety Rules, PPE requirements (Appendix A), Electrical Rules (Appendix B), and the Compliance Form template (Appendix D).
+          </div>
+          <SimplePDFViewer
+            pdfPath="/ict-safety-rules.pdf"
+            localKey={`ictlab_step3_read_${user?.id}`}
+            onLastPage={() => {}}
+          />
+        </div>
+      </div>
+
+      {/* ── Card 2: Compliance Form ── */}
+      <div style={{ border: `1px solid ${formUrl ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: formUrl ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${formUrl ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: formUrl ? '#1D9E75' : '#E1F5EE', border: `2px solid ${formUrl ? '#1D9E75' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: formUrl ? '#fff' : '#9ca3af', flexShrink: 0 }}>
+            {formUrl ? '✓' : '2'}
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: formUrl ? '#085041' : 'var(--text)' }}>Sign the Compliance Form (Appendix D)</div>
+          {formUrl && (
+            <a href={formUrl} target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#1D9E75', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              View Form ↗
+            </a>
+          )}
+        </div>
+        <div style={{ padding: 16 }}>
+          {!formUrl ? (
+            <>
+              <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
+                Fill in your details below. Your typed name serves as your electronic signature. This generates a signed PDF version of Appendix D from the Safety Rules and submits it to your lab manager.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                {[
+                  { key: 'firstName', label: 'First Name*' },
+                  { key: 'lastName',  label: 'Last Name*' },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
+                    <input
+                      value={formData[key]}
+                      onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>UIUC Email Address*</div>
+                <input
+                  value={formData.email}
+                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                  type="email"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Principal Investigator</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                {[
+                  { key: 'piFirst', label: 'PI First Name*' },
+                  { key: 'piLast',  label: 'PI Last Name*' },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
+                    <input
+                      value={formData[key]}
+                      onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {formError && <div style={{ fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px', marginBottom: 10 }}>{formError}</div>}
+              <button
+                onClick={generateComplianceForm}
+                disabled={generatingForm}
+                style={{ padding: '10px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: generatingForm ? 'default' : 'pointer', opacity: generatingForm ? 0.7 : 1 }}
+              >
+                {generatingForm ? '⏳ Generating…' : '📋 Generate & Submit Compliance Form'}
+              </button>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
+              Your signed compliance form has been submitted. Click <strong>View Form ↗</strong> above to download a copy.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Card 3: External Training ── */}
+      <div style={{ border: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: (ext1Url && ext2Url) ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: (ext1Url && ext2Url) ? '#1D9E75' : '#E1F5EE', border: `2px solid ${(ext1Url && ext2Url) ? '#1D9E75' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: (ext1Url && ext2Url) ? '#fff' : '#9ca3af', flexShrink: 0 }}>
+            {(ext1Url && ext2Url) ? '✓' : '3'}
+          </div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: (ext1Url && ext2Url) ? '#085041' : 'var(--text)' }}>Complete DRS Online Safety Training</div>
+        </div>
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
+            Complete both online training modules from the Division of Research Safety (DRS). After completing each module, download your certificate and upload it here.
+          </div>
+          {uploadError && <div style={{ fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>{uploadError}</div>}
+
+          {/* Part 1 */}
+          {[
+            {
+              part: 1,
+              label: 'DRS Training Part 1',
+              url: 'https://storyline.research.illinois.edu/263/story.html',
+              certUrl: ext1Url,
+              uploading: uploading1,
+              inputRef: ext1InputRef,
+            },
+            {
+              part: 2,
+              label: 'DRS Training Part 2',
+              url: 'https://storyline.research.illinois.edu/264/story.html',
+              certUrl: ext2Url,
+              uploading: uploading2,
+              inputRef: ext2InputRef,
+            },
+          ].map(({ part, label, url, certUrl, uploading, inputRef }) => (
+            <div key={part} style={{ background: certUrl ? '#E1F5EE' : 'var(--surface2)', border: `1px solid ${certUrl ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: certUrl ? 0 : 10 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: certUrl ? '#085041' : 'var(--text)' }}>
+                  {certUrl ? '✓ ' : ''}{label}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <a href={url} target="_blank" rel="noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                    Open Training ↗
+                  </a>
+                  {certUrl && (
+                    <a href={certUrl} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 12, fontWeight: 600, color: '#1D9E75', textDecoration: 'none' }}>
+                      View Certificate ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+              {!certUrl && (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+                    After completing the module, upload your completion certificate (PDF or image):
+                  </div>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp"
+                    style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadExtCert(part, f) }}
+                  />
+                  <button
+                    onClick={() => inputRef.current?.click()}
+                    disabled={uploading}
+                    style={{ padding: '8px 18px', background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1, fontFamily: 'var(--sans)' }}
+                  >
+                    {uploading ? '⏳ Uploading…' : '⬆ Upload Certificate'}
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Progress summary */}
+      {!isSubmitted && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', paddingBottom: 4 }}>
+          {[!!formUrl, !!ext1Url, !!ext2Url].filter(Boolean).length} / 3 items submitted
+          {allDone ? ' — step will be marked as submitted' : ''}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Step 4: ICT Safety Video ───────────────────────────────────────────────
 
 function Step4VideoContent({ userId, isManager }) {
@@ -814,6 +1401,17 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
         stepRow={stepRow}
         onCertGenerated={onCertGenerated}
         {...step.pdfConfig}
+      />
+    )
+  }
+
+  if (step.type === 'safety_rules') {
+    return (
+      <Step3PolicyContent
+        user={user}
+        isManager={isManager}
+        stepRow={stepRow}
+        onCertGenerated={onCertGenerated}
       />
     )
   }
