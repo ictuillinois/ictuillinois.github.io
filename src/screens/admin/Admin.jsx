@@ -58,7 +58,6 @@ const MODULE_IMAGE_DEFS = [
   { key: 'equipment',      label: 'Equipment List', icon: '🔧' },
   { key: 'equipmenthub',   label: 'Equipment',           icon: '📚' },
   { key: 'booking',        label: 'Reserve Equipment',   icon: '📅' },
-  { key: 'remessages',     label: 'RE Messages',         icon: '💬' },
   { key: 'pm',             label: 'Task Board',  icon: '📋' },
   { key: 'mileage',        label: 'Mileage Form',        icon: '🚗' },
   { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺' },
@@ -449,6 +448,7 @@ const STUDENT_ICON_OPTIONS = [
   { key: 'barcode',   label: 'QR Scan',           icon: '📷' },
   { key: 'mileage',   label: 'Mileage Form',      icon: '🚗' },
   { key: 'labsafety', label: 'Lab Safety',        icon: '🦺' },
+  { key: 'training',  label: 'Training Records',  icon: '🎓' },
 ]
 
 // ── User modal ────────────────────────────────────────────────
@@ -480,11 +480,11 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
         .then(({ data }) => {
           const defaults = data?.student_default_modules?.length
             ? data.student_default_modules
-            : ['projects', 'booking', 'barcode', 'mileage', 'labsafety']
+            : ['projects', 'booking', 'barcode', 'mileage', 'labsafety', 'training']
           setSelectedIcons(new Set([...defaults, 'profile']))
         })
     } else if (!user && role === 'lab_user') {
-      setSelectedIcons(new Set(['projects', 'booking', 'barcode', 'mileage', 'labsafety', 'profile']))
+      setSelectedIcons(new Set(['projects', 'booking', 'barcode', 'mileage', 'labsafety', 'training', 'profile']))
     }
   }, [user?.id, user?.role, role, effectiveOrgId])
 
@@ -1986,7 +1986,6 @@ const FEEDBACK_SCREEN_NAMES = {
   pm:            'Task Board',
   barcode:       'Material Scanner',
   barcodeqr:     'QR Labels',
-  remessages:    'Messages',
   home:          'Inspection',
   history:       'Inspection History',
   projects:      'Projects',

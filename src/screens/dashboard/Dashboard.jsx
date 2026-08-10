@@ -69,19 +69,25 @@ function ExternalLinkModal({ url, onConfirm, onCancel }) {
   )
 }
 
-function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
+function ModuleCard({ m, onClick, imgUrl, isAdminManage, onDragStart, onDragOver, onDrop, onDragEnd, isDragging, isDragOver }) {
+  const draggable = !!onDragStart
   return (
     <a
       href="#"
       className="module-card-link"
+      draggable={draggable}
       onClick={e => { e.preventDefault(); onClick?.() }}
       onTouchEnd={e => { e.preventDefault(); onClick?.() }}
+      onDragStart={e => { e.dataTransfer.setData('text/plain', m.key); onDragStart?.() }}
+      onDragOver={e => { e.preventDefault(); onDragOver?.() }}
+      onDrop={e => { e.preventDefault(); onDrop?.() }}
+      onDragEnd={() => onDragEnd?.()}
       style={{
         display: 'block',
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
-        cursor: 'pointer',
-        border: isAdminManage ? '1px dashed var(--border)' : '1px solid var(--border)',
+        cursor: draggable ? 'grab' : 'pointer',
+        border: isDragOver ? '2px solid var(--accent)' : isAdminManage ? '1px dashed var(--border)' : '1px solid var(--border)',
         position: 'relative',
         backgroundColor: m.bg,
         backgroundImage: imgUrl ? `url(${imgUrl})` : 'none',
@@ -92,6 +98,8 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage }) {
         WebkitTapHighlightColor: 'transparent',
         WebkitUserSelect: 'none',
         textDecoration: 'none',
+        opacity: isDragging ? 0.35 : 1,
+        transition: 'opacity 0.15s, border-color 0.15s',
       }}>
       <div style={{ position: 'absolute', inset: 0, background: imgUrl ? 'linear-gradient(to top, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.15) 100%)' : 'linear-gradient(to top, rgba(0,0,0,0.15) 0%, transparent 100%)', pointerEvents: 'none' }} />
       {m.external && <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 10, borderRadius: 4, padding: '2px 6px', pointerEvents: 'none' }}>↗ External</div>}
@@ -126,8 +134,10 @@ function gridMaxHeight(count) {
   return rows * CARD_MAX_H + (rows - 1) * GRID_GAP
 }
 
-function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool, customLinks = [] }) {
+function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool, customLinks = [], onReorder }) {
   const [confirmExternal, setConfirmExternal] = useState(null)
+  const [dragSrc, setDragSrc] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
 
   if (isStudent) {
     const allMods = getAllModulesForStudent()
@@ -160,10 +170,30 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
   const visibleModules = isAdmin ? modules.filter(m => !m.external) : modules
   const totalCards = visibleModules.length + (isAdmin ? adminManageCards.length : 0) + customLinks.length
 
+  function handleDrop(targetIdx) {
+    if (dragSrc === null || dragSrc === targetIdx) { setDragSrc(null); setDragOver(null); return }
+    const reordered = [...visibleModules]
+    const [moved] = reordered.splice(dragSrc, 1)
+    reordered.splice(targetIdx, 0, moved)
+    setDragSrc(null)
+    setDragOver(null)
+    onReorder?.(reordered.map(m => m.key))
+  }
+
   return (
     <>
       <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(totalCards) }}>
-        {visibleModules.map(m => <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />)}
+        {visibleModules.map((m, idx) => (
+          <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]}
+            onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)}
+            onDragStart={() => setDragSrc(idx)}
+            onDragOver={() => setDragOver(idx)}
+            onDrop={() => handleDrop(idx)}
+            onDragEnd={() => { setDragSrc(null); setDragOver(null) }}
+            isDragging={dragSrc === idx}
+            isDragOver={dragOver === idx && dragSrc !== idx}
+          />
+        ))}
         {isAdmin && adminManageCards.map(card => <ModuleCard key={card.key} m={card} imgUrl={moduleImages[card.key]} isAdminManage onClick={() => onEditUrl(card.key)} />)}
         {customLinks.map(link => (
           <ModuleCard key={link.id}
@@ -675,6 +705,10 @@ export default function Dashboard() {
           // Ensure profile is always present for all team users
           if (mods && !mods.includes('profile')) mods = [...mods, 'profile']
         } catch {}
+        // Ensure training is always visible for lab users (backfill for accounts saved before training was added)
+        if (session?.role === 'lab_user' && mods?.length && !mods.includes('training')) {
+          mods = [...mods, 'training']
+        }
         // Lab users with no saved config see all their allowed modules
         setActiveModules(mods?.length ? mods : null)
         if (session?.role === 'lab_user') {
@@ -751,6 +785,23 @@ export default function Dashboard() {
     try { localStorage.setItem(imgCacheKey, JSON.stringify(imgs)) } catch { /* storage full/blocked — cache is best-effort */ }
   }
 
+  async function saveModuleOrder(keys) {
+    setActiveModules(keys)
+    try {
+      if (loginMode === 'solo' && session?.userId) {
+        await sb.from('solo_users').update({ active_modules: keys, has_set_dashboard: true }).eq('id', session.userId)
+      } else if (session?.userId) {
+        const { data: updated } = await sb.from('user_dashboard_prefs')
+          .update({ active_modules: keys, has_set_dashboard: true })
+          .eq('user_id', session.userId).select('id')
+        if (!updated?.length)
+          await sb.from('user_dashboard_prefs').insert({ user_id: session.userId, active_modules: keys, has_set_dashboard: true })
+      } else {
+        localStorage.setItem('ictlab_admin_modules', JSON.stringify(keys))
+      }
+    } catch (e) { console.error('Failed to save module order:', e) }
+  }
+
   async function saveUrl() {
     if (!urlInput.trim()) return
     setSavingUrl(true)
@@ -816,7 +867,7 @@ export default function Dashboard() {
       <div style={{ flex: 1, minHeight: 0 }}>
         {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
         {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
-        {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} />}
+        {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
         {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
       </div>
 
