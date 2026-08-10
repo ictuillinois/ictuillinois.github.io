@@ -7,11 +7,6 @@ import { jsPDF } from 'jspdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
-// Required SQL (run once in Supabase SQL Editor):
-// ALTER TABLE lab_safety_progress
-//   ADD COLUMN IF NOT EXISTS certificate_url TEXT DEFAULT NULL,
-//   ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NULL;
-
 // ── Step configuration ─────────────────────────────────────────────────────
 const STEPS = [
   {
@@ -19,16 +14,38 @@ const STEPS = [
     title: 'Step 1',
     icon: '📋',
     description: 'Read ICT Safety Part I & receive certificate',
-    type: 'pdf_safety_part1',
-    content: null,
+    type: 'pdf_safety',
+    pdfConfig: {
+      pdfPath: '/ict-safety-part1.pdf',
+      slideCount: 46,
+      displayTitle: 'ICT Health and Safety Program Part I',
+      certTitle: 'ICT Health and Safety Program Part I — All ICT Users',
+      certSubtitle: 'Covering RAMP Risk Assessment, PPE, Emergency Procedures & ICT Laboratory Policies',
+      certSemester: 'ICT LABORATORY SAFETY PROGRAM  ·  FALL 2025',
+      storagePrefix: 'safety-certs/part1/',
+      stepNumber: 1,
+      localKeyBase: 'ictlab_step1',
+      autoUpdateOnMount: true,
+    },
   },
   {
     number: 2,
     title: 'Step 2',
-    icon: '🎬',
-    description: 'Required training video',
-    type: 'placeholder',
-    content: null,
+    icon: '📋',
+    description: 'Read ICT Safety Part II & receive certificate',
+    type: 'pdf_safety',
+    pdfConfig: {
+      pdfPath: '/ict-safety-part2.pdf',
+      slideCount: 24,
+      displayTitle: 'ICT Health and Safety Program Part II',
+      certTitle: 'ICT Health and Safety Program Part II — Lab Users',
+      certSubtitle: 'Covering Chemical Safety, Lab Policies, Equipment Use & Emergency Preparedness',
+      certSemester: 'ICT LABORATORY SAFETY PROGRAM  ·  FALL 2025',
+      storagePrefix: 'safety-certs/part2/',
+      stepNumber: 2,
+      localKeyBase: 'ictlab_step2',
+      autoUpdateOnMount: false,
+    },
   },
   {
     number: 3,
@@ -110,9 +127,9 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
   )
 }
 
-// ── Step 1: PDF Safety Training + Certificate Generation ───────────────────
+// ── PDF Safety Training + Certificate (generic for Part I and Part II) ─────
 
-function CompletionPopup({ onGenerate, onClose, generating }) {
+function CompletionPopup({ onGenerate, onClose, generating, slideCount, partLabel }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
@@ -125,10 +142,10 @@ function CompletionPopup({ onGenerate, onClose, generating }) {
         border: '2px solid #1D9E75',
       }}>
         <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
-        <div style={{ fontWeight: 700, fontSize: 20, color: '#085041', marginBottom: 8 }}>Part 1 Completed!</div>
+        <div style={{ fontWeight: 700, fontSize: 20, color: '#085041', marginBottom: 8 }}>{partLabel} Completed!</div>
         <div style={{ fontSize: 14, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 24 }}>
-          You've successfully read through all 46 slides of the<br />
-          <strong>ICT Health and Safety Program Part I</strong>.<br />
+          You've successfully read through all {slideCount} slides of the<br />
+          <strong>ICT Health and Safety Program {partLabel}</strong>.<br />
           Generate your certificate below — it will be submitted to your lab manager for approval.
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -158,8 +175,14 @@ function CompletionPopup({ onGenerate, onClose, generating }) {
   )
 }
 
-function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
+function PDFSafetyContent({
+  user, isManager, stepRow, onCertGenerated,
+  pdfPath, slideCount, displayTitle, certTitle, certSubtitle, certSemester,
+  storagePrefix, stepNumber, localKeyBase, autoUpdateOnMount,
+}) {
   const { session } = useAppStore()
+
+  const partLabel = stepNumber === 1 ? 'Part I' : stepNumber === 2 ? 'Part II' : `Step ${stepNumber}`
 
   const [pdfDoc, setPdfDoc] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -173,18 +196,17 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(null)
 
-  const storageKey  = `ictlab_step1_done_${user?.id}`
-  const certV2Key   = `ictlab_cert_v2_${user?.id}`
+  const storageKey = `${localKeyBase}_done_${user?.id}`
+  const certV2Key  = `${localKeyBase}_v2_${user?.id}`
   const [hasReachedEnd, setHasReachedEnd] = useState(() => !!localStorage.getItem(storageKey))
   const [autoUpdating, setAutoUpdating]   = useState(false)
 
-  const canvasRef       = useRef(null)
+  const canvasRef        = useRef(null)
   const canvasWrapperRef = useRef(null)
-  const renderTaskRef   = useRef(null)
-  const containerRef    = useRef(null)
-  const viewerBoxRef    = useRef(null)
+  const renderTaskRef    = useRef(null)
+  const containerRef     = useRef(null)
+  const viewerBoxRef     = useRef(null)
 
-  // Track fullscreen state changes
   useEffect(() => {
     const onFSChange = () => setIsFullscreen(!!document.fullscreenElement)
     document.addEventListener('fullscreenchange', onFSChange)
@@ -192,11 +214,8 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   }, [])
 
   function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      viewerBoxRef.current?.requestFullscreen?.()
-    } else {
-      document.exitFullscreen?.()
-    }
+    if (!document.fullscreenElement) viewerBoxRef.current?.requestFullscreen?.()
+    else document.exitFullscreen?.()
   }
 
   // Load PDF when viewer opens
@@ -207,7 +226,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       setLoadingPDF(true)
       setPdfError(null)
       try {
-        const res = await fetch('/ict-safety-part1.pdf')
+        const res = await fetch(pdfPath)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.arrayBuffer()
         const doc = await pdfjsLib.getDocument({ data }).promise
@@ -224,7 +243,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     return () => { cancelled = true }
   }, [viewerOpen])
 
-  // Render page + annotation link overlay whenever page changes
+  // Re-render page whenever page, viewer state, or fullscreen state changes
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || !viewerOpen) return
     let cancelled = false
@@ -239,13 +258,22 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         const page = await pdfDoc.getPage(currentPage)
         if (cancelled || !canvasRef.current) return
 
-        const containerW = containerRef.current?.clientWidth || 680
+        // In fullscreen: fill the viewport (constrained by both width AND height)
+        const containerEl = containerRef.current
+        const containerW = containerEl?.clientWidth || (isFullscreen ? window.innerWidth : 680)
+        const containerH = isFullscreen
+          ? (containerEl?.clientHeight || window.innerHeight - 60) - 24  // subtract 12px padding top+bottom
+          : Infinity
+
         const baseVP = page.getViewport({ scale: 1 })
-        const scale = Math.min(containerW / baseVP.width, 1.8)
+        const scaleByW = (containerW - 24) / baseVP.width  // 12px padding each side
+        const scaleByH = containerH < Infinity ? containerH / baseVP.height : Infinity
+        const maxScale = isFullscreen ? 4 : 1.8
+        const scale    = Math.min(scaleByW, scaleByH, maxScale)
         const viewport = page.getViewport({ scale })
 
         const canvas = canvasRef.current
-        canvas.width = viewport.width
+        canvas.width  = viewport.width
         canvas.height = viewport.height
 
         const task = page.render({ canvasContext: canvas.getContext('2d'), viewport })
@@ -255,7 +283,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
 
         if (cancelled) return
 
-        // ── Clickable link overlay ──────────────────────────────────────────
+        // Clickable link overlay
         const wrapper = canvasWrapperRef.current
         if (wrapper) {
           wrapper.querySelectorAll('.pdf-link').forEach(el => el.remove())
@@ -285,7 +313,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     }
     render()
     return () => { cancelled = true }
-  }, [pdfDoc, currentPage, viewerOpen])
+  }, [pdfDoc, currentPage, viewerOpen, isFullscreen])
 
   function goToPage(n) {
     if (!pdfDoc || n < 1 || n > totalPages) return
@@ -297,8 +325,9 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     }
   }
 
-  // Auto-regenerate old-style certs to new design on first load (no download)
+  // Auto-regenerate old-style certs to new design on first load (silent, no download)
   useEffect(() => {
+    if (!autoUpdateOnMount) return
     if (!user?.id || !stepRow?.certificate_url || stepRow?.completed || isManager) return
     if (localStorage.getItem(certV2Key)) return
     generateCertificate({ autoUpdate: true })
@@ -314,7 +343,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
       const dateStr   = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-      // Load ICT logo as a faint watermark
+      // ICT logo as faint watermark
       let logoDataUrl = null
       try {
         const logoRes = await fetch('/ict-logo.png')
@@ -341,20 +370,18 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       } catch {}
 
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const W = doc.internal.pageSize.getWidth()    // 297
-      const H = doc.internal.pageSize.getHeight()   // 210
+      const W = doc.internal.pageSize.getWidth()   // 297
+      const H = doc.internal.pageSize.getHeight()  // 210
 
-      // White background
       doc.setFillColor(255, 255, 255)
       doc.rect(0, 0, W, H, 'F')
 
-      // ICT logo watermark — centered, large
       if (logoDataUrl) {
         const lSize = 90
         doc.addImage(logoDataUrl, 'PNG', W / 2 - lSize / 2, H / 2 - lSize / 2 + 8, lSize, lSize)
       }
 
-      // Outer border (teal double)
+      // Border
       doc.setDrawColor(29, 158, 117)
       doc.setLineWidth(3)
       doc.rect(8, 8, W - 16, H - 16)
@@ -365,56 +392,48 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       doc.setFillColor(29, 158, 117)
       ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 4, 'F'))
 
-      // Dark teal header band
+      // Header band
       doc.setFillColor(8, 80, 65)
       doc.rect(8, 8, W - 16, 32, 'F')
 
-      // Header text
       doc.setTextColor(255, 255, 255)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(22)
       doc.text('CERTIFICATE OF COMPLETION', W / 2, 22, { align: 'center' })
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(11)
-      doc.text('ICT LABORATORY SAFETY PROGRAM  ·  FALL 2025', W / 2, 32, { align: 'center' })
+      doc.text(certSemester, W / 2, 32, { align: 'center' })
 
-      // "This certifies that"
       doc.setTextColor(80, 80, 80)
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(13)
       doc.text('This certifies that', W / 2, 60, { align: 'center' })
 
-      // Student name
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(30)
       doc.setTextColor(29, 158, 117)
       doc.text(fullName, W / 2, 82, { align: 'center' })
 
-      // Underline under name
       const nameW = doc.getTextWidth(fullName)
       doc.setDrawColor(29, 158, 117)
       doc.setLineWidth(0.6)
       doc.line(W / 2 - nameW / 2 - 8, 86, W / 2 + nameW / 2 + 8, 86)
 
-      // "has successfully completed"
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(13)
       doc.setTextColor(80, 80, 80)
       doc.text('has successfully completed', W / 2, 98, { align: 'center' })
 
-      // Training program name
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(16)
       doc.setTextColor(20, 20, 20)
-      doc.text('ICT Health and Safety Program Part I — All ICT Users', W / 2, 110, { align: 'center' })
+      doc.text(certTitle, W / 2, 110, { align: 'center' })
 
-      // Sub-description
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(11)
       doc.setTextColor(100, 100, 100)
-      doc.text('Covering RAMP Risk Assessment, PPE, Emergency Procedures & ICT Laboratory Policies', W / 2, 119, { align: 'center' })
+      doc.text(certSubtitle, W / 2, 119, { align: 'center' })
 
-      // Date — centered, no signature lines
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(60, 60, 60)
@@ -430,7 +449,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
 
       // Upload to Supabase
       const blob = doc.output('blob')
-      const fileName = `safety-certs/part1/${user.id}-${Date.now()}.pdf`
+      const fileName = `${storagePrefix}${user.id}-${Date.now()}.pdf`
       const { error: upErr } = await sb.storage
         .from('project-files')
         .upload(fileName, blob, { contentType: 'application/pdf', upsert: false })
@@ -444,13 +463,13 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       await sb.from('lab_safety_progress').upsert({
         user_id: user.id,
         organization_id: session.organizationId,
-        step_number: 1,
+        step_number: stepNumber,
         completed: false,
         certificate_url: certUrl,
         submitted_at: new Date().toISOString(),
       }, { onConflict: 'user_id,step_number' })
 
-      if (!autoUpdate) doc.save(`ICT-Safety-Part1-${fullName.replace(/\s+/g, '-')}.pdf`)
+      if (!autoUpdate) doc.save(`ICT-Safety-${partLabel.replace(/\s+/g, '-')}-${fullName.replace(/\s+/g, '-')}.pdf`)
       if (autoUpdate) localStorage.setItem(certV2Key, '1')
       setShowCompletion(false)
       onCertGenerated({ certificate_url: certUrl, submitted_at: new Date().toISOString() })
@@ -462,7 +481,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     else setGenerating(false)
   }
 
-  const hasCert = !!stepRow?.certificate_url
+  const hasCert    = !!stepRow?.certificate_url
   const isApproved = !!stepRow?.completed
 
   // ── Manager view ──
@@ -470,7 +489,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     return (
       <div>
         <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
-          Lab users must read the <strong>ICT Health and Safety Program Part I</strong> presentation (46 slides).
+          Lab users must read the <strong>{displayTitle}</strong> presentation ({slideCount} slides).
           Upon completing the last slide, they generate a certificate which is submitted here for your approval.
         </div>
         {hasCert ? (
@@ -506,18 +525,16 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   // ── Lab user view ──
   return (
     <div>
-      {/* Intro */}
       <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
-        Read all <strong>46 slides</strong> of the <strong>ICT Health and Safety Program Part I</strong>.
+        Read all <strong>{slideCount} slides</strong> of the <strong>{displayTitle}</strong>.
         When you reach the last slide, a certificate will be generated for your lab manager to approve.
       </div>
 
-      {/* Certificate status — shown independently of the viewer */}
       {hasCert && (
         <div style={{ background: isApproved ? '#E1F5EE' : '#f0fdf4', border: `1px solid ${isApproved ? '#9FE1CB' : '#bbf7d0'}`, borderRadius: 10, padding: 16, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 4 }}>
-              {isApproved ? '✓ Step 1 approved by your lab manager!' : '✓ Certificate submitted — awaiting lab manager approval'}
+              {isApproved ? `✓ Step ${stepNumber} approved by your lab manager!` : '✓ Certificate submitted — awaiting lab manager approval'}
             </div>
             {stepRow?.submitted_at && (
               <div style={{ fontSize: 12, color: '#085041' }}>
@@ -546,7 +563,6 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         </div>
       )}
 
-      {/* PDF viewer — always available so lab users can re-read anytime */}
       {!viewerOpen ? (
         <div style={{ marginBottom: 12 }}>
           <button
@@ -554,7 +570,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
           >
             <span style={{ fontSize: 20 }}>📖</span>
-            {hasCert ? 'Review Training Material Again' : hasReachedEnd ? 'Review Training Material' : 'Open Safety Training — Part I (46 slides)'}
+            {hasCert ? `Review Training Material Again` : hasReachedEnd ? 'Review Training Material' : `Open Safety Training — ${partLabel} (${slideCount} slides)`}
           </button>
           {hasReachedEnd && !hasCert && (
             <div style={{ marginTop: 10, fontSize: 13, color: '#085041', fontWeight: 600 }}>
@@ -563,104 +579,113 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
           )}
         </div>
       ) : (
-            <div ref={viewerBoxRef} style={{ border: '1px solid var(--border)', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', marginBottom: 12, display: 'flex', flexDirection: 'column', background: isFullscreen ? '#525659' : undefined }}>
-              {/* PDF canvas area */}
-              <div
-                ref={containerRef}
-                style={{
-                  background: '#525659',
-                  padding: 12,
-                  minHeight: 200,
-                  position: 'relative',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'flex-start',
-                  flex: isFullscreen ? 1 : undefined,
-                  overflow: isFullscreen ? 'auto' : undefined,
-                }}
+        <div
+          ref={viewerBoxRef}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: isFullscreen ? 0 : 12,
+            overflow: 'hidden',
+            marginBottom: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#525659',
+            // When fullscreen, the element fills the viewport — let it be 100% of the fullscreen area
+            ...(isFullscreen ? { width: '100%', height: '100%' } : {}),
+          }}
+        >
+          {/* PDF canvas area */}
+          <div
+            ref={containerRef}
+            style={{
+              background: '#525659',
+              padding: 12,
+              minHeight: 200,
+              position: 'relative',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: isFullscreen ? 'center' : 'flex-start',
+              flex: 1,
+              overflow: isFullscreen ? 'hidden' : 'visible',
+            }}
+          >
+            {loadingPDF && (
+              <div style={{ color: '#fff', textAlign: 'center', padding: 40, fontSize: 14 }}>
+                Loading PDF… please wait
+              </div>
+            )}
+            {pdfError && (
+              <div style={{ color: '#fca5a5', textAlign: 'center', padding: 40, fontSize: 14 }}>
+                {pdfError}
+              </div>
+            )}
+            <div
+              ref={canvasWrapperRef}
+              style={{ position: 'relative', display: pdfDoc ? 'block' : 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.4)', borderRadius: 2 }}
+            >
+              <canvas ref={canvasRef} style={{ display: 'block' }} />
+            </div>
+            {rendering && (
+              <div style={{ position: 'absolute', bottom: 16, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}>
+                Loading…
+              </div>
+            )}
+          </div>
+
+          {/* Navigation bar */}
+          {pdfDoc && (
+            <div style={{ background: isFullscreen ? '#1a1a1a' : 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage <= 1 ? 'default' : 'pointer', opacity: currentPage <= 1 ? 0.4 : 1, fontFamily: 'var(--sans)' }}
               >
-                {loadingPDF && (
-                  <div style={{ color: '#fff', textAlign: 'center', padding: 40, fontSize: 14 }}>
-                    Loading PDF… please wait
-                  </div>
-                )}
-                {pdfError && (
-                  <div style={{ color: '#fca5a5', textAlign: 'center', padding: 40, fontSize: 14 }}>
-                    {pdfError}
-                  </div>
-                )}
-                {/* Canvas wrapper — position:relative so link overlays sit on top */}
-                <div
-                  ref={canvasWrapperRef}
-                  style={{ position: 'relative', display: pdfDoc ? 'block' : 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.4)', borderRadius: 2 }}
-                >
-                  <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
+                ← Prev
+              </button>
+
+              <div style={{ flex: 1 }}>
+                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 4 }}>
+                  <div style={{ width: `${(currentPage / totalPages) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
                 </div>
-                {rendering && (
-                  <div style={{ position: 'absolute', bottom: 16, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}>
-                    Loading…
-                  </div>
-                )}
+                <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>
+                  Slide {currentPage} / {totalPages}
+                </div>
               </div>
 
-              {/* Navigation bar */}
-              {pdfDoc && (
-                <div style={{ background: isFullscreen ? '#1a1a1a' : 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage <= 1}
-                    style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage <= 1 ? 'default' : 'pointer', opacity: currentPage <= 1 ? 0.4 : 1, fontFamily: 'var(--sans)' }}
-                  >
-                    ← Prev
-                  </button>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: currentPage < totalPages ? '#1D9E75' : 'var(--surface)', color: currentPage < totalPages ? '#fff' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage >= totalPages ? 'default' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, fontFamily: 'var(--sans)' }}
+              >
+                Next →
+              </button>
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 4 }}>
-                      <div style={{ width: `${(currentPage / totalPages) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
-                    </div>
-                    <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>
-                      Slide {currentPage} / {totalPages}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage >= totalPages}
-                    style={{ padding: '6px 14px', border: '1px solid var(--border)', borderRadius: 6, background: currentPage < totalPages ? '#1D9E75' : 'var(--surface)', color: currentPage < totalPages ? '#fff' : 'var(--text)', fontSize: 13, fontWeight: 600, cursor: currentPage >= totalPages ? 'default' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, fontFamily: 'var(--sans)' }}
-                  >
-                    Next →
-                  </button>
-
-                  {/* Fullscreen toggle */}
-                  <button
-                    onClick={toggleFullscreen}
-                    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 15, cursor: 'pointer', lineHeight: 1, fontFamily: 'var(--sans)' }}
-                  >
-                    {isFullscreen ? '⤡' : '⤢'}
-                  </button>
-                </div>
-              )}
-
-              {/* Close viewer — hidden in fullscreen (Esc exits) */}
-              {!isFullscreen && (
-                <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setViewerOpen(false)}
-                    style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: '4px 8px' }}
-                  >
-                    Close viewer
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 15, cursor: 'pointer', lineHeight: 1, fontFamily: 'var(--sans)' }}
+              >
+                {isFullscreen ? '⤡' : '⤢'}
+              </button>
             </div>
           )}
 
-      {/* Generate certificate — only when reached end and no cert submitted yet */}
+          {!isFullscreen && (
+            <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setViewerOpen(false)}
+                style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: '4px 8px' }}
+              >
+                Close viewer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {hasReachedEnd && !hasCert && (
         <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16, marginTop: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 8 }}>
-            ✅ You've read all 46 slides!
+            ✅ You've read all {slideCount} slides!
           </div>
           <div style={{ fontSize: 13, color: '#085041', marginBottom: 12, lineHeight: 1.6 }}>
             Your completion certificate is ready. Click below to generate it and submit to your lab manager.
@@ -675,12 +700,13 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         </div>
       )}
 
-      {/* Completion popup overlay */}
       {showCompletion && (
         <CompletionPopup
           generating={generating}
           onGenerate={generateCertificate}
           onClose={() => setShowCompletion(false)}
+          slideCount={slideCount}
+          partLabel={partLabel}
         />
       )}
     </div>
@@ -780,13 +806,14 @@ function Step4VideoContent({ userId, isManager }) {
 // ── Step content renderer ──────────────────────────────────────────────────
 
 function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
-  if (step.type === 'pdf_safety_part1') {
+  if (step.type === 'pdf_safety') {
     return (
-      <Step1PDFContent
+      <PDFSafetyContent
         user={user}
         isManager={isManager}
         stepRow={stepRow}
         onCertGenerated={onCertGenerated}
+        {...step.pdfConfig}
       />
     )
   }
@@ -867,7 +894,7 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
       {/* Tab bar */}
       <div style={{ display: 'flex', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
         {STEPS.map(s => {
-          const done = !!userProg[s.number]?.completed
+          const done   = !!userProg[s.number]?.completed
           const active = activeStep === s.number
           return (
             <button key={s.number} onClick={() => setActiveStep(s.number)}
@@ -899,12 +926,11 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
       {/* Step content */}
       {STEPS.map(s => {
         if (s.number !== activeStep) return null
-        const done = !!userProg[s.number]?.completed
+        const done    = !!userProg[s.number]?.completed
         const stepRow = userProg[s.number] || null
 
         return (
           <div key={s.number} style={{ padding: 24 }}>
-            {/* Step header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{s.icon} {s.title}</div>
@@ -917,7 +943,6 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
               )}
             </div>
 
-            {/* Step content area */}
             <div style={{ marginBottom: 20 }}>
               <StepContentArea
                 step={s}
@@ -928,7 +953,6 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
               />
             </div>
 
-            {/* Lab manager: approve / revoke */}
             {isStaff && (
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                 {done ? (
@@ -948,7 +972,6 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
         )
       })}
 
-      {/* All steps approved — proceed banner */}
       {allApproved && (
         <div style={{ borderTop: '1px solid #9FE1CB', padding: '16px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -975,16 +998,15 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
 
 export default function SafetyTab({ asTab = false, targetUser = null }) {
   const { session } = useAppStore()
-  const isStaff = session?.role === 'admin' || session?.role === 'user'
+  const isStaff   = session?.role === 'admin' || session?.role === 'user'
   const isLabUser = session?.role === 'lab_user'
 
-  const [users, setUsers] = useState([])
+  const [users, setUsers]           = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
-  // progress[userId][stepNum] = { completed, certificate_url, submitted_at }
-  const [progress, setProgress] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [search, setSearch] = useState('')
+  const [progress, setProgress]     = useState({})
+  const [loading, setLoading]       = useState(true)
+  const [saving, setSaving]         = useState(false)
+  const [search, setSearch]         = useState('')
 
   useEffect(() => { if (targetUser) setSelectedUser(targetUser) }, [targetUser?.id])
   useEffect(() => { load() }, [])
@@ -1134,7 +1156,6 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         </div>
       )}
 
-      {/* ── Lab user view — step panel only ── */}
       {isLabUser && selectedUser && (
         <StepPanel
           user={selectedUser}
@@ -1147,7 +1168,6 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         />
       )}
 
-      {/* ── Lab manager / admin view ── */}
       {isStaff && (
         <>
           {!targetUser && (
