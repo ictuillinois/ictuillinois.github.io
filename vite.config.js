@@ -17,6 +17,7 @@ export default defineConfig({
         selfDefending: false,
         reservedStrings: [
           '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$',
+          '^pdfjs-dist$',
           '^\\./', '^\\.\\./',
         ],
       },
