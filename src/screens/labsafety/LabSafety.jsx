@@ -161,7 +161,6 @@ function CompletionPopup({ onGenerate, onClose, generating }) {
 function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   const { session } = useAppStore()
 
-  // PDF viewer state
   const [pdfDoc, setPdfDoc] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(0)
@@ -169,6 +168,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   const [pdfError, setPdfError] = useState(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [rendering, setRendering] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(null)
@@ -177,8 +177,25 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
   const [hasReachedEnd, setHasReachedEnd] = useState(() => !!localStorage.getItem(storageKey))
 
   const canvasRef = useRef(null)
+  const canvasWrapperRef = useRef(null)  // wraps canvas; annotation links go here
   const renderTaskRef = useRef(null)
   const containerRef = useRef(null)
+  const viewerBoxRef = useRef(null)      // fullscreen target
+
+  // Track fullscreen state changes
+  useEffect(() => {
+    const onFSChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFSChange)
+    return () => document.removeEventListener('fullscreenchange', onFSChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      viewerBoxRef.current?.requestFullscreen?.()
+    } else {
+      document.exitFullscreen?.()
+    }
+  }
 
   // Load PDF when viewer opens
   useEffect(() => {
@@ -188,7 +205,6 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       setLoadingPDF(true)
       setPdfError(null)
       try {
-        // Fetch PDF manually so browser includes session cookies (site is private)
         const res = await fetch('/ict-safety-part1.pdf')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.arrayBuffer()
@@ -206,7 +222,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     return () => { cancelled = true }
   }, [viewerOpen])
 
-  // Render page on canvas whenever currentPage changes
+  // Render page + annotation link overlay whenever page changes
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || !viewerOpen) return
     let cancelled = false
@@ -234,6 +250,32 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         renderTaskRef.current = task
         await task.promise
         renderTaskRef.current = null
+
+        if (cancelled) return
+
+        // ── Clickable link overlay ──────────────────────────────────────────
+        const wrapper = canvasWrapperRef.current
+        if (wrapper) {
+          wrapper.querySelectorAll('.pdf-link').forEach(el => el.remove())
+          const annotations = await page.getAnnotations()
+          annotations
+            .filter(a => a.subtype === 'Link' && a.url)
+            .forEach(ann => {
+              const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(ann.rect)
+              const left = Math.min(x1, x2)
+              const top  = Math.min(y1, y2)
+              const w    = Math.abs(x2 - x1)
+              const h    = Math.abs(y2 - y1)
+              const a = document.createElement('a')
+              a.className = 'pdf-link'
+              a.href = ann.url
+              a.target = '_blank'
+              a.rel = 'noopener noreferrer'
+              a.title = ann.url
+              a.style.cssText = `position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;cursor:pointer;`
+              wrapper.appendChild(a)
+            })
+        }
       } catch (e) {
         if (e?.name !== 'RenderingCancelledException') console.error(e)
       }
@@ -258,18 +300,49 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
     setGenError(null)
     try {
       const firstName = user.nick_name?.trim() || user.name || ''
-      const lastName = user.last_name || ''
-      const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
-      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      const lastName  = user.last_name || ''
+      const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
+      const dateStr   = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-      // Generate certificate PDF
+      // Load ICT logo as a faint watermark
+      let logoDataUrl = null
+      try {
+        const logoRes = await fetch('/ict-logo.png')
+        if (logoRes.ok) {
+          const logoBlob = await logoRes.blob()
+          const logoObjUrl = URL.createObjectURL(logoBlob)
+          const img = await new Promise(resolve => {
+            const i = new Image()
+            i.onload = () => resolve(i)
+            i.onerror = () => resolve(null)
+            i.src = logoObjUrl
+          })
+          if (img?.naturalWidth > 0) {
+            const cvs = document.createElement('canvas')
+            cvs.width = img.naturalWidth
+            cvs.height = img.naturalHeight
+            const ctx = cvs.getContext('2d')
+            ctx.globalAlpha = 0.07
+            ctx.drawImage(img, 0, 0)
+            logoDataUrl = cvs.toDataURL('image/png')
+          }
+          URL.revokeObjectURL(logoObjUrl)
+        }
+      } catch {}
+
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const W = doc.internal.pageSize.getWidth()   // 297
-      const H = doc.internal.pageSize.getHeight()  // 210
+      const W = doc.internal.pageSize.getWidth()    // 297
+      const H = doc.internal.pageSize.getHeight()   // 210
 
       // White background
       doc.setFillColor(255, 255, 255)
       doc.rect(0, 0, W, H, 'F')
+
+      // ICT logo watermark — centered, large
+      if (logoDataUrl) {
+        const lSize = 90
+        doc.addImage(logoDataUrl, 'PNG', W / 2 - lSize / 2, H / 2 - lSize / 2 + 8, lSize, lSize)
+      }
 
       // Outer border (teal double)
       doc.setDrawColor(29, 158, 117)
@@ -278,14 +351,11 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       doc.setLineWidth(0.8)
       doc.rect(12, 12, W - 24, H - 24)
 
-      // Corner accents
-      const cs = 12
+      // Corner circles
       doc.setFillColor(29, 158, 117)
-      ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => {
-        doc.circle(cx, cy, 4, 'F')
-      })
+      ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 4, 'F'))
 
-      // Teal header band
+      // Dark teal header band
       doc.setFillColor(8, 80, 65)
       doc.rect(8, 8, W - 16, 32, 'F')
 
@@ -308,58 +378,43 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(30)
       doc.setTextColor(29, 158, 117)
-      doc.text(fullName, W / 2, 80, { align: 'center' })
+      doc.text(fullName, W / 2, 82, { align: 'center' })
 
       // Underline under name
       const nameW = doc.getTextWidth(fullName)
       doc.setDrawColor(29, 158, 117)
       doc.setLineWidth(0.6)
-      doc.line(W / 2 - nameW / 2 - 8, 84, W / 2 + nameW / 2 + 8, 84)
+      doc.line(W / 2 - nameW / 2 - 8, 86, W / 2 + nameW / 2 + 8, 86)
 
       // "has successfully completed"
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(13)
       doc.setTextColor(80, 80, 80)
-      doc.text('has successfully completed', W / 2, 96, { align: 'center' })
+      doc.text('has successfully completed', W / 2, 98, { align: 'center' })
 
       // Training program name
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(16)
       doc.setTextColor(20, 20, 20)
-      doc.text('ICT Health and Safety Program Part I — All ICT Users', W / 2, 108, { align: 'center' })
+      doc.text('ICT Health and Safety Program Part I — All ICT Users', W / 2, 110, { align: 'center' })
 
       // Sub-description
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(11)
       doc.setTextColor(100, 100, 100)
-      doc.text('Covering RAMP Risk Assessment, PPE, Emergency Procedures & ICT Laboratory Policies', W / 2, 117, { align: 'center' })
+      doc.text('Covering RAMP Risk Assessment, PPE, Emergency Procedures & ICT Laboratory Policies', W / 2, 119, { align: 'center' })
 
-      // Date
-      doc.setFontSize(12)
+      // Date — centered, no signature lines
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
       doc.setTextColor(60, 60, 60)
-      doc.text(`Date of Completion:  ${dateStr}`, W / 2, 132, { align: 'center' })
-
-      // Separator
-      doc.setDrawColor(200, 200, 200)
-      doc.setLineWidth(0.4)
-      doc.line(W * 0.15, 142, W * 0.85, 142)
-
-      // Signature lines
-      const sigY = H - 34
-      doc.setDrawColor(100, 100, 100)
-      doc.setLineWidth(0.5)
-      const lineLen = 60
-      doc.line(W * 0.25 - lineLen/2, sigY, W * 0.25 + lineLen/2, sigY)
-      doc.line(W * 0.75 - lineLen/2, sigY, W * 0.75 + lineLen/2, sigY)
-      doc.setFontSize(10)
-      doc.setTextColor(120, 120, 120)
-      doc.text('Student Signature', W * 0.25, sigY + 5, { align: 'center' })
-      doc.text('Lab Manager / Instructor', W * 0.75, sigY + 5, { align: 'center' })
+      doc.text(`Date of Completion:  ${dateStr}`, W / 2, 142, { align: 'center' })
 
       // Footer band
       doc.setFillColor(29, 158, 117)
       doc.rect(8, H - 22, W - 16, 14, 'F')
       doc.setTextColor(255, 255, 255)
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       doc.text('ICT Laboratory · College of Engineering · University of Missouri', W / 2, H - 13, { align: 'center' })
 
@@ -376,7 +431,6 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         certUrl = urlData?.publicUrl
       }
 
-      // Save to lab_safety_progress
       await sb.from('lab_safety_progress').upsert({
         user_id: user.id,
         organization_id: session.organizationId,
@@ -386,9 +440,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
         submitted_at: new Date().toISOString(),
       }, { onConflict: 'user_id,step_number' })
 
-      // Trigger download
       doc.save(`ICT-Safety-Part1-${fullName.replace(/\s+/g, '-')}.pdf`)
-
       setShowCompletion(false)
       onCertGenerated({ certificate_url: certUrl, submitted_at: new Date().toISOString() })
     } catch (e) {
@@ -489,9 +541,22 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
               )}
             </div>
           ) : (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 12 }}>
+            <div ref={viewerBoxRef} style={{ border: '1px solid var(--border)', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', marginBottom: 12, display: 'flex', flexDirection: 'column', background: isFullscreen ? '#525659' : undefined }}>
               {/* PDF canvas area */}
-              <div ref={containerRef} style={{ background: '#525659', padding: 12, minHeight: 200, position: 'relative' }}>
+              <div
+                ref={containerRef}
+                style={{
+                  background: '#525659',
+                  padding: 12,
+                  minHeight: 200,
+                  position: 'relative',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  flex: isFullscreen ? 1 : undefined,
+                  overflow: isFullscreen ? 'auto' : undefined,
+                }}
+              >
                 {loadingPDF && (
                   <div style={{ color: '#fff', textAlign: 'center', padding: 40, fontSize: 14 }}>
                     Loading PDF… please wait
@@ -502,10 +567,13 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
                     {pdfError}
                   </div>
                 )}
-                <canvas
-                  ref={canvasRef}
-                  style={{ display: pdfDoc ? 'block' : 'none', margin: '0 auto', maxWidth: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.4)', borderRadius: 2 }}
-                />
+                {/* Canvas wrapper — position:relative so link overlays sit on top */}
+                <div
+                  ref={canvasWrapperRef}
+                  style={{ position: 'relative', display: pdfDoc ? 'block' : 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.4)', borderRadius: 2 }}
+                >
+                  <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
+                </div>
                 {rendering && (
                   <div style={{ position: 'absolute', bottom: 16, right: 16, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}>
                     Loading…
@@ -515,7 +583,7 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
 
               {/* Navigation bar */}
               {pdfDoc && (
-                <div style={{ background: 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ background: isFullscreen ? '#1a1a1a' : 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
                   <button
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage <= 1}
@@ -525,11 +593,10 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
                   </button>
 
                   <div style={{ flex: 1 }}>
-                    {/* Progress bar */}
                     <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 4 }}>
                       <div style={{ width: `${(currentPage / totalPages) * 100}%`, height: '100%', background: '#1D9E75', borderRadius: 2, transition: 'width 0.2s' }} />
                     </div>
-                    <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>
+                    <div style={{ textAlign: 'center', fontSize: 12, color: isFullscreen ? '#ccc' : 'var(--text3)', fontWeight: 600 }}>
                       Slide {currentPage} / {totalPages}
                     </div>
                   </div>
@@ -541,18 +608,29 @@ function Step1PDFContent({ user, isManager, stepRow, onCertGenerated }) {
                   >
                     Next →
                   </button>
+
+                  {/* Fullscreen toggle */}
+                  <button
+                    onClick={toggleFullscreen}
+                    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                    style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', fontSize: 15, cursor: 'pointer', lineHeight: 1, fontFamily: 'var(--sans)' }}
+                  >
+                    {isFullscreen ? '⤡' : '⤢'}
+                  </button>
                 </div>
               )}
 
-              {/* Close viewer */}
-              <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={() => setViewerOpen(false)}
-                  style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: '4px 8px' }}
-                >
-                  Close viewer
-                </button>
-              </div>
+              {/* Close viewer — hidden in fullscreen (Esc exits) */}
+              {!isFullscreen && (
+                <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '8px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setViewerOpen(false)}
+                    style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', padding: '4px 8px' }}
+                  >
+                    Close viewer
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
