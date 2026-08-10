@@ -7,25 +7,34 @@ import { jsPDF } from 'jspdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
-async function autoSaveToDocumentsTab(userId, certUrl, certName) {
-  if (!userId || !certUrl) { console.warn('[autoSave] skipped — missing userId or certUrl', { userId, certUrl, certName }); return }
+async function autoSaveToDocumentsTab(userId, certUrl, certName, approved = false) {
+  if (!userId || !certUrl) return
   try {
-    const { data: rows, error: selErr } = await sb.from('training_fresh').select('id')
+    const { data: rows } = await sb.from('training_fresh').select('id')
       .eq('user_id', userId).eq('certificate_name', certName).limit(1)
-    if (selErr) { console.error('[autoSave] select error:', selErr); }
-    const existing = rows?.[0]
-    if (existing) {
-      const { error: updErr } = await sb.from('training_fresh')
-        .update({ certificate_url: certUrl, certificate_uploaded_at: new Date().toISOString() })
-        .eq('id', existing.id)
-      if (updErr) console.error('[autoSave] update error:', updErr)
+    const payload = { certificate_url: certUrl, certificate_uploaded_at: new Date().toISOString(), admin_approved: approved }
+    if (rows?.[0]) {
+      await sb.from('training_fresh').update(payload).eq('id', rows[0].id)
     } else {
-      const { error: insErr } = await sb.from('training_fresh')
-        .insert({ user_id: userId, certificate_url: certUrl, certificate_name: certName, certificate_uploaded_at: new Date().toISOString() })
-      if (insErr) console.error('[autoSave] insert error:', insErr)
+      await sb.from('training_fresh').insert({ user_id: userId, certificate_name: certName, ...payload })
     }
   } catch (e) {
-    console.error('[autoSave] unexpected error:', e)
+    console.error('[autoSave] error:', e)
+  }
+}
+
+const STEP_DOC_NAMES = {
+  1: ['ICT Health and Safety Program Part I — All ICT Users'],
+  2: ['ICT Health and Safety Program Part II — Lab Users'],
+  3: ['ICT Safety Rules — Compliance Form (Appendix D)', 'DRS Online Training — Part 1 Certificate', 'DRS Online Training — Part 2 Certificate'],
+}
+
+async function setDocApproval(userId, stepNumber, approved) {
+  const names = STEP_DOC_NAMES[stepNumber]
+  if (!names?.length) return
+  for (const name of names) {
+    const { data: rows } = await sb.from('training_fresh').select('id').eq('user_id', userId).eq('certificate_name', name).limit(1)
+    if (rows?.[0]) await sb.from('training_fresh').update({ admin_approved: approved }).eq('id', rows[0].id)
   }
 }
 
@@ -1700,16 +1709,17 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         const syncKey = `ictlab_docs_synced_${session.userId}`
         if (!localStorage.getItem(syncKey)) {
           ;(prog || []).forEach(async r => {
+            const approved = !!r.completed
             if (r.step_number === 1 && r.certificate_url)
-              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part I — All ICT Users')
+              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part I — All ICT Users', approved)
             if (r.step_number === 2 && r.certificate_url)
-              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part II — Lab Users')
+              await autoSaveToDocumentsTab(session.userId, r.certificate_url, 'ICT Health and Safety Program Part II — Lab Users', approved)
             if (r.step_number === 3 && r.certificate_url) {
               try {
                 const urls = JSON.parse(r.certificate_url)
-                if (urls.form) await autoSaveToDocumentsTab(session.userId, urls.form, 'ICT Safety Rules — Compliance Form (Appendix D)')
-                if (urls.ext1) await autoSaveToDocumentsTab(session.userId, urls.ext1, 'DRS Online Training — Part 1 Certificate')
-                if (urls.ext2) await autoSaveToDocumentsTab(session.userId, urls.ext2, 'DRS Online Training — Part 2 Certificate')
+                if (urls.form) await autoSaveToDocumentsTab(session.userId, urls.form, 'ICT Safety Rules — Compliance Form (Appendix D)', approved)
+                if (urls.ext1) await autoSaveToDocumentsTab(session.userId, urls.ext1, 'DRS Online Training — Part 1 Certificate', approved)
+                if (urls.ext2) await autoSaveToDocumentsTab(session.userId, urls.ext2, 'DRS Online Training — Part 2 Certificate', approved)
               } catch {}
             }
           })
@@ -1744,6 +1754,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
             [stepNumber]: { ...(prev[userId]?.[stepNumber] || {}), completed: true },
           },
         }))
+        await setDocApproval(userId, stepNumber, true)
       }
     } catch (e) { console.error(e) }
     setSaving(false)
@@ -1771,6 +1782,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
             [stepNumber]: { ...(prev[userId]?.[stepNumber] || {}), completed: false },
           },
         }))
+        await setDocApproval(userId, stepNumber, false)
       }
     } catch (e) { console.error(e) }
     setSaving(false)
