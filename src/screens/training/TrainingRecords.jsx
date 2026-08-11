@@ -10,6 +10,20 @@ import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 
+async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
+  if (!orgId) return
+  const { data: managers } = await sb.from('users').select('id')
+    .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
+  if (!managers?.length) return
+  await sb.from('notifications').insert(managers.map(m => ({
+    user_id: m.id,
+    type: 'training_submitted',
+    title: `${uploaderName} uploaded a new certificate`,
+    body: 'Review and approve it in Training Records.',
+    read: false,
+  })))
+}
+
 async function sendTrainingApprovedNotif(userId, approverName) {
   const title = 'Training certificate approved'
   const body  = `Your certificate was reviewed and approved by ${approverName}.`
@@ -157,6 +171,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       })
       if (insertErr) { toast('Save failed: ' + insertErr.message); setUploading(null); return }
       toast('Certification added.')
+      notifyManagersTrainingSubmitted(session?.organizationId, session?.username)
       setShowAddForm(false); setNewCertLabel('')
       setAddingFor(null); setAddingLabel('')
       load(); onChanged?.()

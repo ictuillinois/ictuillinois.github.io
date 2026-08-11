@@ -81,11 +81,11 @@ export default function NotificationBell() {
         setPendingBookingNotif(n)
       }
       setScreen('booking')
-    } else if (n.type === 'new_message') {
-      setScreen('remessages')
     } else if (n.type === 'team_invite') {
       setPendingProfileTab('team')
       setScreen('profile')
+    } else if (['training_submitted', 'training_approved', 'training_expiring', 'safety_step_submitted', 'safety_skip_request'].includes(n.type)) {
+      setScreen('training')
     } else if (n.task_id) {
       setScreen('pm')
     }
@@ -127,7 +127,7 @@ export default function NotificationBell() {
               const title = n._src === 'booking' ? n.message : n.title
               const icon = n._src === 'booking'
                 ? (BOOKING_ICONS[n.type] || '📅')
-                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝' }[n.type] || '🔔')
+                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', training_submitted: '🎓', training_approved: '✅', safety_step_submitted: '🦺', safety_skip_request: '⚠️' }[n.type] || '🔔')
               return (
                 <div key={`${n._src}_${n.id}`} onClick={() => handleClick(n)}
                   style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}
