@@ -78,7 +78,7 @@ function ModuleCard({ m, onClick, imgUrl, isAdminManage, onDragStart, onDragOver
       draggable={draggable}
       onClick={e => { e.preventDefault(); onClick?.() }}
       onTouchEnd={e => { e.preventDefault(); onClick?.() }}
-      onDragStart={e => { e.dataTransfer.setData('text/plain', m.key); onDragStart?.() }}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', m.key); e.dataTransfer.setDragImage(e.currentTarget, e.offsetX, e.offsetY); onDragStart?.() }}
       onDragOver={e => { e.preventDefault(); onDragOver?.() }}
       onDrop={e => { e.preventDefault(); onDrop?.() }}
       onDragEnd={() => onDragEnd?.()}
