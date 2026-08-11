@@ -2335,7 +2335,7 @@ function UserProfile({ session }) {
       {activeTab === 'info'      && <UserProfileForm session={session} toast={toast} />}
       {activeTab === 'password'  && <PasswordChangePanel session={session} toast={toast} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
-      {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="student" />}
+      {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="lab_user" />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
