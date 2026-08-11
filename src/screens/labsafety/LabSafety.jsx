@@ -1394,7 +1394,8 @@ function Step4VideoContent({ user, isManager }) {
         const name = user?.username || 'A lab user'
         await sb.from('notifications').insert(managers.map(m => ({
           user_id: m.id,
-          message: `${name} has confirmed watching the ICT safety video (Step 4). Please review and approve.`,
+          title: `${name} submitted safety training`,
+          body: `${name} confirmed watching the ICT safety video (Step 4). Please review and approve.`,
           type: 'safety_step_submitted',
           read: false,
         })))

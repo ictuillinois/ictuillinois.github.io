@@ -40,7 +40,8 @@ async function notifyManagersSafetySkipped(session) {
   const name = session.username || 'A lab user'
   await sb.from('notifications').insert(managers.map(m => ({
     user_id: m.id,
-    message: `${name} skipped safety training and requested to use the lab without completing all steps. Please review and contact them if needed.`,
+    title: `${name} skipped safety training`,
+    body: `${name} requested lab access without completing all safety steps. Please review and contact them if needed.`,
     type: 'safety_skip_request',
     read: false,
   })))

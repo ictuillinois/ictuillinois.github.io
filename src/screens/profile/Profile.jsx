@@ -1,6 +1,5 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
-import StorageProviderModal from '../../components/StorageProviderModal'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { passwordError } from '../../lib/passwordPolicy'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
@@ -38,7 +37,7 @@ async function notifyOrgManagers(organizationId, message, type = 'info', exclude
   if (excludeUserId) q = q.neq('id', excludeUserId)
   const { data: managers } = await q
   if (!managers?.length) return
-  await sb.from('notifications').insert(managers.map(m => ({ user_id: m.id, message, type, read: false })))
+  await sb.from('notifications').insert(managers.map(m => ({ user_id: m.id, title: message, type, read: false })))
 }
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
@@ -81,9 +80,9 @@ async function createAuthUser(email, password) {
 // [TeammatesPanel imported from components/TeammatesPanel.jsx]
 // ══════════════════════════════════════════════════════════════
 
-const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','storage','password','danger']
-const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','storage','team','danger']
-const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','storage','team','danger']
+const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','password','danger']
+const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','team','danger']
+const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','team','danger']
 const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org']
 
 // ══════════════════════════════════════════════════════════════
@@ -208,7 +207,6 @@ function SoloProfile({ session }) {
           { key: 'teammates',     label: '👥 Teammates' },
           { key: 'dashboard',     label: '🎛️ Dashboard Icons' },
           { key: 'notifications', label: '🔔 Notifications' },
-          { key: 'storage',       label: '🗄️ Storage' },
           { key: 'password',      label: '🔑 Password' },
           { key: 'danger',        label: '⚠️ Delete Account' },
         ].map(t => (
@@ -261,8 +259,6 @@ function SoloProfile({ session }) {
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
 
       {activeTab === 'notifications' && <NotificationPrefsPanel userId={session?.userId} role="solo" />}
-
-      {activeTab === 'storage' && <StorageTab toast={toast} />}
 
       {activeTab === 'password' && (
         <div className="card">
@@ -950,9 +946,6 @@ function NotificationPrefsPanel({ userId, role }) {
     { title: '🤝 Project Team', desc: 'Notifications about project team invites.', roles: ['lab_user', 'user', 'admin'], events: [
       { key: 'team_invite', label: 'Project team invite received or accepted' },
     ]},
-    { title: '💬 Lab Messages', desc: 'Messages from the Lab Messages feature.', roles: ['lab_user', 'user', 'admin', 'solo'], events: [
-      { key: 'message_reply', label: 'Reply received to my message' },
-    ]},
     { title: '🔧 Equipment Maintenance', desc: 'Reminders when equipment you are responsible for is coming due.', roles: ['user', 'admin', 'solo'], events: [
       { key: 'maintenance_reminder', label: 'Maintenance due — reminder 2 weeks before and 1 week before due date' },
     ]},
@@ -987,6 +980,18 @@ function NotificationPrefsPanel({ userId, role }) {
   if (!userId) return <div style={{ fontSize: 13, color: 'var(--text3)', padding: 16 }}>Sign in to manage notification preferences.</div>
   if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
+  const allEvents  = SECTIONS.flatMap(s => s.events)
+  const allAppOn   = allEvents.every(ev => !!prefs[ev.key])
+  const allEmailOn = allEvents.every(ev => !!prefs[`email_${ev.key}`])
+  function toggleAll(type) {
+    const newVal = type === 'app' ? !allAppOn : !allEmailOn
+    setPrefs(p => {
+      const next = { ...p }
+      allEvents.forEach(ev => { next[type === 'app' ? ev.key : `email_${ev.key}`] = newVal })
+      return next
+    })
+  }
+
   return (
     <div>
       {/* App Preferences */}
@@ -1009,7 +1014,23 @@ function NotificationPrefsPanel({ userId, role }) {
         </div>
       </div>
 
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Choose how you want to be notified. <strong>In-app</strong> shows a 🔔 inside ICT-Lab. <strong>Email</strong> sends to your registered address.</div>
+      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>Choose how you want to be notified. <strong>In-app</strong> shows a 🔔 inside ICT-Lab. <strong>Email</strong> sends to your registered address.</div>
+
+      {/* Select All row */}
+      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 16px', marginBottom: 20 }}>
+        <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Select all</div>
+        <div style={{ display: 'flex', gap: 20, flexShrink: 0 }}>
+          {[{ label: 'App 🔔', on: allAppOn, type: 'app' }, { label: 'Email 📧', on: allEmailOn, type: 'email' }].map(({ label, on, type }) => (
+            <div key={type} style={{ width: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }} onClick={() => toggleAll(type)}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: on ? 'var(--accent)' : 'var(--text3)', minWidth: 22, textAlign: 'right' }}>{on ? 'On' : 'Off'}</span>
+              <div style={{ width: 44, height: 24, borderRadius: 12, background: on ? 'var(--accent)' : 'var(--border)', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', top: 2, left: on ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {SECTIONS.map(sec => (
         <div key={sec.title} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 20 }}>
           <div style={{ padding: '12px 16px', background: 'var(--accent-light)', borderBottom: '1px solid #9FE1CB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2090,7 +2111,6 @@ function StaffProfile({ session }) {
           { key: 'password',  label: '🔑 Password' },
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
-          { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
           { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
@@ -2104,7 +2124,6 @@ function StaffProfile({ session }) {
       {activeTab === 'password'  && <PasswordChangePanel session={session} toast={toast} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
-      {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
@@ -2304,7 +2323,6 @@ function UserProfile({ session }) {
           { key: 'password',  label: '🔑 Password' },
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
-          { key: 'storage',   label: '🗄️ Storage' },
           { key: 'team',      label: '🤝 Project Team' },
           { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
@@ -2318,7 +2336,6 @@ function UserProfile({ session }) {
       {activeTab === 'password'  && <PasswordChangePanel session={session} toast={toast} />}
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="student" />}
-      {activeTab === 'storage'   && <StorageTab toast={toast} />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
@@ -2596,7 +2613,6 @@ function AccessModal({ user, toast, session, onClose }) {
     { key: 'equipment',    label: 'Equipment List', icon: '🔧', moduleKey: 'equipment' },
     { key: 'equipmenthub', label: 'Equipment',           icon: '📚', moduleKey: 'equipmenthub' },
     { key: 'booking',      label: 'Reserve Equipment',   icon: '📅', moduleKey: 'booking' },
-    { key: 'remessages',   label: 'Lab Messages', icon: '💬', moduleKey: 'remessages' },
     { key: 'mileage',      label: 'Mileage Form',        icon: '🚗', moduleKey: 'mileage' },
     { key: 'labsafety',    label: 'Lab Safety',          icon: '🦺', moduleKey: 'labsafety' },
     { key: 'pm',           label: 'Task Board',  icon: '📋', moduleKey: 'pm' },
@@ -2681,7 +2697,6 @@ function IconImageManager({ toast, session }) {
     { key: 'booking',        label: 'Reserve Equipment',   icon: '📅', bg: '#e0f2fe' },
     { key: 'mileage',        label: 'Mileage Form',        icon: '🚗', bg: '#fdf0ed' },
     { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺', bg: '#fef3c7' },
-    { key: 'remessages',     label: 'Lab Messages', icon: '💬', bg: '#E1F5EE' },
     { key: 'profile',        label: 'Profile',             icon: '👤', bg: '#EEEDFE' },
     { key: 'pm',             label: 'Task Board',  icon: '📋', bg: '#fff3e0' },
     { key: 'barcode',        label: 'Barcode Scanner',     icon: '📷', bg: '#e0f7fa' },
