@@ -8,6 +8,29 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
+import { buildEmailHtml } from '../../lib/emailTemplate'
+
+async function sendTrainingApprovedNotif(userId, approverName) {
+  const title = 'Training certificate approved'
+  const body  = `Your certificate was reviewed and approved by ${approverName}.`
+  const { data: prefs } = await sb.from('notification_prefs').select('training_approved, email_training_approved').eq('user_id', userId).maybeSingle()
+  if (!prefs || prefs.training_approved !== false) {
+    await sb.from('notifications').insert({ user_id: userId, type: 'training_approved', title, body, read: false })
+  }
+  if (prefs?.email_training_approved === true) {
+    const { data: user } = await sb.from('users').select('email, phone, organization_id').eq('id', userId).maybeSingle()
+    const toEmail = user?.phone || user?.email
+    if (!toEmail) return
+    let orgContact = null
+    if (user?.organization_id) {
+      const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
+      orgContact = org
+    }
+    const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
+    await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'training_approved' })
+      .then(({ error }) => { if (error) console.warn('Training email queue failed:', error.message) })
+  }
+}
 
 const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other']
 
@@ -111,9 +134,11 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   }
 
   async function toggleApprove(rec) {
-    const { error } = await sb.from('training_fresh').update({ admin_approved: !rec.admin_approved, admin_approved_by: session.username, admin_approved_at: new Date().toISOString() }).eq('id', rec.id)
+    const approving = !rec.admin_approved
+    const { error } = await sb.from('training_fresh').update({ admin_approved: approving, admin_approved_by: session.username, admin_approved_at: new Date().toISOString() }).eq('id', rec.id)
     if (error) { toast('Approval failed: ' + error.message); return }
-    toast(rec.admin_approved ? 'Approval removed.' : 'Certificate approved ✓')
+    toast(approving ? 'Certificate approved ✓' : 'Approval removed.')
+    if (approving) sendTrainingApprovedNotif(rec.user_id, session.username)
     load(); onChanged?.()
   }
 
