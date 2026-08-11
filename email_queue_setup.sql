@@ -38,9 +38,9 @@ SELECT cron.schedule(
   '* * * * *',
   $cron$
   SELECT net.http_post(
-    url     := 'https://qhsxtpywfczqopcimykk.supabase.co/functions/v1/send-emails',
+    url     := 'https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails',
     headers := jsonb_build_object(
-                 'Authorization', 'Bearer sb_publishable_eXj0rGtAqMRX2Q3B9kgc1w_CE8rzWei',
+                 'Authorization', 'Bearer sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8',
                  'Content-Type',  'application/json'),
     body    := '{}'::jsonb
   );
