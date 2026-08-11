@@ -15,34 +15,51 @@ async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
   const { data: managers } = await sb.from('users').select('id')
     .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
   if (!managers?.length) return
-  await sb.from('notifications').insert(managers.map(m => ({
+  const { error } = await sb.from('notifications').insert(managers.map(m => ({
     user_id: m.id,
     type: 'training_submitted',
     title: `${uploaderName} uploaded a new certificate`,
     body: 'Review and approve it in Training Records.',
     read: false,
   })))
+  if (error) console.error('[notif] manager cert-submitted notify FAILED:', error.message, error.code)
+  else console.log('[notif] cert-submitted notifs sent to', managers.length, 'managers')
 }
 
 async function sendTrainingApprovedNotif(userId, approverName) {
   const title = 'Training certificate approved'
   const body  = `Your certificate was reviewed and approved by ${approverName}.`
-  const { data: prefs } = await sb.from('notification_prefs').select('training_approved, email_training_approved').eq('user_id', userId).maybeSingle()
-  if (!prefs || prefs.training_approved !== false) {
-    await sb.from('notifications').insert({ user_id: userId, type: 'training_approved', title, body, read: false })
-  }
-  if (prefs?.email_training_approved === true) {
-    const { data: user } = await sb.from('users').select('email, phone, organization_id').eq('id', userId).maybeSingle()
-    const toEmail = user?.phone || user?.email
-    if (!toEmail) return
-    let orgContact = null
-    if (user?.organization_id) {
-      const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
-      orgContact = org
+  try {
+    const { data: prefs, error: prefsErr } = await sb.from('notification_prefs').select('training_approved, email_training_approved').eq('user_id', userId).maybeSingle()
+    if (prefsErr) console.warn('[notif] prefs fetch error (non-blocking):', prefsErr.message)
+
+    if (!prefs || prefs.training_approved !== false) {
+      const { error: insertErr } = await sb.from('notifications').insert({ user_id: userId, type: 'training_approved', title, body, read: false })
+      if (insertErr) {
+        console.error('[notif] INSERT into notifications FAILED:', insertErr.message, insertErr.code, insertErr.details)
+        import('../../lib/logAdminError').then(({ logAdminError }) =>
+          logAdminError('Training approval notification failed', `user_id=${userId} err=${insertErr.message} (${insertErr.code})`)
+        )
+      } else {
+        console.log('[notif] in-app notification inserted OK for user', userId)
+      }
     }
-    const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
-    await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'training_approved' })
-      .then(({ error }) => { if (error) console.warn('Training email queue failed:', error.message) })
+
+    if (prefs?.email_training_approved === true) {
+      const { data: user } = await sb.from('users').select('email, phone, organization_id').eq('id', userId).maybeSingle()
+      const toEmail = user?.phone || user?.email
+      if (!toEmail) return
+      let orgContact = null
+      if (user?.organization_id) {
+        const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
+        orgContact = org
+      }
+      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
+      const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'training_approved' })
+      if (emailErr) console.warn('[notif] email queue insert failed:', emailErr.message)
+    }
+  } catch (e) {
+    console.error('[notif] sendTrainingApprovedNotif unexpected error:', e)
   }
 }
 
