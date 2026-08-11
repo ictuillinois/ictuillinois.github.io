@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
 import NotificationBell from './NotificationBell'
@@ -8,6 +8,7 @@ import AboutModal from './AboutModal'
 import CustomerServiceModal from './CustomerServiceModal'
 import SaraChat from './SaraChat'
 import FeedbackWidget from './FeedbackWidget'
+import OnboardingTour, { ModuleTip, HelpTourButton } from './OnboardingTour'
 
 function ExternalLinkModal({ url, onConfirm, onCancel }) {
   return (
@@ -468,8 +469,11 @@ export default function Layout({ children }) {
   const [orgLogoUrl, setOrgLogoUrl] = useState(null)
   const [showAbout,   setShowAbout]   = useState(false)
   const [showContact, setShowContact] = useState(false)
+  const [showTour,    setShowTour]    = useState(false)
+  const [loginCount,  setLoginCount]  = useState(0)
   // Mobile: sidebar lives in a slide-in drawer opened by the header hamburger
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+  const tourTriggeredRef = useRef(false)
   useEffect(() => { setMobileDrawerOpen(false) }, [screen, sidebarSubTab])
 
   useEffect(() => {
@@ -478,6 +482,21 @@ export default function Layout({ children }) {
     sb.from('organizations').select('logo_url').eq('id', orgId).single()
       .then(({ data }) => setOrgLogoUrl(data?.logo_url || null))
   }, [session?.organizationId, session?.loginMode])
+
+  // Track login count + auto-trigger tour for new users
+  useEffect(() => {
+    if (!session?.userId || session?.mustChangePassword || tourTriggeredRef.current) return
+    tourTriggeredRef.current = true
+    const uid = session.userId
+    const countKey = `ictlab_login_count_${uid}`
+    const doneKey  = `ictlab_tour_done_${uid}`
+    const count = parseInt(localStorage.getItem(countKey) || '0', 10) + 1
+    localStorage.setItem(countKey, String(count))
+    setLoginCount(count)
+    if (localStorage.getItem(doneKey) !== 'true') {
+      setTimeout(() => setShowTour(true), 600)
+    }
+  }, [session?.userId, session?.mustChangePassword])
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -526,6 +545,15 @@ export default function Layout({ children }) {
               <path d="M12 8h.01"/>
             </svg>
           </button>
+
+          {/* Help / Tour button */}
+          {session?.userId && (
+            <HelpTourButton
+              loginCount={loginCount}
+              onOpen={() => setShowTour(true)}
+              accentRgb="29,198,130"
+            />
+          )}
 
           {session?.userId === null && session?.role === 'admin' ? <SuperAdminBell /> : session?.userId ? <NotificationBell /> : null}
 
@@ -594,6 +622,9 @@ export default function Layout({ children }) {
             ? 'calc(72px + env(safe-area-inset-bottom, 0px))'
             : isProto ? 0 : '24px',
         }}>
+          {session?.userId && !isProto && screen !== 'dashboard' && (
+            <ModuleTip screen={screen} userId={session.userId} />
+          )}
           {children}
           {!isMobile && !isProto && screen !== 'dashboard' && (
             <div style={{ textAlign: 'center', padding: '16px 0 4px', fontSize: 11, color: 'var(--text3)' }}>
@@ -644,6 +675,7 @@ export default function Layout({ children }) {
 
       {showAbout   && <AboutModal onClose={() => setShowAbout(false)} onContact={() => { setShowAbout(false); setShowContact(true) }} />}
       {showContact && <CustomerServiceModal onClose={() => setShowContact(false)} />}
+      {showTour && <OnboardingTour session={session} onDone={() => setShowTour(false)} />}
       <FeedbackWidget bottomOffset={isMobile ? 80 : 24} />
       <SaraChat bottomOffset={isMobile ? 80 : 24} color={accentColor} onContact={() => setShowContact(true)} />
     </div>
