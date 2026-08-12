@@ -83,6 +83,24 @@ CREATE TABLE IF NOT EXISTS student_lockers (
   created_at      timestamptz DEFAULT now()
 );
 
+-- ── Ensure organization_id exists on any pre-existing tables ─────────────────
+-- (CREATE TABLE IF NOT EXISTS skips if table already exists, so these columns
+--  might be missing from tables created by an older schema.)
+ALTER TABLE lab_safety_progress     ADD COLUMN IF NOT EXISTS organization_id uuid;
+ALTER TABLE training_fresh          ADD COLUMN IF NOT EXISTS organization_id uuid;
+ALTER TABLE training_golf_car       ADD COLUMN IF NOT EXISTS organization_id uuid;
+ALTER TABLE training_equipment      ADD COLUMN IF NOT EXISTS organization_id uuid;
+ALTER TABLE training_building_alarm ADD COLUMN IF NOT EXISTS organization_id uuid;
+ALTER TABLE student_lockers         ADD COLUMN IF NOT EXISTS organization_id uuid;
+
+-- Also add any other columns that may be missing on pre-existing tables
+ALTER TABLE training_golf_car       ADD COLUMN IF NOT EXISTS confirmation  text;
+ALTER TABLE training_golf_car       ADD COLUMN IF NOT EXISTS trainer_name  text;
+ALTER TABLE training_building_alarm ADD COLUMN IF NOT EXISTS key_given      boolean DEFAULT false;
+ALTER TABLE training_building_alarm ADD COLUMN IF NOT EXISTS key_given_date date;
+ALTER TABLE lab_safety_progress     ADD COLUMN IF NOT EXISTS approved_by   text;
+ALTER TABLE lab_safety_progress     ADD COLUMN IF NOT EXISTS approved_at   timestamptz;
+
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_safety_prog_user  ON lab_safety_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_safety_prog_org   ON lab_safety_progress(organization_id);
