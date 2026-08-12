@@ -1,4 +1,4 @@
-const LOGO_URL = 'https://ictlab.app/logo.svg'
+const LOGO_URL = 'https://ictlab.app/ict-logo.png'
 const APP_URL  = 'https://ictlab.app/'
 
 export function buildEmailHtml({ title, body, ctaLabel = 'View in ICT-Lab →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null, credentials = null }) {
@@ -42,12 +42,17 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in ICT-Lab →', 
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.10);">
 
+        <!-- Logo banner -->
+        <tr>
+          <td style="background:#ffffff;padding:20px 32px 16px;text-align:center;border-bottom:3px solid #0d47a1;">
+            <img src="${LOGO_URL}" width="180" height="58" alt="ICT-Lab logo" style="display:block;margin:0 auto;border:0;">
+          </td>
+        </tr>
+
         <!-- Header -->
         <tr>
-          <td style="background:#0d47a1;padding:28px 32px 24px;text-align:center;">
-            <img src="${LOGO_URL}" width="72" height="72" alt="ICT-Lab logo" style="display:block;margin:0 auto 12px;border:0;">
-            <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;line-height:1;">ICT-Lab</div>
-            <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;margin-top:5px;">The All-in-One Research Lab Platform</div>
+          <td style="background:#0d47a1;padding:16px 32px 20px;text-align:center;">
+            <div style="color:#ffb380;font-size:11px;font-weight:400;letter-spacing:1.2px;text-transform:uppercase;">The All-in-One Research Lab Platform</div>
           </td>
         </tr>
 

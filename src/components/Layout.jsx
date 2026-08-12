@@ -222,7 +222,13 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     return true
   })
   const visibleMeta = activeModules
-    ? activeModules.map(key => navigable.find(m => m.key === key)).filter(Boolean)
+    ? (() => {
+        const inActive = activeModules.map(key => navigable.find(m => m.key === key)).filter(Boolean)
+        if (!isStaff) return inActive
+        const activeSet = new Set(activeModules)
+        const extras = navigable.filter(m => m.staffOnly && !activeSet.has(m.key))
+        return [...inActive, ...extras]
+      })()
     : navigable
 
   const handleModuleClick = (m) => {

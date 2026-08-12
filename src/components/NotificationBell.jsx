@@ -81,6 +81,8 @@ export default function NotificationBell() {
         setPendingBookingNotif(n)
       }
       setScreen('booking')
+    } else if (n.type === 'new_message') {
+      setScreen('remessages')
     } else if (n.type === 'team_invite') {
       setPendingProfileTab('team')
       setScreen('profile')

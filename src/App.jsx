@@ -51,6 +51,7 @@ const EquipmentScan        = lazy(() => import('./screens/equipment/EquipmentSca
 const BarcodeScannerScreen = lazy(() => import('./screens/barcode/BarcodeScannerScreen'))
 const BarcodeManager       = lazy(() => import('./screens/barcode/BarcodeManager'))
 const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecords'))
+const LabMessage           = lazy(() => import('./screens/messaging/LabMessage'))
 const LabManagement        = lazy(() => import('./screens/labmanagement/LabManagement'))
 const PM                   = lazy(() => import('./screens/maintenance/PM'))
 const Profile              = lazy(() => import('./screens/profile/Profile'))
@@ -109,7 +110,7 @@ const INTERNAL = new Set([
   'home', 'inspection', 'results', 'history',
   'projects', 'project-detail',
   'booking', 'barcode', 'barcodeqr',
-  'training', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'equipmentscan',
+  'training', 'remessages', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'equipmentscan',
 ])
 
 export default function App() {
@@ -304,6 +305,7 @@ export default function App() {
     barcode:          <BarcodeScannerScreen />,
     barcodeqr:        <BarcodeManager />,
     training:         <TrainingRecords />,
+    remessages:       <LabMessage />,
     labmanagement:    <LabManagement />,
     pm:               <PM />,
     profile:          <Profile />,

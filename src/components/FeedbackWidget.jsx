@@ -11,7 +11,6 @@ const FEEDBACK_SCREENS = {
   pm:            'Task Board',
   barcode:       'Material Scanner',
   barcodeqr:     'QR Labels',
-  remessages:    'Messages',
   home:          'Inspection',
   history:       'Inspection History',
   projects:      'Projects',

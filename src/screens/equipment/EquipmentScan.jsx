@@ -36,7 +36,6 @@ function ILabLogo({ size = 40 }) {
 const OPTION_META = [
   { id: 'sop',         icon: '📋', label: 'Standard Operating Procedure',   sub: 'Watch how-to videos, read the SOP, or turn on/off guide',   color: '#0369a1', bg: '#e0f2fe' },
   { id: 'book',        icon: '📅', label: 'Book this Equipment',            sub: 'Reserve a time slot on the lab calendar',                   color: '#1D9E75', bg: '#E1F5EE' },
-  { id: 'contact',     icon: '💬', label: 'Lab Messages',            sub: 'Questions, chat, or report an issue to the lab manager',    color: '#534AB7', bg: '#EEEDFE' },
   { id: 'calibration', icon: '🔧', label: 'Calibration',                   sub: 'View calibration schedule and maintenance records',          color: '#92400e', bg: '#fef3c7' },
 ]
 
@@ -221,25 +220,6 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
 
 
 
-function ContactSection({ onClose, onGoToMessages }) {
-  return (
-    <SectionCard title="💬 Lab Messages" onClose={onClose}>
-      <div style={{ textAlign: 'center', padding: '20px 0 8px' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Lab Messages</div>
-        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
-          Send a message, ask a question, or report an issue about this equipment to your lab manager.
-        </div>
-        <button
-          onClick={onGoToMessages}
-          style={{ padding: '10px 24px', borderRadius: 9, fontSize: 14, fontWeight: 700, background: '#534AB7', color: '#fff', border: 'none', cursor: 'pointer' }}
-        >
-          Open Messages →
-        </button>
-      </div>
-    </SectionCard>
-  )
-}
 
 // URL param is the canonical source — survives re-mounts after navigation
 const EQ_FROM_URL = new URLSearchParams(window.location.search).get('eq')
@@ -410,9 +390,6 @@ export default function EquipmentScan() {
               )}
               {isActive && opt.id === 'calibration' && (
                 <MaintenanceSection equipment={equipment} session={session} onClose={() => setActiveSection(null)} onGoToInventory={() => setScreen('equipment')} />
-              )}
-              {isActive && opt.id === 'contact' && (
-                <ContactSection onClose={() => setActiveSection(null)} onGoToMessages={() => { sessionStorage.setItem('ictlab_return_scan', '1'); setScreen('remessages') }} />
               )}
             </div>
           )

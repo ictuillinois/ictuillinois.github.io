@@ -57,6 +57,7 @@ async function sendTrainingApprovedNotif(userId, approverName) {
       const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
       const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'training_approved' })
       if (emailErr) console.warn('[notif] email queue insert failed:', emailErr.message)
+      else fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
     }
   } catch (e) {
     console.error('[notif] sendTrainingApprovedNotif unexpected error:', e)
@@ -153,6 +154,20 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   const [selectedUserId, setSelectedUserId] = useState(null)   // card grid → detail panel
 
   useEffect(() => { if (students.length > 0) load() }, [students])
+
+  useEffect(() => {
+    if (!students.length) return
+    const ids = students.map(s => s.id)
+    const channel = sb.channel('fresh_training_changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'training_fresh' }, payload => {
+        if (ids.includes(payload.new?.user_id)) load()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'training_fresh' }, payload => {
+        if (ids.includes(payload.new?.user_id)) load()
+      })
+      .subscribe()
+    return () => sb.removeChannel(channel)
+  }, [students])
 
   async function load() {
     setLoading(true)

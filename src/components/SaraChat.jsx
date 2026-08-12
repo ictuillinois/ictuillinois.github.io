@@ -11,7 +11,7 @@ const FAQ = [
   {
     id: 'features',
     q: 'What modules are available?',
-    a: 'ICT-Lab includes:\n• Project Workspace — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (staff)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Lab Messages — communicate with Research Engineers\n• Supply Inventory — room-by-room supply tracking (staff)',
+    a: 'ICT-Lab includes:\n• Project Workspace — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (staff)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (staff)',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions', 'available'],
     followups: ['booking', 'training', 'projects'],
   },
@@ -72,13 +72,6 @@ const FAQ = [
     followups: ['training', 'contact', 'access'],
   },
   {
-    id: 'messages',
-    q: 'How do I message the Research Engineers?',
-    a: 'Use the Lab Messages module to send messages to Research Engineers and other team members. It\'s the best way to ask questions, report equipment issues, or coordinate lab activities. You\'ll receive a notification when they reply.',
-    keywords: ['message', 'messages', 'chat', 'communicate', 'contact re', 'lab messages', 'talk', 'send', 'notify', 'notification'],
-    followups: ['contact', 'booking', 'features'],
-  },
-  {
     id: 'password',
     q: 'How do I change my password?',
     a: 'On your first login you will be prompted to set a new password automatically. To change it later, go to Profile → Security. If you are locked out or forgot your password, contact ResearchengineersICT@illinois.edu and a Research Engineer will reset it for you.',
@@ -95,13 +88,13 @@ const FAQ = [
   {
     id: 'contact',
     q: 'How do I contact the Research Engineers?',
-    a: 'You can reach the ICT Research Engineers by:\n• Email: ResearchengineersICT@illinois.edu\n• Lab Messages module inside ICT-Lab\n• The "Contact Us" button on this page\n\nFor urgent lab issues, contact the lab directly.',
+    a: 'You can reach the ICT Research Engineers by:\n• Email: ResearchengineersICT@illinois.edu\n• The "Contact Us" button on this page\n\nFor urgent lab issues, contact the lab directly.',
     keywords: ['contact', 'support', 'help', 'question', 'reach', 'email', 'talk', 'issue', 'problem', 'research engineer', 'illinois', 'uiuc'],
-    followups: ['messages', 'password', 'access'],
+    followups: ['password', 'access', 'features'],
   },
 ]
 
-const STARTERS = ['what', 'access', 'booking', 'training', 'mileage', 'contact']
+const STARTERS = ['what', 'access', 'booking', 'training', 'mileage', 'labsafety', 'contact']
 
 function findAnswer(input) {
   const q = input.toLowerCase()

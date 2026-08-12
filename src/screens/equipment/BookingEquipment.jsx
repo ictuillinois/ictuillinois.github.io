@@ -3607,9 +3607,10 @@ function BookingSettings({ session }) {
 function EquipmentNotesTab({ session }) {
   const { toast } = useAppStore()
   const [equipment, setEquipment] = useState([])
-  const [notes, setNotes] = useState({})   // eqId -> current textarea value
-  const [saved, setSaved] = useState({})   // eqId -> saved value (for dirty check)
-  const [saving, setSaving] = useState(null)
+  const [selectedId, setSelectedId] = useState('')
+  const [notes, setNotes] = useState({})
+  const [saved, setSaved] = useState({})
+  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { load() }, [])
@@ -3630,76 +3631,80 @@ function EquipmentNotesTab({ session }) {
     setLoading(false)
   }
 
-  async function saveNote(eqId) {
-    setSaving(eqId)
-    const note = notes[eqId]?.trim() || null
-    const { error } = await sb.from('equipment_inventory').update({ special_note: note }).eq('id', eqId)
-    if (error) { toast('Save failed: ' + error.message); setSaving(null); return }
-    setSaved(s => ({ ...s, [eqId]: notes[eqId] }))
-    setSaving(null)
+  async function saveNote() {
+    if (!selectedId) return
+    setSaving(true)
+    const note = notes[selectedId]?.trim() || null
+    const { error } = await sb.from('equipment_inventory').update({ special_note: note }).eq('id', selectedId)
+    if (error) { toast('Save failed: ' + error.message); setSaving(false); return }
+    setSaved(s => ({ ...s, [selectedId]: notes[selectedId] }))
+    setSaving(false)
     toast(note ? 'Note saved ✓' : 'Note cleared ✓')
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
+  const selected = equipment.find(e => e.id === selectedId)
+  const currentNote = notes[selectedId] ?? ''
+  const isDirty = notes[selectedId] !== saved[selectedId]
+  const hasNote = !!saved[selectedId]
+
   return (
-    <div>
+    <div style={{ maxWidth: 640 }}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>⚠️ Special Treatment Instructions</div>
         <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
-          Add notes for equipment that requires special handling. Lab users will see the note and must confirm they have read it before booking.
+          Select equipment to view or edit its special handling note. Lab users must confirm they have read it before booking.
         </div>
       </div>
-      {equipment.length === 0 && (
+
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>Select Equipment</label>
+        <select
+          value={selectedId}
+          onChange={e => setSelectedId(e.target.value)}
+          style={{ width: '100%', fontSize: 13, padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+        >
+          <option value="">— Choose equipment —</option>
+          {equipment.map(e => (
+            <option key={e.id} value={e.id}>
+              {e.nickname || e.equipment_name}{e.category ? ` · ${e.category}` : ''}{saved[e.id] ? ' ⚠️' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {selected && (
+        <div style={{ background: 'var(--surface)', border: `1px solid ${hasNote ? '#fed7aa' : 'var(--border)'}`, borderLeft: hasNote ? '3px solid #f97316' : '3px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 18px' }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
+            {selected.nickname || selected.equipment_name}
+            {hasNote && <span style={{ marginLeft: 8, fontSize: 10, background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: 99, padding: '2px 8px', fontWeight: 700 }}>⚠️ Note active</span>}
+          </div>
+          {selected.nickname && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{selected.equipment_name}{selected.category ? ` · ${selected.category}` : ''}</div>}
+          {!selected.nickname && selected.category && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{selected.category}</div>}
+          <textarea
+            value={currentNote}
+            onChange={ev => setNotes(n => ({ ...n, [selectedId]: ev.target.value }))}
+            placeholder="Add special treatment instructions visible to all lab users who book this equipment…"
+            rows={5}
+            style={{ width: '100%', resize: 'vertical', fontSize: 13, borderColor: isDirty ? 'var(--accent)' : 'var(--border)', boxSizing: 'border-box', marginBottom: 12 }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={saveNote} disabled={saving || !isDirty}>
+              {saving ? 'Saving…' : isDirty ? 'Save note' : 'Saved ✓'}
+            </button>
+            {hasNote && (
+              <button className="btn" onClick={() => setNotes(n => ({ ...n, [selectedId]: '' }))} disabled={saving} style={{ fontSize: 12, color: 'var(--text3)' }}>
+                Clear note
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!selected && equipment.length === 0 && (
         <div className="empty-state"><div className="empty-icon">🔧</div>No equipment found.</div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {equipment.map(e => {
-          const isDirty = notes[e.id] !== saved[e.id]
-          const hasNote = !!saved[e.id]
-          return (
-            <div key={e.id} style={{ background: 'var(--surface)', border: `1px solid ${hasNote ? '#fed7aa' : 'var(--border)'}`, borderLeft: hasNote ? '3px solid #f97316' : undefined, borderRadius: 'var(--radius-lg)', padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', marginBottom: 2 }}>
-                    {e.nickname || e.equipment_name}
-                    {hasNote && <span style={{ marginLeft: 8, fontSize: 10, background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: 99, padding: '2px 8px', fontWeight: 700 }}>⚠️ Note set</span>}
-                  </div>
-                  {e.nickname && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>{e.equipment_name} · {e.category}</div>}
-                  {!e.nickname && e.category && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>{e.category}</div>}
-                  <textarea
-                    value={notes[e.id] || ''}
-                    onChange={ev => setNotes(n => ({ ...n, [e.id]: ev.target.value }))}
-                    placeholder="Add special treatment instructions visible to all lab users who book this equipment…"
-                    rows={3}
-                    style={{ width: '100%', resize: 'vertical', fontSize: 13, borderColor: isDirty ? 'var(--accent)' : 'var(--border)', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={() => saveNote(e.id)}
-                    disabled={!isDirty || saving === e.id}
-                    style={{ whiteSpace: 'nowrap' }}
-                  >
-                    {saving === e.id ? 'Saving…' : 'Save note'}
-                  </button>
-                  {hasNote && (
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => { setNotes(n => ({ ...n, [e.id]: '' })) }}
-                      disabled={saving === e.id}
-                      style={{ fontSize: 11, color: 'var(--text3)' }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }
@@ -3708,15 +3713,8 @@ function EquipmentNotesTab({ session }) {
 // MAIN
 // ══════════════════════════════════════════════════════════════
 export default function BookingEquipment() {
-  const { session } = useAppStore()
-  const [tab, setTab] = useState('calendar')
-
-  const tabs = [
-    { key: 'calendar', label: '📅 Book Equipment' },
-    { key: 'history', label: '📋 History & Usage' },
-    ...(canEdit(session) ? [{ key: 'eq_notes', label: '⚠️ Special Treatment' }] : []),
-    ...(isAdmin(session) ? [{ key: 'settings', label: '⚙️ Settings' }] : []),
-  ]
+  const { session, sidebarSubTab } = useAppStore()
+  const tab = sidebarSubTab || 'calendar'
 
   return (
     <div>
@@ -3724,18 +3722,10 @@ export default function BookingEquipment() {
         <div className="section-title">Reserve Equipment</div>
         <HelpPanel screen="booking" />
       </div>
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding: '10px 20px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: tab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${tab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-            {t.label}
-          </button>
-        ))}
-      </ScrollTabs>
-      {tab === 'calendar' && <BookingCalendar session={session} />}
-      {tab === 'history' && <BookingHistory session={session} />}
-      {tab === 'eq_notes' && <EquipmentNotesTab session={session} />}
-      {tab === 'settings' && <BookingSettings session={session} />}
+      {tab === 'calendar'  && <BookingCalendar session={session} />}
+      {tab === 'history'   && <BookingHistory session={session} />}
+      {tab === 'eq_notes'  && <EquipmentNotesTab session={session} />}
+      {tab === 'settings'  && <BookingSettings session={session} />}
     </div>
   )
 }

@@ -511,15 +511,15 @@ function ExportData() {
     const orgB64     = orgLogoSrc ? await imgUrlToBase64(orgLogoSrc) : null
 
     function drawHeader(isFirst) {
-      if (ictlabB64) doc.addImage(ictlabB64, 'PNG', ML, 7, 18, 18)
+      if (ictlabB64) doc.addImage(ictlabB64, 'PNG', ML, 7, 50, 20)
       if (orgB64)     doc.addImage(orgB64,     'PNG', PW - MR - 36, 7, 36, 18)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(12, 17, 64)
-      doc.text('SUPPLY INVENTORY INSPECTION REPORT', PW / 2, 14, { align: 'center' })
+      doc.text('SUPPLY INVENTORY INSPECTION REPORT', PW / 2, 16, { align: 'center' })
       if (isFirst && orgName) {
         doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80)
-        doc.text(orgName, PW / 2, 20, { align: 'center' })
+        doc.text(orgName, PW / 2, 22, { align: 'center' })
       }
       doc.setTextColor(0)
       doc.setDrawColor(29, 158, 117); doc.setLineWidth(0.8)
@@ -675,11 +675,10 @@ function ExportData() {
     if (ictlabB64 || orgB64) {
       // 4-row logo header — rows sized to fit images (pt ≈ px/1.333)
       dataStartRow = 5
-      ws.getRow(1).height = 10; ws.getRow(2).height = 56; ws.getRow(3).height = 10; ws.getRow(4).height = 5
-      // ICT-Lab logo: portrait 680×860, fixed 48×60 px
+      ws.getRow(1).height = 10; ws.getRow(2).height = 68; ws.getRow(3).height = 10; ws.getRow(4).height = 5
       if (ictlabB64) {
         const id = wb.addImage({ base64: ictlabB64, extension: 'png' })
-        ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 48, height: 60 } })
+        ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 68 } })
       }
       // Org logo: fixed 110×55 px (landscape)
       if (orgB64) {
@@ -749,11 +748,11 @@ function ExportData() {
 
       // ── Row 1-3: Logo header ──
       ws.getRow(1).height = 10
-      ws.getRow(2).height = 60
+      ws.getRow(2).height = 70
       ws.getRow(3).height = 10
       if (ictlabB64) {
         const id = wb.addImage({ base64: ictlabB64, extension: 'png' })
-        ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 48, height: 60 } })
+        ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 68 } })
       }
       if (orgB64) {
         const id = wb.addImage({ base64: orgB64, extension: 'png' })
@@ -1015,8 +1014,8 @@ function ExportData() {
       // Column widths first — before any row data
       ws.columns = [{ width: 22 }, { width: 22 }, { width: 16 }, { width: 12 }, { width: 10 }, { width: 14 }]
       if (ictlabB64 || orgB64) {
-        ws.getRow(1).height = 10; ws.getRow(2).height = 56; ws.getRow(3).height = 10; ws.getRow(4).height = 5
-        if (ictlabB64) { const id = wb.addImage({ base64: ictlabB64, extension: 'png' }); ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 48, height: 60 } }) }
+        ws.getRow(1).height = 10; ws.getRow(2).height = 68; ws.getRow(3).height = 10; ws.getRow(4).height = 5
+        if (ictlabB64) { const id = wb.addImage({ base64: ictlabB64, extension: 'png' }); ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 68 } }) }
         if (orgB64)     { const id = wb.addImage({ base64: orgB64, extension: 'png' }); ws.addImage(id, { tl: { col: 4, row: 0 }, ext: { width: 110, height: 55 } }) }
         const tc = ws.getRow(2).getCell(3); tc.value = name; tc.font = { bold: true, size: 13, color: { argb: 'FF0C1140' } }; tc.alignment = { horizontal: 'center', vertical: 'middle' }; ws.mergeCells(2, 3, 3, 4)
       }

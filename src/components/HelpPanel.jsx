@@ -114,15 +114,6 @@ const HELP_CONTENT = {
       'Assign Others tab (org admin only): create and assign tasks directly to any lab manager',
     ],
   },
-  remessages: {
-    title: 'Messages',
-    description: 'Direct messaging between lab members and managers. Use this to ask questions, report issues, or coordinate with your team.',
-    tips: [
-      'Messages are organized by conversation thread',
-      'Lab managers can see all conversations in their organization',
-      'Attach files or images to your messages',
-    ],
-  },
   labmanagement: {
     title: 'Lab Management',
     description: 'Centralized hub for lab administration — manage safety documents, compliance records, lab policies, and facility information.',

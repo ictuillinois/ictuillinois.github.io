@@ -9,7 +9,6 @@ const FEATURES = [
   { icon: '🎓', label: 'Training Records',  desc: 'Certificates, compliance tracking & exam history' },
   { icon: '🧪', label: 'Project Workspace', desc: 'Research projects, materials & test results' },
   { icon: '📋', label: 'Task Board',        desc: 'Tasks, meetings, deadlines & team calendar' },
-  { icon: '💬', label: 'Lab Messages',      desc: 'Team communication, notes & issue reports' },
 ]
 
 const WHO = ['University research labs', 'Independent researchers', 'Lab managers & admins', 'Multi-user lab teams']

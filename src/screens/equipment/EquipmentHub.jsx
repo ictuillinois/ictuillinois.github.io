@@ -932,6 +932,10 @@ export default function EquipmentHub() {
   return (
     <div>
       <HelpPanel screen="equipmenthub" />
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Equipment SOP</h1>
+        <p style={{ fontSize: 14, color: 'var(--text3)', margin: '4px 0 0' }}>Standard Operating Procedure for Equipment</p>
+      </div>
 
       {/* Solo top-level tabs (categories vs equipment) */}
       {isSolo && (
