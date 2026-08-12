@@ -81,7 +81,7 @@ async function createAuthUser(email, password) {
 // ══════════════════════════════════════════════════════════════
 
 const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','password','danger']
-const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','team','guide','danger']
+const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','team','danger']
 const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','team','danger']
 const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org']
 
@@ -2085,32 +2085,6 @@ function PasswordChangePanel({ session, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// LAB MANAGER GUIDE
-// ══════════════════════════════════════════════════════════════
-function LabManagerGuidePanel() {
-  const PDF_URL = '/lab-manager-guide.pdf'
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text1)' }}>Lab Manager Guide</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>ICT-Lab Platform — Version 2.0, August 2026</div>
-        </div>
-        <a href={PDF_URL} download="ICT-Lab-Manager-Guide.pdf"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
-          ⬇ Download PDF
-        </a>
-      </div>
-      <iframe
-        src={PDF_URL}
-        title="Lab Manager Guide"
-        style={{ width: '100%', height: 'calc(100vh - 260px)', minHeight: 500, border: '1px solid var(--border)', borderRadius: 8, display: 'block' }}
-      />
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════
 // STAFF PROFILE
 // ══════════════════════════════════════════════════════════════
 function StaffProfile({ session }) {
@@ -2138,7 +2112,6 @@ function StaffProfile({ session }) {
           { key: 'dashboard', label: '🎛️ Dashboard Icons' },
           { key: 'notifs',    label: '🔔 Notifications' },
           { key: 'team',      label: '🤝 Project Team' },
-          { key: 'guide',     label: '📋 Lab Manager Guide' },
           { key: 'danger',    label: '⚠️ Delete Account' },
         ].map(t => (
           <button key={t.key} onClick={() => setSidebarSubTab(t.key)}
@@ -2152,7 +2125,6 @@ function StaffProfile({ session }) {
       {activeTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {activeTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="user" />}
       {activeTab === 'team'      && <TeamMembersPanel session={session} />}
-      {activeTab === 'guide'     && <LabManagerGuidePanel />}
       {activeTab === 'danger'    && <TeamDeleteAccountPanel session={session} toast={toast} />}
     </div>
   )

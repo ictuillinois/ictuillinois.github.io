@@ -7,6 +7,30 @@ const TAB_TITLES = {
   students:  'Lab Users',
   staff:     'Lab Managers',
   approvals: 'Approval Requests',
+  guide:     'Lab Manager Guide',
+}
+
+function LabManagerGuidePanel() {
+  const PDF_URL = '/lab-manager-guide.pdf'
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text1)' }}>Lab Manager Guide</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>ICT-Lab Platform — Version 2.0, August 2026</div>
+        </div>
+        <a href={PDF_URL} download="ICT-Lab-Manager-Guide.pdf"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+          ⬇ Download PDF
+        </a>
+      </div>
+      <iframe
+        src={PDF_URL}
+        title="Lab Manager Guide"
+        style={{ width: '100%', height: 'calc(100vh - 260px)', minHeight: 500, border: '1px solid var(--border)', borderRadius: 8, display: 'block' }}
+      />
+    </div>
+  )
 }
 
 export default function LabManagement() {
@@ -14,7 +38,7 @@ export default function LabManagement() {
   const [pendingCount, setPendingCount] = useState(0)
 
   // Tabs live in the sidebar (Layout getScreenTabs 'labmanagement')
-  const tab = ['students', 'staff', 'approvals'].includes(sidebarSubTab) ? sidebarSubTab : 'students'
+  const tab = ['students', 'staff', 'approvals', 'guide'].includes(sidebarSubTab) ? sidebarSubTab : 'students'
 
   useEffect(() => { loadPendingCount() }, [])
 
@@ -40,6 +64,7 @@ export default function LabManagement() {
       {tab === 'students'  && <StudentsPanel toast={toast} session={session} />}
       {tab === 'staff'     && <StaffPanel    toast={toast} session={session} />}
       {tab === 'approvals' && <ApprovalRequestsPanel toast={toast} session={session} onCountChange={setPendingCount} />}
+      {tab === 'guide'     && <LabManagerGuidePanel />}
     </div>
   )
 }
