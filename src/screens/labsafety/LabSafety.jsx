@@ -1413,10 +1413,11 @@ function Step4VideoContent({ user, isManager }) {
         <video
           src={VIDEO_SRC}
           controls
+          preload="metadata"
           controlsList="nodownload"
           onContextMenu={e => e.preventDefault()}
           onEnded={handleVideoEnded}
-          style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block', maxHeight: 480 }}
+          style={{ width: '100%', minHeight: 240, borderRadius: 8, background: '#000', display: 'block', maxHeight: 480 }}
         />
         {!videoWatched && (
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center' }}>
