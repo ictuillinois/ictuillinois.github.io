@@ -1388,18 +1388,20 @@ function Step4VideoContent({ user, isManager }) {
       organization_id: orgId,
     }, { onConflict: 'user_id,step_number' })
     if (orgId && userId) {
-      const { data: managers } = await sb.from('users').select('id')
-        .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
-      if (managers?.length) {
-        const name = user?.username || 'A lab user'
-        await sb.from('notifications').insert(managers.map(m => ({
-          user_id: m.id,
-          title: `${name} submitted safety training`,
-          body: `${name} confirmed watching the ICT safety video (Step 4). Please review and approve.`,
-          type: 'safety_step_submitted',
-          read: false,
-        })))
-      }
+      try {
+        const { data: managers } = await sb.from('users').select('id')
+          .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
+        if (managers?.length) {
+          const name = user?.username || 'A lab user'
+          await sb.from('notifications').insert(managers.map(m => ({
+            user_id: m.id,
+            title: `${name} submitted safety training`,
+            body: `${name} confirmed watching the ICT safety video (Step 4). Please review and approve.`,
+            type: 'safety_step_submitted',
+            read: false,
+          })))
+        }
+      } catch (e) { /* notification failure doesn't block step completion */ }
     }
     setSaving(false)
   }
@@ -1737,10 +1739,16 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
   async function approveStep(userId, stepNumber) {
     setSaving(true)
     try {
+      // Ensure we always have a valid organization_id — fall back to DB lookup if session is missing it
+      let orgId = session.organizationId
+      if (!orgId) {
+        const { data: u } = await sb.from('users').select('organization_id').eq('id', userId).maybeSingle()
+        orgId = u?.organization_id || null
+      }
       const prev = progress[userId]?.[stepNumber] || {}
       const { error } = await sb.from('lab_safety_progress').upsert({
         user_id: userId,
-        organization_id: session.organizationId,
+        organization_id: orgId,
         step_number: stepNumber,
         completed: true,
         approved_by: session.userId,

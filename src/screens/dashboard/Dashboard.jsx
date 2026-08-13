@@ -563,7 +563,13 @@ function SuperAdminDashboard({ session, setScreen, greeting, dateStr }) {
   )
 }
 
-function SafetyGate({ onGoToTraining }) {
+function SafetyGate({ onGoToTraining, onRefresh }) {
+  const [checking, setChecking] = useState(false)
+  async function handleRefresh() {
+    setChecking(true)
+    await onRefresh?.()
+    setChecking(false)
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 32, textAlign: 'center', gap: 16 }}>
       <div style={{ fontSize: 64 }}>🔒</div>
@@ -575,6 +581,10 @@ function SafetyGate({ onGoToTraining }) {
       <button onClick={onGoToTraining}
         style={{ padding: '12px 32px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 8, boxShadow: '0 4px 12px rgba(29,158,117,0.3)' }}>
         Go to Safety Training →
+      </button>
+      <button onClick={handleRefresh} disabled={checking}
+        style={{ padding: '8px 20px', background: 'none', color: 'var(--text3)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+        {checking ? 'Checking…' : 'Already approved? Refresh ↻'}
       </button>
     </div>
   )
@@ -623,18 +633,19 @@ export default function Dashboard() {
 
   useEffect(() => { loadDashboardPrefs() }, [session?.userId, session?.loginMode])
 
-  useEffect(() => {
+  async function checkSafetyProgress() {
     if (!isStudent || !session?.userId) { setSafetyComplete(true); return }
-    sb.from('lab_safety_progress')
-      .select('step_number')
-      .eq('user_id', session.userId)
-      .eq('completed', true)
-      .then(({ data }) => {
-        const done = new Set((data || []).map(r => r.step_number))
-        setSafetyComplete([1, 2, 3, 4].every(n => done.has(n)))
-      })
-      .catch(() => setSafetyComplete(true))
-  }, [session?.userId, isStudent, screen])
+    try {
+      const { data } = await sb.from('lab_safety_progress')
+        .select('step_number')
+        .eq('user_id', session.userId)
+        .eq('completed', true)
+      const done = new Set((data || []).map(r => r.step_number))
+      setSafetyComplete([1, 2, 3, 4].every(n => done.has(n)))
+    } catch { setSafetyComplete(true) }
+  }
+
+  useEffect(() => { checkSafetyProgress() }, [session?.userId, isStudent, screen])
 
   async function loadDashboardPrefs() {
     try {
@@ -897,7 +908,7 @@ export default function Dashboard() {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         {isStudent && safetyComplete === false
-          ? <SafetyGate onGoToTraining={() => { setSidebarSubTab('safety'); setScreen('training') }} />
+          ? <SafetyGate onGoToTraining={() => { setSidebarSubTab('safety'); setScreen('training') }} onRefresh={checkSafetyProgress} />
           : <>
               {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
               {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}

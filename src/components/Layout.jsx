@@ -500,10 +500,31 @@ export default function Layout({ children }) {
     const count = parseInt(localStorage.getItem(countKey) || '0', 10) + 1
     localStorage.setItem(countKey, String(count))
     setLoginCount(count)
-    if (localStorage.getItem(doneKey) !== 'true') {
-      setTimeout(() => setShowTour(true), 600)
-    }
+    if (localStorage.getItem(doneKey) === 'true') return
+    // Check DB — if user has already configured their dashboard (on any device), skip tour
+    sb.from('user_dashboard_prefs').select('has_set_dashboard').eq('user_id', uid).limit(1)
+      .then(({ data }) => {
+        if (data?.[0]?.has_set_dashboard) {
+          localStorage.setItem(doneKey, 'true')
+        } else {
+          setTimeout(() => setShowTour(true), 600)
+        }
+      })
+      .catch(() => { setTimeout(() => setShowTour(true), 600) })
   }, [session?.userId, session?.mustChangePassword])
+
+  async function handleTourDone() {
+    setShowTour(false)
+    const uid = session?.userId
+    if (!uid) return
+    // Persist tour completion to DB so other devices don't re-show the tour
+    const { data } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', uid).limit(1)
+    if (data?.length) {
+      await sb.from('user_dashboard_prefs').update({ has_set_dashboard: true }).eq('user_id', uid)
+    } else {
+      await sb.from('user_dashboard_prefs').insert({ user_id: uid, has_set_dashboard: true })
+    }
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -682,7 +703,7 @@ export default function Layout({ children }) {
 
       {showAbout   && <AboutModal onClose={() => setShowAbout(false)} onContact={() => { setShowAbout(false); setShowContact(true) }} />}
       {showContact && <CustomerServiceModal onClose={() => setShowContact(false)} />}
-      {showTour && <OnboardingTour session={session} onDone={() => setShowTour(false)} />}
+      {showTour && <OnboardingTour session={session} onDone={handleTourDone} />}
       <FeedbackWidget bottomOffset={isMobile ? 80 : 24} />
       <SaraChat bottomOffset={isMobile ? 80 : 24} color={accentColor} onContact={() => setShowContact(true)} />
     </div>

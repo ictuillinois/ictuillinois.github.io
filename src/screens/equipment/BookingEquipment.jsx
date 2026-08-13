@@ -2255,6 +2255,7 @@ function BookingCalendar({ session }) {
   }, [])
 
   const [retrainingBlocked, setRetrainingBlocked] = useState([])
+  const [trainedEquipmentIds, setTrainedEquipmentIds] = useState(null) // null=loading, Set=trained eq IDs for lab users
   const [activeBlock, setActiveBlock] = useState(null)
   const [photoRequired, setPhotoRequired] = useState(false)
   const [orgName, setOrgName] = useState('')
@@ -2280,6 +2281,12 @@ function BookingCalendar({ session }) {
     await loadActiveBlock()
     await loadPhotoRequired()         // must run before checkPhotoReminders so the ref is set
     await checkPhotoReminders(data || [])
+    // Load training gate for lab users — only trained equipment can be booked
+    if (session?.role === 'lab_user' && session?.userId) {
+      const { data: trained } = await sb.from('training_equipment')
+        .select('equipment_id').eq('user_id', session.userId).eq('passed_exam', true)
+      setTrainedEquipmentIds(new Set((trained || []).map(t => t.equipment_id)))
+    }
     // Load org users for manager student-filter dropdown
     if (canEdit(session) && session?.organizationId) {
       const { data: users } = await sb.from('users').select('id, name, role')
@@ -2515,6 +2522,10 @@ function BookingCalendar({ session }) {
   }
 
   function toggleEquipment(id) {
+    if (session?.role === 'lab_user' && trainedEquipmentIds !== null && !trainedEquipmentIds.has(id)) {
+      toast('Complete equipment training first — see Training Records → Equipment Exam.')
+      return
+    }
     setSelectedEq(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id])
   }
 
@@ -2618,9 +2629,17 @@ function BookingCalendar({ session }) {
     if (!allSet) { toast('Set a time slot for every selected equipment first.'); return }
     setMultiDraftSaving(true)
     const purposeTitle = multiDraftPurpose === 'project' ? 'Project' : multiDraftPurpose === 'thesis' ? 'Thesis' : `Other: ${multiDraftOther.trim()}`
+    // Fetch approval settings for all selected equipment in one batch
+    let approvalMap = {}
+    try {
+      const { data: settingsRows } = await sb.from('equipment_booking_settings')
+        .select('equipment_id, requires_approval').in('equipment_id', selectedEq)
+      ;(settingsRows || []).forEach(r => { approvalMap[r.equipment_id] = r.requires_approval })
+    } catch (e) { /* default: no approval required */ }
     let failed = 0
     for (const eqId of selectedEq) {
       const t = multiDraftSlots[eqId]
+      const requiresApproval = (approvalMap[eqId] ?? false) && !isAdmin(session)
       const { error } = await sb.from('equipment_bookings').insert({
         equipment_id: eqId,
         user_id: session.userId,
@@ -2628,7 +2647,8 @@ function BookingCalendar({ session }) {
         title: purposeTitle,
         start_time: new Date(t.start).toISOString(),
         end_time:   new Date(t.end).toISOString(),
-        status: 'confirmed',
+        status: requiresApproval ? 'pending' : 'confirmed',
+        requires_approval: !!requiresApproval,
         notes: multiDraftNotes.trim() || null,
         created_by: session.username,
         updated_at: new Date().toISOString(),
@@ -2637,7 +2657,7 @@ function BookingCalendar({ session }) {
     }
     setMultiDraftSaving(false)
     if (failed > 0) toast(`${failed} booking(s) failed — check for conflicts.`)
-    else toast(`${selectedEq.length} bookings confirmed ✓`)
+    else toast(`${selectedEq.length} ${selectedEq.length === 1 ? 'booking' : 'bookings'} ${approvalMap[selectedEq[0]] && !isAdmin(session) ? 'submitted — pending approval' : 'confirmed'} ✓`)
     exitMultiDraft()
     loadBookings()
   }
@@ -2899,23 +2919,27 @@ function BookingCalendar({ session }) {
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-                : filteredEq.map(e => (
+                : filteredEq.map(e => {
+                    const isUntrainedEq = session?.role === 'lab_user' && trainedEquipmentIds !== null && !trainedEquipmentIds.has(e.id)
+                    return (
                   <div key={e.id} onClick={() => toggleEquipment(e.id)}
-                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
-                    onMouseEnter={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'var(--surface2)' }}
-                    onMouseLeave={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = 'transparent' }}>
+                    style={{ padding: '8px 12px', cursor: isUntrainedEq ? 'not-allowed' : 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : isUntrainedEq ? 'var(--surface2)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8, opacity: isUntrainedEq ? 0.55 : 1 }}
+                    onMouseEnter={ev => { if (!selectedEq.includes(e.id) && !isUntrainedEq) ev.currentTarget.style.background = 'var(--surface2)' }}
+                    onMouseLeave={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = isUntrainedEq ? 'var(--surface2)' : 'transparent' }}>
                     <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--border)'}`, background: selectedEq.includes(e.id) ? 'var(--accent)' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {selectedEq.includes(e.id) && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: isUntrainedEq ? 'var(--text3)' : retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {e.nickname || e.equipment_name}
                         {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
+                        {isUntrainedEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
                       </div>
                       {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
                     </div>
                   </div>
-                ))
+                    )
+                  })
               }
             </div>
           </div>
