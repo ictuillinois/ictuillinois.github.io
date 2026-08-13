@@ -41,8 +41,8 @@ export const useAppStore = create((set, get) => ({
   toastMsg: '',
   toastVisible: false,
   toastIsError: false,
-  toast: (msg) => {
-    const isError = /^error|^please|^could not|^failed|^invalid|^unable/i.test(msg?.trim())
+  toast: (msg, forceError) => {
+    const isError = !!forceError || /error|failed|conflict|blocked|^please|^could not|^invalid|^unable|^cannot|^select |^set a |^describe|^complete.*train/i.test(msg?.trim())
     set({ toastMsg: msg, toastVisible: true, toastIsError: isError })
     if (!isError) setTimeout(() => set({ toastVisible: false }), 2500)
   },
