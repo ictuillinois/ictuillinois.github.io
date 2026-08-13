@@ -2637,6 +2637,7 @@ function BookingCalendar({ session }) {
       ;(settingsRows || []).forEach(r => { approvalMap[r.equipment_id] = r.requires_approval })
     } catch (e) { /* default: no approval required */ }
     let failed = 0
+    let firstError = null
     for (const eqId of selectedEq) {
       const t = multiDraftSlots[eqId]
       const requiresApproval = (approvalMap[eqId] ?? false) && !isAdmin(session)
@@ -2653,10 +2654,10 @@ function BookingCalendar({ session }) {
         created_by: session.username,
         updated_at: new Date().toISOString(),
       })
-      if (error) failed++
+      if (error) { failed++; if (!firstError) firstError = error }
     }
     setMultiDraftSaving(false)
-    if (failed > 0) toast(`${failed} booking(s) failed — check for conflicts.`)
+    if (failed > 0) toast(`${failed} booking(s) failed: ${firstError?.message || firstError?.code || 'unknown error'}`)
     else toast(`${selectedEq.length} ${selectedEq.length === 1 ? 'booking' : 'bookings'} ${approvalMap[selectedEq[0]] && !isAdmin(session) ? 'submitted — pending approval' : 'confirmed'} ✓`)
     exitMultiDraft()
     loadBookings()
