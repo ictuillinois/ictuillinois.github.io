@@ -2657,7 +2657,7 @@ function BookingCalendar({ session }) {
       if (error) { failed++; if (!firstError) firstError = error }
     }
     setMultiDraftSaving(false)
-    if (failed > 0) toast(`${failed} booking(s) failed: ${firstError?.message || firstError?.code || 'unknown error'}`)
+    if (failed > 0) toast(`${failed} booking(s) failed — ${firstError?.message || 'check for conflicts'}`)
     else toast(`${selectedEq.length} ${selectedEq.length === 1 ? 'booking' : 'bookings'} ${approvalMap[selectedEq[0]] && !isAdmin(session) ? 'submitted — pending approval' : 'confirmed'} ✓`)
     exitMultiDraft()
     loadBookings()
