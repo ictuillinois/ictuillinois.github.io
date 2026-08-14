@@ -726,6 +726,28 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
+  // Realtime: update manager's view live when a student passes exam or watches video/SOP
+  useEffect(() => {
+    if (!students.length || !canManage) return
+    const ids = new Set(students.map(s => String(s.id)))
+    const examSub = sb.channel('eq-training-exams-' + (session?.organizationId || 'solo'))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'equipment_exam_results' }, ({ new: row }) => {
+        if (row?.passed && ids.has(String(row.user_id))) {
+          setPassedExams(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev])
+        }
+      })
+      .subscribe()
+    const progSub = sb.channel('eq-training-prog-' + (session?.organizationId || 'solo'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment_material_progress' }, ({ eventType, new: nw, old: ol }) => {
+        const row = nw || ol
+        if (!row || !ids.has(String(row.user_id))) return
+        if (eventType === 'INSERT') setMaterialProgress(prev => [...prev, nw])
+        else if (eventType === 'UPDATE') setMaterialProgress(prev => prev.map(p => p.id === nw.id ? nw : p))
+      })
+      .subscribe()
+    return () => { sb.removeChannel(examSub); sb.removeChannel(progSub) }
+  }, [students, canManage])
+
   async function load() {
     setLoading(true)
     let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('nickname')
