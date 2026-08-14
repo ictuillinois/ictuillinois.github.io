@@ -710,6 +710,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
   const [equipment, setEquipment] = useState([])
   const [records, setRecords] = useState([])
   const [pendingRetraining, setPendingRetraining] = useState([])
+  const [trainingSchedules, setTrainingSchedules] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddEquip, setShowAddEquip] = useState(false)
   const [newEquip, setNewEquip] = useState({ name: '', description: '' })
@@ -733,14 +734,20 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     if (ids.length) recQuery = recQuery.in('user_id', ids)
     let pendingQ = sb.from('retraining_requests').select('*').eq('status', 'pending')
     if (session?.role === 'lab_user' && session?.userId) pendingQ = pendingQ.eq('user_id', session.userId)
-    const [{ data: eq }, { data: rec }, { data: retrainReqs }] = await Promise.all([
+    let schedQ = sb.from('training_schedule').select('*').in('status', ['proposed', 'confirmed', 'countered'])
+    if (ids.length) schedQ = schedQ.in('user_id', ids)
+    else if (session?.role === 'lab_user' && session?.userId) schedQ = schedQ.eq('user_id', session.userId)
+    if (session?.organizationId) schedQ = schedQ.eq('organization_id', session.organizationId)
+    const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }] = await Promise.all([
       equipQuery,
       recQuery,
       pendingQ,
+      schedQ,
     ])
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
+    setTrainingSchedules(scheds || [])
     setLoading(false)
   }
 
@@ -1003,6 +1010,11 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
             const recs = getRecords(u.id)
             const passedCount = recs.filter(r => r.passed_exam).length
             const headerBg = idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)'
+            const approvedEquipIds = new Set(recs.map(r => r.equipment_id))
+            const pendingReqs = pendingRetraining.filter(r => String(r.user_id) === String(u.id) && !approvedEquipIds.has(r.equipment_id))
+            const pendingScheds = trainingSchedules.filter(s => String(s.user_id) === String(u.id) && !approvedEquipIds.has(s.equipment_id))
+            const hasAny = recs.length > 0 || pendingReqs.length > 0 || pendingScheds.length > 0
+            const cols = canManage ? 6 : 5
             return (
               <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
                 <div style={{ padding: '12px 16px', background: headerBg, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1016,14 +1028,19 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                         {passedCount}/{recs.length} passed
                       </span>
                     )}
+                    {(pendingReqs.length > 0 || pendingScheds.length > 0) && (
+                      <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 12, fontWeight: 600, background: '#fef3c7', color: '#92400e' }}>
+                        {pendingReqs.length + pendingScheds.length} pending
+                      </span>
+                    )}
                     {canManage && <button className="btn btn-sm" onClick={() => setAddingRecord({ userId: u.id })}>+ Add training</button>}
                   </div>
                 </div>
-                {recs.length === 0 ? (
+                {!hasAny ? (
                   <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text3)' }}>No equipment training records yet.</div>
                 ) : (
                   <table style={{ fontSize: 13 }}>
-                    <thead><tr><th>Equipment</th><th>Date</th><th>Trained By</th><th>Passed Exam</th><th>Expires</th>{canManage && <th></th>}</tr></thead>
+                    <thead><tr><th>Equipment</th><th>Date</th><th>Trained By</th><th>Status</th><th>Expires</th>{canManage && <th></th>}</tr></thead>
                     <tbody>
                       {recs.map(rec => {
                         const retrainReq = getRetrainingInfo(u.id, rec.equipment_id)
@@ -1054,7 +1071,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                             </tr>
                             {retrainReq && (
                               <tr>
-                                <td colSpan={canEdit(session) ? 6 : 5} style={{ padding: 0, border: 'none' }}>
+                                <td colSpan={cols} style={{ padding: 0, border: 'none' }}>
                                   <div style={{ background: '#fef3c7', borderTop: '1px solid #f0d070', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                                     <div style={{ fontSize: 12, color: '#92400e' }}>⚠️ <strong>Retraining required</strong> — not used in 3+ months.</div>
                                     {canEdit(session) && (
@@ -1065,6 +1082,38 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                               </tr>
                             )}
                           </React.Fragment>
+                        )
+                      })}
+                      {pendingReqs.map(req => {
+                        const eq = equipment.find(e => e.id === req.equipment_id)
+                        return (
+                          <tr key={`req-${req.id}`} style={{ background: '#fef3c7' }}>
+                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || req.equipment_name}</td>
+                            <td style={{ color: 'var(--text3)' }}>—</td>
+                            <td style={{ color: 'var(--text3)' }}>—</td>
+                            <td><span style={{ fontSize: 11, background: '#fde68a', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>⏳ Awaiting date</span></td>
+                            <td style={{ color: 'var(--text3)' }}>—</td>
+                            {canManage && <td></td>}
+                          </tr>
+                        )
+                      })}
+                      {pendingScheds.map(sched => {
+                        const eq = equipment.find(e => e.id === sched.equipment_id)
+                        const isConfirmed = sched.status === 'confirmed'
+                        const isCountered = sched.status === 'countered'
+                        const bg = isConfirmed ? '#E1F5EE' : '#e0f2fe'
+                        const color = isConfirmed ? '#085041' : '#0369a1'
+                        const label = isConfirmed ? '✓ Training confirmed' : isCountered ? '🔄 Time negotiating' : '📅 Date proposed'
+                        const dateVal = isConfirmed ? sched.confirmed_date : sched.proposed_date
+                        return (
+                          <tr key={`sched-${sched.id}`} style={{ background: bg }}>
+                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
+                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? new Date(dateVal).toLocaleDateString() : '—'}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text3)' }}>{sched.proposed_by || '—'}</td>
+                            <td><span style={{ fontSize: 11, background: bg, color, padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: `1px solid ${isConfirmed ? '#9FE1CB' : '#7dd3fc'}` }}>{label}</span></td>
+                            <td style={{ color: 'var(--text3)' }}>—</td>
+                            {canManage && <td></td>}
+                          </tr>
                         )
                       })}
                     </tbody>
