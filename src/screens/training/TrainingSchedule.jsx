@@ -639,11 +639,12 @@ export function ExamTab({ session }) {
     let score = 0
     questions.forEach(q => { if (answers[q.id] === q.correct_answer) score++ })
     const passed = score >= Math.ceil(questions.length * 0.7) // 70% to pass
-    await sb.from('equipment_exam_results').insert({
+    const { error: examErr } = await sb.from('equipment_exam_results').insert({
       user_id: session.userId, equipment_id: selectedEq,
       score, total: questions.length, passed, answers,
       organization_id: session?.organizationId || null,
     })
+    if (examErr) { toast('Error saving exam result: ' + examErr.message); return }
     // Mark progress
     await sb.from('equipment_material_progress').upsert({
       user_id: session.userId, equipment_id: selectedEq,
