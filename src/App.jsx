@@ -58,6 +58,7 @@ const Profile              = lazy(() => import('./screens/profile/Profile'))
 const Admin                = lazy(() => import('./screens/admin/Admin'))
 
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
+const SCAN_EQ_ID = new URLSearchParams(window.location.search).get('eq')
 
 async function notifyManagersSafetySkipped(session) {
   if (!session?.organizationId || !session?.userId) return
@@ -114,7 +115,7 @@ const INTERNAL = new Set([
 ])
 
 export default function App() {
-  const { session, screen, refreshCache, setScreen, setSidebarSubTab, setActiveModules, setSession, clearSession } = useAppStore()
+  const { session, screen, refreshCache, setScreen, setSidebarSubTab, setActiveModules, setSession, clearSession, setScanEquipmentId } = useAppStore()
   const [loading, setLoading] = useState(true)
   const [userAccess, setUserAccess] = useState(null)
   const [showIconPicker, setShowIconPicker] = useState(null)
@@ -157,6 +158,10 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (SCAN_EQ_ID) setScanEquipmentId(SCAN_EQ_ID)
+  }, [])
+
+  useEffect(() => {
     async function init() {
       try {
         const [authResult, maintResult] = await Promise.all([
@@ -180,6 +185,7 @@ export default function App() {
     if (session?.loginMode) {
       localStorage.setItem('ictlab_login_mode', session.loginMode)
       refreshCache()
+      if (SCAN_EQ_ID) { setScreen('equipmentscan'); return }
       const deepScreen = new URLSearchParams(window.location.search).get('screen')
       if (deepScreen && INTERNAL.has(deepScreen)) setScreen(deepScreen)
     } else if (!session) {
@@ -203,6 +209,7 @@ export default function App() {
   async function checkFirstLogin(userId) {
     try {
       if (!userId) { setShowIconPicker(false); return }
+      if (SCAN_EQ_ID) { setShowIconPicker(false); return }
       // localStorage is the fast/reliable source — immune to RLS issues on user_dashboard_prefs
       if (localStorage.getItem(`ictlab_picker_done_${userId}`) === 'true') {
         setShowIconPicker(false)

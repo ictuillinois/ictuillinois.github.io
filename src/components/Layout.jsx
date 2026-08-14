@@ -124,7 +124,6 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
     { key: 'records',   icon: '📋', label: 'Records' },
-    { key: 'materials', icon: '📷', label: 'Project Materials' },
   ]
 
   if (screen === 'home') {

@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { useIsMobile } from '../../components/Layout'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { ScannerContent } from './BarcodeScannerScreen'
 import { isNative } from '../../lib/scanner.js'
 
 // ICT-Lab hexagon logo for screen preview
@@ -24,7 +23,7 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
 </svg>`
 
 function getScanUrl(equipmentId) {
-  const base = isNative() ? 'https://ictlab.app/' : `${window.location.origin}/ictlab/`
+  const base = (isNative() || window.location.hostname !== 'localhost') ? 'https://ictlab.app/' : `${window.location.origin}/`
   return `${base}?eq=${equipmentId}`
 }
 
@@ -461,16 +460,6 @@ export default function BarcodeManager() {
     setLoading(false)
   }
 
-  if (!isAdminOrStaff) return (
-    <div style={{ maxWidth: 600, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <div className="section-title">Barcode Scanner</div>
-        <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Scan or browse project materials</div>
-      </div>
-      <ScannerContent />
-    </div>
-  )
-
   return (
     <div>
       {/* Header */}
@@ -483,13 +472,12 @@ export default function BarcodeManager() {
           </div>
         </div>
         <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
-          When scanned with a phone camera, the QR code opens the ICT-Lab login page. After logging in, users get quick access to equipment info, booking, maintenance history, and more.
+          When scanned with a phone camera, the QR code takes users directly to the equipment options page — SOP, booking, calibration, and contact — after logging in if needed.
         </div>
       </div>
 
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
-      {tab === 'materials' && <ScannerContent />}
     </div>
   )
 }
