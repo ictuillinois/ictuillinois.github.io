@@ -711,6 +711,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
   const [records, setRecords] = useState([])
   const [pendingRetraining, setPendingRetraining] = useState([])
   const [trainingSchedules, setTrainingSchedules] = useState([])
+  const [passedExams, setPassedExams] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddEquip, setShowAddEquip] = useState(false)
   const [newEquip, setNewEquip] = useState({ name: '', description: '' })
@@ -738,16 +739,17 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     if (ids.length) schedQ = schedQ.in('user_id', ids)
     else if (session?.role === 'lab_user' && session?.userId) schedQ = schedQ.eq('user_id', session.userId)
     if (session?.organizationId) schedQ = schedQ.eq('organization_id', session.organizationId)
-    const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }] = await Promise.all([
-      equipQuery,
-      recQuery,
-      pendingQ,
-      schedQ,
+    let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+    if (ids.length) examQ = examQ.in('user_id', ids)
+    else if (session?.role === 'lab_user' && session?.userId) examQ = examQ.eq('user_id', session.userId)
+    const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }, { data: exams }] = await Promise.all([
+      equipQuery, recQuery, pendingQ, schedQ, examQ,
     ])
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
     setTrainingSchedules(scheds || [])
+    setPassedExams(exams || [])
     setLoading(false)
   }
 
@@ -872,6 +874,29 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
   async function deleteRecord(id) {
     await sb.from('training_equipment').delete().eq('id', id)
     load(); onChanged?.(); toast('Record removed.')
+  }
+
+  async function approveTraining({ userId, username, equipmentId, scheduleId, requestId }) {
+    const eq = equipment.find(e => e.id === equipmentId)
+    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const { error } = await sb.from('training_equipment').insert({
+      user_id: userId, equipment_id: equipmentId,
+      trained_by: session.username,
+      trained_date: new Date().toISOString().split('T')[0],
+      passed_exam: true,
+      organization_id: session?.organizationId || null,
+    })
+    if (error) { toast('Error approving: ' + error.message); return }
+    if (requestId) await sb.from('retraining_requests').delete().eq('id', requestId)
+    if (scheduleId) await sb.from('training_schedule').update({ status: 'cancelled' }).eq('id', scheduleId)
+    // Notify the lab user
+    sb.from('notifications').insert({
+      user_id: userId, type: 'training_approved',
+      title: `Training approved: ${eqName}`,
+      body: `${session.username} approved your training. You can now book this equipment.`,
+      read: false,
+    }).catch(() => {})
+    load(); onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
@@ -1013,7 +1038,16 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
             const approvedEquipIds = new Set(recs.map(r => r.equipment_id))
             const pendingReqs = pendingRetraining.filter(r => String(r.user_id) === String(u.id) && !approvedEquipIds.has(r.equipment_id))
             const pendingScheds = trainingSchedules.filter(s => String(s.user_id) === String(u.id) && !approvedEquipIds.has(s.equipment_id))
-            const hasAny = recs.length > 0 || pendingReqs.length > 0 || pendingScheds.length > 0
+            // Passed exams not yet approved: deduplicated by equipment (keep latest per equipment)
+            const latestByEquip = new Map()
+            passedExams.filter(e => String(e.user_id) === String(u.id) && !approvedEquipIds.has(e.equipment_id)).forEach(e => {
+              if (!latestByEquip.has(e.equipment_id)) latestByEquip.set(e.equipment_id, e)
+            })
+            const pendingExamApprovals = [...latestByEquip.values()]
+            // Also exclude equipment that already has a pending schedule (avoid double-counting)
+            const schedEquipIds = new Set(pendingScheds.map(s => s.equipment_id))
+            const examApprovalsFiltered = pendingExamApprovals.filter(e => !schedEquipIds.has(e.equipment_id))
+            const hasAny = recs.length > 0 || pendingReqs.length > 0 || pendingScheds.length > 0 || examApprovalsFiltered.length > 0
             const cols = canManage ? 6 : 5
             return (
               <div key={u.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
@@ -1028,9 +1062,9 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                         {passedCount}/{recs.length} passed
                       </span>
                     )}
-                    {(pendingReqs.length > 0 || pendingScheds.length > 0) && (
+                    {(pendingReqs.length > 0 || pendingScheds.length > 0 || examApprovalsFiltered.length > 0) && (
                       <span style={{ fontSize: 12, padding: '4px 10px', borderRadius: 12, fontWeight: 600, background: '#fef3c7', color: '#92400e' }}>
-                        {pendingReqs.length + pendingScheds.length} pending
+                        {pendingReqs.length + pendingScheds.length + examApprovalsFiltered.length} pending
                       </span>
                     )}
                     {canManage && <button className="btn btn-sm" onClick={() => setAddingRecord({ userId: u.id })}>+ Add training</button>}
@@ -1093,7 +1127,14 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td><span style={{ fontSize: 11, background: '#fde68a', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>⏳ Awaiting date</span></td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
-                            {canManage && <td></td>}
+                            {canManage && (
+                              <td>
+                                <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                                  onClick={() => approveTraining({ userId: u.id, username: fullName(u), equipmentId: req.equipment_id, requestId: req.id })}>
+                                  ✓ Approve
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         )
                       })}
@@ -1121,7 +1162,41 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                               </button>
                             </td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
-                            {canManage && <td></td>}
+                            {canManage && (
+                              <td>
+                                {isConfirmed && (
+                                  <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                                    onClick={() => approveTraining({ userId: u.id, username: fullName(u), equipmentId: sched.equipment_id, scheduleId: sched.id })}>
+                                    ✓ Approve
+                                  </button>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                      {examApprovalsFiltered.map(exam => {
+                        const eq = equipment.find(e => e.id === exam.equipment_id)
+                        const pct = Math.round(exam.score / exam.total * 100)
+                        return (
+                          <tr key={`exam-${exam.equipment_id}`} style={{ background: '#E1F5EE' }}>
+                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
+                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(exam.taken_at).toLocaleDateString()}</td>
+                            <td style={{ fontSize: 12, color: 'var(--text3)' }}>Self</td>
+                            <td>
+                              <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: '1px solid #9FE1CB' }}>
+                                🎓 Exam passed ({pct}%)
+                              </span>
+                            </td>
+                            <td style={{ color: 'var(--text3)' }}>—</td>
+                            {canManage && (
+                              <td>
+                                <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                                  onClick={() => approveTraining({ userId: u.id, username: fullName(u), equipmentId: exam.equipment_id })}>
+                                  ✓ Approve
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         )
                       })}

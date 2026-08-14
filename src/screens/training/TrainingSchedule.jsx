@@ -652,6 +652,25 @@ export function ExamTab({ session }) {
     setSubmitted({ score, total: questions.length, passed })
     setExamMode(false); loadEquipmentData()
     toast(passed ? '✓ Exam passed!' : 'Exam not passed. You can retake it.')
+    // Notify managers when exam is passed
+    if (passed) {
+      const orgId = session?.organizationId
+      const eq = equipment.find(e => e.id === selectedEq)
+      const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+      if (orgId) {
+        sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
+          .then(({ data: managers }) => {
+            if (managers?.length) {
+              sb.from('notifications').insert(managers.map(m => ({
+                user_id: m.id, type: 'training_request',
+                title: `${session.username} passed the exam for ${eqName}`,
+                body: 'Review and approve their training in Training Records → Equipment tab.',
+                read: false,
+              }))).catch(() => {})
+            }
+          })
+      }
+    }
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
