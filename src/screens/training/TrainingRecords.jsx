@@ -726,13 +726,29 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
 
   useEffect(() => { if (students.length > 0) load() }, [students])
 
-  // Realtime: update manager's view live when a student passes exam or watches video/SOP
+  // Poll + realtime: keep manager's review checklist fresh without manual page refresh
   useEffect(() => {
     if (!students.length || !canManage) return
-    const ids = new Set(students.map(s => String(s.id)))
+    const ids = students.map(s => s.id)
+    const idSet = new Set(ids.map(String))
+
+    async function refreshExamsAndProgress() {
+      let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+      if (ids.length) examQ = examQ.in('user_id', ids)
+      let progQ = sb.from('equipment_material_progress').select('*')
+      if (ids.length) progQ = progQ.in('user_id', ids)
+      const [{ data: exams }, { data: prog }] = await Promise.all([examQ, progQ])
+      if (exams) setPassedExams(exams)
+      if (prog) setMaterialProgress(prog)
+    }
+
+    // Poll every 15 seconds so the review checklist updates without realtime SQL setup
+    const interval = setInterval(refreshExamsAndProgress, 15000)
+
+    // Also wire up realtime (requires ALTER PUBLICATION supabase_realtime ADD TABLE equipment_exam_results)
     const examSub = sb.channel('eq-training-exams-' + (session?.organizationId || 'solo'))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'equipment_exam_results' }, ({ new: row }) => {
-        if (row?.passed && ids.has(String(row.user_id))) {
+        if (row?.passed && idSet.has(String(row.user_id))) {
           setPassedExams(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev])
         }
       })
@@ -740,12 +756,13 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     const progSub = sb.channel('eq-training-prog-' + (session?.organizationId || 'solo'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment_material_progress' }, ({ eventType, new: nw, old: ol }) => {
         const row = nw || ol
-        if (!row || !ids.has(String(row.user_id))) return
+        if (!row || !idSet.has(String(row.user_id))) return
         if (eventType === 'INSERT') setMaterialProgress(prev => [...prev, nw])
         else if (eventType === 'UPDATE') setMaterialProgress(prev => prev.map(p => p.id === nw.id ? nw : p))
       })
       .subscribe()
-    return () => { sb.removeChannel(examSub); sb.removeChannel(progSub) }
+
+    return () => { clearInterval(interval); sb.removeChannel(examSub); sb.removeChannel(progSub) }
   }, [students, canManage])
 
   async function load() {
