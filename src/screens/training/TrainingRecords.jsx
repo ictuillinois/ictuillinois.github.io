@@ -881,22 +881,30 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
     const { error } = await sb.from('training_equipment').insert({
       user_id: userId, equipment_id: equipmentId,
-      trained_by: session.username,
+      trained_by: session.username || session.name || 'Lab Manager',
       trained_date: new Date().toISOString().split('T')[0],
       passed_exam: true,
-      organization_id: session?.organizationId || null,
     })
     if (error) { toast('Error approving: ' + error.message); return }
-    if (requestId) await sb.from('retraining_requests').delete().eq('id', requestId)
-    if (scheduleId) await sb.from('training_schedule').update({ status: 'cancelled' }).eq('id', scheduleId)
-    // Notify the lab user
+    // Optimistic update — update local state immediately so the row disappears without waiting for re-fetch
+    const newRec = { user_id: userId, equipment_id: equipmentId, trained_by: session.username || session.name || 'Lab Manager', trained_date: new Date().toISOString().split('T')[0], passed_exam: true, id: `tmp-${Date.now()}` }
+    setRecords(prev => [...prev, newRec])
+    if (requestId) {
+      await sb.from('retraining_requests').delete().eq('id', requestId)
+      setPendingRetraining(prev => prev.filter(r => r.id !== requestId))
+    }
+    if (scheduleId) {
+      await sb.from('training_schedule').update({ status: 'cancelled' }).eq('id', scheduleId)
+      setTrainingSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'cancelled' } : s))
+    }
     sb.from('notifications').insert({
       user_id: userId, type: 'training_approved',
       title: `Training approved: ${eqName}`,
-      body: `${session.username} approved your training. You can now book this equipment.`,
+      body: `${session.username || 'Your lab manager'} approved your training. You can now book this equipment.`,
       read: false,
     }).catch(() => {})
-    load(); onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
+    onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
+    load()
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
