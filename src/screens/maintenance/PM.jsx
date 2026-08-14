@@ -966,6 +966,21 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
         const map = {}; (u || []).forEach(x => { map[x.id] = x.name })
         setStaffMap(map); setLoading(false)
       })
+
+    // Realtime: update progress/status in place without tab switch
+    const channel = sb.channel('overview-tasks-' + (orgId || 'solo'))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' }, ({ new: row }) => {
+        setTasks(prev => prev.map(t => t.id === row.id ? { ...t, ...row } : t))
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks' }, ({ new: row }) => {
+        const mine = !userId || row.assigned_to === userId || row.created_by === userId || isOwnerAdmin
+        if (mine) setTasks(prev => [...prev, row])
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks' }, ({ old: row }) => {
+        setTasks(prev => prev.filter(t => t.id !== row.id))
+      })
+      .subscribe()
+    return () => sb.removeChannel(channel)
   }, [userId, isOwnerAdmin, isSolo, orgId])
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -974,7 +989,7 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
   const done = tasks.filter(t => t.status === 'done').length
   const inProgress = tasks.filter(t => t.status === 'in_progress').length
   const todo = tasks.filter(t => t.status === 'todo').length
-  const pct = total ? Math.round((done / total) * 100) : 0
+  const pct = total ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / total) : 0
   const overdueTasks = tasks.filter(t => t.deadline && new Date(t.deadline + 'T23:59:59') < today && t.status !== 'done').sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
   const upcoming = tasks.filter(t => { if (!t.deadline || t.status === 'done') return false; const d = new Date(t.deadline + 'T12:00:00'); return d >= today && d <= in7 }).sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
   const byPriority = { high: 0, medium: 0, low: 0 }
