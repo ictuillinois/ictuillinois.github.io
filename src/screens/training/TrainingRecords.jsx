@@ -706,7 +706,7 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
 function EquipmentTraining({ students, session, hideChrome = false, onChanged }) {
   const isSolo = session?.loginMode === 'solo'
   const canManage = canEdit(session) || isSolo
-  const { toast } = useAppStore()
+  const { toast, setScreen } = useAppStore()
   const [equipment, setEquipment] = useState([])
   const [records, setRecords] = useState([])
   const [pendingRetraining, setPendingRetraining] = useState([])
@@ -1105,12 +1105,21 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                         const color = isConfirmed ? '#085041' : '#0369a1'
                         const label = isConfirmed ? '✓ Training confirmed' : isCountered ? '🔄 Time negotiating' : '📅 Date proposed'
                         const dateVal = isConfirmed ? sched.confirmed_date : sched.proposed_date
+                        const goToHub = () => { localStorage.setItem('selectEquipment', sched.equipment_id); setScreen('equipmenthub') }
                         return (
                           <tr key={`sched-${sched.id}`} style={{ background: bg }}>
-                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
+                            <td style={{ fontWeight: 500 }}>
+                              <button onClick={goToHub} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', fontSize: 'inherit' }}>
+                                {eq?.nickname || eq?.equipment_name || '—'}
+                              </button>
+                            </td>
                             <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? new Date(dateVal).toLocaleDateString() : '—'}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>{sched.proposed_by || '—'}</td>
-                            <td><span style={{ fontSize: 11, background: bg, color, padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: `1px solid ${isConfirmed ? '#9FE1CB' : '#7dd3fc'}` }}>{label}</span></td>
+                            <td>
+                              <button onClick={goToHub} style={{ fontSize: 11, background: bg, color, padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: `1px solid ${isConfirmed ? '#9FE1CB' : '#7dd3fc'}`, cursor: 'pointer' }} title="Click to open equipment page">
+                                {label} →
+                              </button>
+                            </td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             {canManage && <td></td>}
                           </tr>

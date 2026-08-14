@@ -824,7 +824,7 @@ export function ExamTab({ session }) {
                         <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8 }}>Passing score: 70%</div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 13, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center' }}>No exam has been set up for this equipment yet. Contact your instructor.</div>
+                      <div style={{ fontSize: 13, color: '#085041', fontStyle: 'italic', textAlign: 'center' }}>A lab manager will review and approve your training.</div>
                     )
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
@@ -887,7 +887,7 @@ export function ExamTab({ session }) {
                     Pass mark: 70% · Your score: {Math.round(submitted.score/submitted.total*100)}%
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
-                    {submitted.passed ? '✓ Your instructor has been notified. You can now book this equipment.' : 'Review the SOP and training materials, then try again.'}
+                    {submitted.passed ? 'A lab manager will review and approve your training.' : 'Review the SOP and training materials, then try again.'}
                   </div>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                     <button className="btn btn-primary" onClick={() => setSubmitted(null)}>Done</button>

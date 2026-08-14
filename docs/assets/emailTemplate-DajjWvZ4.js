@@ -1,4 +1,4 @@
-const s="https://ictlab.app/ict-logo.png",i="https://ictlab.app/";function c({title:t,body:o,ctaLabel:n="View in ICT-Lab →",ctaUrl:r=i,prefsUrl:l=i,orgContact:a=null,credentials:e=null}){const d=e?`
+const s="https://ictlab.app/ict-logo.png",i="https://ictlab.app/";function c({title:t,body:o,ctaLabel:n="View in ICT-Lab →",ctaUrl:r=i,prefsUrl:d=i,orgContact:a=null,credentials:e=null}){const l=e?`
         <tr>
           <td style="padding:0 36px 20px;">
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;">
@@ -56,7 +56,7 @@ const s="https://ictlab.app/ict-logo.png",i="https://ictlab.app/";function c({ti
           </td>
         </tr>
 
-        `+d+`
+        `+l+`
 
         <!-- CTA button -->
         <tr>
@@ -70,7 +70,7 @@ const s="https://ictlab.app/ict-logo.png",i="https://ictlab.app/";function c({ti
             <!-- Notification prefs link (directly under the button) -->
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr><td align="center">
-                <a href="`+l+`" style="font-size:12px;color:#6B7280;text-decoration:underline;">Manage notification preferences</a>
+                <a href="`+d+`" style="font-size:12px;color:#6B7280;text-decoration:underline;">Manage notification preferences</a>
               </td></tr>
             </table>
           </td>
