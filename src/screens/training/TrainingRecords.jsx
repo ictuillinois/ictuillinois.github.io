@@ -742,23 +742,28 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
       if (prog) setMaterialProgress(prog)
     }
 
-    // Poll every 15 seconds so the review checklist updates without realtime SQL setup
-    const interval = setInterval(refreshExamsAndProgress, 15000)
+    // Poll every 10 seconds
+    const interval = setInterval(refreshExamsAndProgress, 10000)
 
-    // Also wire up realtime (requires ALTER PUBLICATION supabase_realtime ADD TABLE equipment_exam_results)
+    // Realtime — deduplicate by user+equipment+taken_at, not by id (table may have no id column)
     const examSub = sb.channel('eq-training-exams-' + (session?.organizationId || 'solo'))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'equipment_exam_results' }, ({ new: row }) => {
         if (row?.passed && idSet.has(String(row.user_id))) {
-          setPassedExams(prev => prev.some(e => e.id === row.id) ? prev : [row, ...prev])
+          setPassedExams(prev => {
+            const dup = prev.some(e => String(e.user_id) === String(row.user_id) && e.equipment_id === row.equipment_id && e.taken_at === row.taken_at)
+            return dup ? prev : [row, ...prev]
+          })
         }
       })
       .subscribe()
     const progSub = sb.channel('eq-training-prog-' + (session?.organizationId || 'solo'))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment_material_progress' }, ({ eventType, new: nw, old: ol }) => {
-        const row = nw || ol
-        if (!row || !idSet.has(String(row.user_id))) return
-        if (eventType === 'INSERT') setMaterialProgress(prev => [...prev, nw])
-        else if (eventType === 'UPDATE') setMaterialProgress(prev => prev.map(p => p.id === nw.id ? nw : p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment_material_progress' }, ({ eventType, new: nw }) => {
+        if (!nw || !idSet.has(String(nw.user_id))) return
+        setMaterialProgress(prev => {
+          const idx = prev.findIndex(p => String(p.user_id) === String(nw.user_id) && p.equipment_id === nw.equipment_id)
+          if (idx >= 0) { const next = [...prev]; next[idx] = nw; return next }
+          return [...prev, nw]
+        })
       })
       .subscribe()
 
@@ -813,12 +818,27 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
         {ok ? '✓' : '✗'} {label}
       </span>
     )
+    const allDone = !!prog?.watched_video && !!prog?.downloaded_sop && !!exam
     return (
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '6px 14px', background: '#fafaf5', borderTop: '1px dashed var(--border)' }}>
         <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>Review:</span>
         {chip(!!prog?.watched_video, 'Video watched')}
         {chip(!!prog?.downloaded_sop, 'SOP downloaded')}
         {chip(!!exam, exam ? `Exam passed (${Math.round(exam.score / exam.total * 100)}%)` : 'Exam passed')}
+        {!allDone && (
+          <button onClick={async () => {
+            const ids = students.map(s => s.id)
+            let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+            if (ids.length) examQ = examQ.in('user_id', ids)
+            let progQ = sb.from('equipment_material_progress').select('*')
+            if (ids.length) progQ = progQ.in('user_id', ids)
+            const [{ data: exams }, { data: p }] = await Promise.all([examQ, progQ])
+            if (exams) setPassedExams(exams)
+            if (p) setMaterialProgress(p)
+          }} style={{ fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: '2px 4px', marginLeft: 2 }} title="Refresh status">
+            ↻ Refresh
+          </button>
+        )}
       </div>
     )
   }
