@@ -264,6 +264,7 @@ export function UserTrainingSchedule({ session }) {
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
   const [counterDate, setCounterDate] = useState({})
+  const [dismissed, setDismissed] = useState(() => new Set(JSON.parse(localStorage.getItem(`ilab_dismissed_sched_${session?.userId}`) || '[]')))
 
   useEffect(() => { load() }, [])
 
@@ -280,8 +281,17 @@ export function UserTrainingSchedule({ session }) {
     setLoading(false)
   }
 
+  function dismissConfirmed(id) {
+    const next = new Set([...dismissed, id])
+    setDismissed(next)
+    localStorage.setItem(`ilab_dismissed_sched_${session?.userId}`, JSON.stringify([...next]))
+  }
+
   async function acceptDate(sched) {
-    await sb.from('training_schedule').update({ status: 'confirmed', confirmed_date: sched.proposed_date, updated_at: new Date().toISOString() }).eq('id', sched.id)
+    const { error: updateErr } = await sb.from('training_schedule')
+      .update({ status: 'confirmed', confirmed_date: sched.proposed_date, updated_at: new Date().toISOString() })
+      .eq('id', sched.id)
+    if (updateErr) { toast('Could not accept: ' + updateErr.message); return }
     const eq = equipment.find(e => e.id === sched.equipment_id)
     const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
     const orgId = session?.organizationId
@@ -301,7 +311,7 @@ export function UserTrainingSchedule({ session }) {
         })
     }
     // Notify the lab user themselves
-    await sb.from('notifications').insert({
+    sb.from('notifications').insert({
       user_id: session.userId, type: 'training_confirmed',
       title: `Training confirmed: ${eqName}`,
       body: `Your training for ${eqName} on ${fmtDT(sched.proposed_date)} is confirmed.`,
@@ -387,11 +397,12 @@ export function UserTrainingSchedule({ session }) {
           </div>
         )
       })}
-      {confirmed.map(sched => {
+      {confirmed.filter(s => !dismissed.has(s.id)).map(sched => {
         const eq = equipment.find(e => e.id === sched.equipment_id)
         return (
-          <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#085041', marginBottom: 4 }}>
+          <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12, position: 'relative' }}>
+            <button onClick={() => dismissConfirmed(sched.id)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#085041', opacity: 0.5, lineHeight: 1, padding: 4 }} title="Dismiss">✕</button>
+            <div style={{ fontWeight: 600, fontSize: 14, color: '#085041', marginBottom: 4, paddingRight: 24 }}>
               ✓ Training confirmed: {eq?.nickname || eq?.equipment_name}
             </div>
             <div style={{ fontSize: 13, color: '#085041' }}>
@@ -399,7 +410,6 @@ export function UserTrainingSchedule({ session }) {
             </div>
             <a href="#" onClick={e => {
                 e.preventDefault()
-                // Store equipment_id so EquipmentHub auto-selects it
                 localStorage.setItem('selectEquipment', sched.equipment_id)
                 useAppStore.getState().setScreen('equipmenthub')
               }}
