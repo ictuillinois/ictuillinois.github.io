@@ -210,9 +210,10 @@ export default function App() {
       }
       const { data } = await sb.from('user_dashboard_prefs').select('active_modules, has_set_dashboard').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
       const row = data?.[0]
+      // Any explicit active_modules array (even empty) means admin or user already configured this
       const hasSaved = row && (
-        (Array.isArray(row.active_modules) && row.active_modules.length > 0) ||
-        row.has_set_dashboard === true
+        row.has_set_dashboard === true ||
+        Array.isArray(row.active_modules)
       )
       if (hasSaved) localStorage.setItem(`ictlab_picker_done_${userId}`, 'true')
       setShowIconPicker(!hasSaved)
@@ -345,18 +346,15 @@ export default function App() {
           session={session}
           loginMode={session.loginMode}
           onDone={(modules) => {
-            if (session.userId) localStorage.setItem(`ictlab_picker_done_${session.userId}`, 'true')
             if (!session.userId) {
               localStorage.setItem('ictlab_admin_dashboard_set', 'true')
-            } else if (!modules || modules.length === 0) {
-              sb.from('user_dashboard_prefs').select('id').eq('user_id', session.userId).limit(1)
-                .then(({ data }) => {
-                  if (data?.length) {
-                    sb.from('user_dashboard_prefs').update({ has_set_dashboard: true }).eq('user_id', session.userId).then(() => {})
-                  } else {
-                    sb.from('user_dashboard_prefs').insert({ user_id: session.userId, has_set_dashboard: true, active_modules: [] }).then(() => {})
-                  }
-                })
+            } else {
+              localStorage.setItem(`ictlab_picker_done_${session.userId}`, 'true')
+              // Upsert avoids the race condition where tour + picker both try to insert
+              sb.from('user_dashboard_prefs').upsert(
+                { user_id: session.userId, has_set_dashboard: true, active_modules: modules || [] },
+                { onConflict: 'user_id', ignoreDuplicates: false }
+              ).catch(() => {})
             }
             if (modules !== null && modules !== undefined) setActiveModules(modules)
             setShowIconPicker(false)

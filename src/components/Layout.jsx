@@ -528,9 +528,11 @@ export default function Layout({ children }) {
     setLoginCount(count)
     if (localStorage.getItem(doneKey) === 'true') return
     // Check DB — if user has already configured their dashboard (on any device), skip tour
-    sb.from('user_dashboard_prefs').select('has_set_dashboard').eq('user_id', uid).limit(1)
+    sb.from('user_dashboard_prefs').select('has_set_dashboard, active_modules').eq('user_id', uid).limit(1)
       .then(({ data }) => {
-        if (data?.[0]?.has_set_dashboard) {
+        const row = data?.[0]
+        // has_set_dashboard OR any explicit active_modules array (even []) counts as "done"
+        if (row?.has_set_dashboard || Array.isArray(row?.active_modules)) {
           localStorage.setItem(doneKey, 'true')
         } else {
           setTimeout(() => setShowTour(true), 600)
@@ -543,13 +545,11 @@ export default function Layout({ children }) {
     setShowTour(false)
     const uid = session?.userId
     if (!uid) return
-    // Persist tour completion to DB so other devices don't re-show the tour
-    const { data } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', uid).limit(1)
-    if (data?.length) {
-      await sb.from('user_dashboard_prefs').update({ has_set_dashboard: true }).eq('user_id', uid)
-    } else {
-      await sb.from('user_dashboard_prefs').insert({ user_id: uid, has_set_dashboard: true })
-    }
+    // Upsert — safe even if picker already inserted the row in the same session
+    await sb.from('user_dashboard_prefs').upsert(
+      { user_id: uid, has_set_dashboard: true },
+      { onConflict: 'user_id', ignoreDuplicates: false }
+    ).catch(() => {})
   }
 
   return (

@@ -104,6 +104,12 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadSaved() }, [])
+  // Auto-dismiss without any modal when a lab user's pool is empty (admin hasn't assigned icons yet)
+  useEffect(() => {
+    if (allowedPool !== null && allowedPool.length === 0 && session?.role === 'lab_user') {
+      onDone([])
+    }
+  }, [allowedPool])
 
   async function loadSaved() {
     try {
