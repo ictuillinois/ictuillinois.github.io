@@ -731,10 +731,12 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     const ids = students.map(s => s.id)
     let recQuery = sb.from('training_equipment').select('*')
     if (ids.length) recQuery = recQuery.in('user_id', ids)
+    let pendingQ = sb.from('retraining_requests').select('*').eq('status', 'pending')
+    if (session?.role === 'lab_user' && session?.userId) pendingQ = pendingQ.eq('user_id', session.userId)
     const [{ data: eq }, { data: rec }, { data: retrainReqs }] = await Promise.all([
       equipQuery,
       recQuery,
-      sb.from('retraining_requests').select('*').eq('status', 'pending'),
+      pendingQ,
     ])
     setEquipment(eq || [])
     setRecords(rec || [])
@@ -820,6 +822,22 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     })
     if (error) { toast('Error: ' + error.message); return }
     toast('Training request submitted ✓')
+    // Notify all managers in the org
+    if (session?.organizationId) {
+      sb.from('users').select('id')
+        .eq('organization_id', session.organizationId)
+        .in('role', ['user', 'admin']).eq('is_active', true)
+        .then(({ data: managers }) => {
+          if (managers?.length) {
+            sb.from('notifications').insert(managers.map(m => ({
+              user_id: m.id, type: 'training_request',
+              title: `${userName} requested equipment training`,
+              body: `${eq?.nickname || eq?.equipment_name || 'Equipment'} — review in Training Records → Equipment.`,
+              read: false,
+            }))).catch(() => {})
+          }
+        })
+    }
     load()
   }
 
@@ -1080,20 +1098,34 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
     setSubmitting(false)
   }
 
+  const myPending = pendingRetraining.filter(r => String(r.user_id) === String(session.userId))
   const pendingIds = new Set(pendingRetraining.map(r => r.equipment_id))
   return (
-    <div className="card" style={{ marginBottom: 16, borderColor: '#0369a1' }}>
-      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#0369a1' }}>📋 Request Training</div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>Select the equipment you need training on. Your request will be sent to the lab manager.</div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={selectedEq} onChange={e => setSelectedEq(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
-          <option value="">— Select equipment —</option>
-          {equipment.map(e => (
-            <option key={e.id} value={e.id} disabled={pendingIds.has(e.id)}>{e.nickname || e.equipment_name}{pendingIds.has(e.id) ? ' (pending)' : ''}</option>
-          ))}
-        </select>
-        <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting || !selectedEq}>{submitting ? 'Submitting…' : 'Submit request'}</button>
+    <div style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: myPending.length > 0 ? 12 : 0, borderColor: '#0369a1' }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#0369a1' }}>📋 Request Training</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>Select the equipment you need training on. Your request will be sent to the lab manager.</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select value={selectedEq} onChange={e => setSelectedEq(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
+            <option value="">— Select equipment —</option>
+            {equipment.map(e => (
+              <option key={e.id} value={e.id} disabled={pendingIds.has(e.id)}>{e.nickname || e.equipment_name}{pendingIds.has(e.id) ? ' (pending)' : ''}</option>
+            ))}
+          </select>
+          <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting || !selectedEq}>{submitting ? 'Submitting…' : 'Submit request'}</button>
+        </div>
       </div>
+      {myPending.map(req => {
+        const eq = equipment.find(e => e.id === req.equipment_id)
+        return (
+          <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#92400e' }}>⏳ {eq?.nickname || req.equipment_name}</div>
+              <div style={{ fontSize: 12, color: '#92400e' }}>{req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}lab manager will review and approve your request</div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

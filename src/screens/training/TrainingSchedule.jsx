@@ -37,6 +37,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
   const [requests, setRequests] = useState([])
   const [schedules, setSchedules] = useState([])
   const [equipment, setEquipment] = useState([])
+  const [examEqIds, setExamEqIds] = useState(new Set()) // equipment_ids that have exam questions
   const [loading, setLoading] = useState(true)
   const [proposing, setProposing] = useState(null) // request being scheduled
   const [proposeDate, setProposeDate] = useState('')
@@ -52,11 +53,35 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     let schedQ = sb.from('training_schedule').select('*').order('created_at', { ascending: false })
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true)
     if (orgId) { retQ = retQ.eq('organization_id', orgId); schedQ = schedQ.eq('organization_id', orgId); eqQ = eqQ.eq('organization_id', orgId) }
-    const [{ data: reqs }, { data: sched }, { data: eq }] = await Promise.all([retQ, schedQ, eqQ])
+    const [{ data: reqs }, { data: sched }, { data: eq }, { data: examRows }] = await Promise.all([
+      retQ, schedQ, eqQ,
+      sb.from('equipment_exam_questions').select('equipment_id'),
+    ])
     setRequests(reqs || [])
     setSchedules(sched || [])
     setEquipment(eq || [])
+    setExamEqIds(new Set((examRows || []).map(r => r.equipment_id)))
     setLoading(false)
+  }
+
+  async function approveDirectly(req) {
+    setSaving(true)
+    const eqName = req.equipment_name || equipment.find(e => e.id === req.equipment_id)?.nickname || 'equipment'
+    const { error } = await sb.from('training_equipment').insert({
+      user_id: req.user_id, equipment_id: req.equipment_id,
+      trained_date: new Date().toISOString().split('T')[0],
+      trained_by: session.username, passed_exam: true,
+    })
+    if (error) { toast('Error: ' + error.message); setSaving(false); return }
+    await sb.from('retraining_requests').delete().eq('id', req.id)
+    await sb.from('notifications').insert({
+      user_id: req.user_id, type: 'training_approved',
+      title: `Training approved: ${eqName}`,
+      body: `${session.username} approved your training. You can now book this equipment.`,
+      read: false,
+    }).catch(() => {})
+    toast('Training approved ✓')
+    setSaving(false); load()
   }
 
   function getSchedule(requestId) {
@@ -86,18 +111,18 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     }
     if (schedErr) { toast('Error saving schedule: ' + schedErr.message); setSaving(false); return }
 
-    // Remove the request once a date is proposed
+    // Remove the request once a date is scheduled
     await sb.from('retraining_requests').delete().eq('id', req.id)
 
     // Notify user — in-app + email
-    const notifMsg = `Training proposed for ${req.equipment_name} on ${fmtDT(proposeDate)} by ${session.username}. Please open Training Records to confirm or propose another time.`
+    const notifMsg = `Training scheduled for ${req.equipment_name} on ${fmtDT(proposeDate)} by ${session.username}. Please review the SOP and training videos before your session.`
     const { error: notifErr } = await sb.from('booking_notifications').insert({
       booking_id: null, user_id: req.user_id, type: 'training_scheduled',
       message: notifMsg, read: false,
     })
     if (notifErr) console.warn('Notification insert failed:', notifErr.message)
-    await sendTrainingEmail(req.user_id, 'training_approved', `Training date proposed — ${req.equipment_name}`, 'A training date has been proposed for you', notifMsg)
-    toast('Training date proposed ✓')
+    await sendTrainingEmail(req.user_id, 'training_approved', `Training scheduled — ${req.equipment_name}`, 'Your training has been scheduled', notifMsg)
+    toast('Training date scheduled ✓')
     setProposing(null); setProposeDate(''); setProposeNotes('')
     setSaving(false); load()
   }
@@ -177,9 +202,15 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
-                      📅 {sched ? 'Change date' : 'Propose training date'}
-                    </button>
+                    {!examEqIds.has(req.equipment_id) ? (
+                      <button className="btn btn-sm btn-primary" onClick={() => approveDirectly(req)} disabled={saving}>
+                        ✓ Approve Training
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
+                        📅 {sched ? 'Change date' : 'Propose training date'}
+                      </button>
+                    )}
                     <button className="btn btn-sm btn-danger" onClick={async () => {
                       await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                       toast('Request denied.'); load()
@@ -235,6 +266,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
 export function UserTrainingSchedule({ session }) {
   const { toast } = useAppStore()
   const [schedules, setSchedules] = useState([])
+  const [requests, setRequests] = useState([])
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
   const [counterDate, setCounterDate] = useState({})
@@ -243,11 +275,13 @@ export function UserTrainingSchedule({ session }) {
 
   async function load() {
     setLoading(true)
-    const [{ data: sched }, { data: eq }] = await Promise.all([
+    const [{ data: sched }, { data: reqs }, { data: eq }] = await Promise.all([
       sb.from('training_schedule').select('*').eq('user_id', session.userId).order('created_at', { ascending: false }),
+      sb.from('retraining_requests').select('*').eq('user_id', session.userId).eq('status', 'pending').order('requested_at', { ascending: false }),
       sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true),
     ])
     setSchedules(sched || [])
+    setRequests(reqs || [])
     setEquipment(eq || [])
     setLoading(false)
   }
@@ -255,11 +289,23 @@ export function UserTrainingSchedule({ session }) {
   async function acceptDate(sched) {
     await sb.from('training_schedule').update({ status: 'confirmed', confirmed_date: sched.proposed_date, updated_at: new Date().toISOString() }).eq('id', sched.id)
     const eq = equipment.find(e => e.id === sched.equipment_id)
-    await sb.from('booking_notifications').insert({
-      booking_id: null, user_id: session.userId, type: 'training_confirmed',
-      message: `Training confirmed for ${eq?.nickname || eq?.equipment_name} on ${fmtDT(sched.proposed_date)}. Please review SOP and training videos.`,
-      read: false,
-    })
+    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    // Notify managers that the lab user accepted the proposed time
+    const orgId = session?.organizationId
+    if (orgId) {
+      sb.from('users').select('id')
+        .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
+        .then(({ data: managers }) => {
+          if (managers?.length) {
+            sb.from('notifications').insert(managers.map(m => ({
+              user_id: m.id, type: 'training_request',
+              title: `${session.username} accepted training time`,
+              body: `${eqName} training on ${fmtDT(sched.proposed_date)} confirmed.`,
+              read: false,
+            }))).catch(() => {})
+          }
+        })
+    }
     toast('Training date accepted ✓'); load()
   }
 
@@ -275,10 +321,23 @@ export function UserTrainingSchedule({ session }) {
   const confirmed = schedules.filter(s => s.status === 'confirmed')
 
   if (loading) return <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-  if (schedules.length === 0) return null
+  if (schedules.length === 0 && requests.length === 0) return null
 
   return (
     <div style={{ marginBottom: 20 }}>
+      {requests.map(req => {
+        const eq = equipment.find(e => e.id === req.equipment_id)
+        return (
+          <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e', marginBottom: 4 }}>
+              ⏳ Training requested: {eq?.nickname || req.equipment_name}
+            </div>
+            <div style={{ fontSize: 13, color: '#92400e' }}>
+              {req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}awaiting a training date from your lab manager.
+            </div>
+          </div>
+        )
+      })}
       {pending.map(sched => {
         const eq = equipment.find(e => e.id === sched.equipment_id)
         return (
@@ -286,26 +345,11 @@ export function UserTrainingSchedule({ session }) {
             <div style={{ fontWeight: 600, fontSize: 14, color: '#0369a1', marginBottom: 8 }}>
               📅 Training scheduled: {eq?.nickname || eq?.equipment_name}
             </div>
-            {sched.status === 'proposed' && (
-              <>
-                <div style={{ fontSize: 13, marginBottom: 12 }}>
-                  <strong>{sched.proposed_by}</strong> proposed: <strong>{fmtDT(sched.proposed_date)}</strong>
-                  {sched.notes && <div style={{ color: 'var(--text3)', marginTop: 4 }}>Note: {sched.notes}</div>}
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button className="btn btn-sm btn-primary" onClick={() => acceptDate(sched)}>✓ Accept this time</button>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <input type="datetime-local" value={counterDate[sched.id] || ''} onChange={e => setCounterDate(d => ({ ...d, [sched.id]: e.target.value }))} style={{ fontSize: 12 }} />
-                    <button className="btn btn-sm" onClick={() => proposeCounter(sched)}>Propose different time</button>
-                  </div>
-                </div>
-              </>
-            )}
-            {sched.status === 'countered' && (
-              <div style={{ fontSize: 13, color: '#0369a1' }}>
-                Your counter-proposal <strong>{fmtDT(sched.counter_date)}</strong> is pending admin approval.
-              </div>
-            )}
+            <div style={{ fontSize: 13, marginBottom: 12 }}>
+              <strong>{sched.proposed_by}</strong> proposed: <strong>{fmtDT(sched.proposed_date)}</strong>
+              {sched.notes && <div style={{ color: 'var(--text3)', marginTop: 4 }}>Note: {sched.notes}</div>}
+            </div>
+            <button className="btn btn-sm btn-primary" onClick={() => acceptDate(sched)}>✓ Accept the time</button>
           </div>
         )
       })}

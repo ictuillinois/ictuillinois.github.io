@@ -2207,6 +2207,7 @@ function BookingCalendar({ session }) {
   const [multiDraftPurpose, setMultiDraftPurpose] = useState('')
   const [multiDraftOther, setMultiDraftOther]     = useState('')
   const [multiDraftNotes, setMultiDraftNotes]     = useState('')
+  const [multiDraftProjectId, setMultiDraftProjectId] = useState('')
   const [multiDraftSaving, setMultiDraftSaving]   = useState(false)
   const [bookingDraft, setBookingDraft] = useState(null)
   const [editBooking, setEditBooking] = useState(null)
@@ -2619,16 +2620,21 @@ function BookingCalendar({ session }) {
 
   function exitMultiDraft() {
     setMultiDraftMode(false); setMultiDraftSlots({}); setMultiDraftIdx(0)
-    setMultiDraftPurpose(''); setMultiDraftOther(''); setMultiDraftNotes('')
+    setMultiDraftPurpose(''); setMultiDraftOther(''); setMultiDraftNotes(''); setMultiDraftProjectId('')
   }
 
   async function bookAllFromDraft() {
     if (!multiDraftPurpose) { toast('Select a purpose for the bookings.'); return }
+    if (multiDraftPurpose === 'project' && projects.length > 0 && !multiDraftProjectId) { toast('Select a project.'); return }
     if (multiDraftPurpose === 'other' && !multiDraftOther.trim()) { toast('Describe the reason.'); return }
     const allSet = selectedEq.every(id => multiDraftSlots[id])
     if (!allSet) { toast('Set a time slot for every selected equipment first.'); return }
     setMultiDraftSaving(true)
-    const purposeTitle = multiDraftPurpose === 'project' ? 'Project' : multiDraftPurpose === 'thesis' ? 'Thesis' : `Other: ${multiDraftOther.trim()}`
+    const selectedProject = projects.find(p => p.id === multiDraftProjectId)
+    const purposeTitle = multiDraftPurpose === 'project'
+      ? `Project: ${selectedProject?.project_id || selectedProject?.name || ''}`
+      : multiDraftPurpose === 'thesis' ? 'Thesis'
+      : `Other: ${multiDraftOther.trim()}`
     // Fetch approval settings for all selected equipment in one batch
     let approvalMap = {}
     try {
@@ -3079,6 +3085,18 @@ function BookingCalendar({ session }) {
                                 </div>
                               ))}
                             </div>
+                            {multiDraftPurpose === 'project' && (
+                              <div style={{ marginTop: 6 }}>
+                                {projects.length === 0 ? (
+                                  <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>No active projects found. Create one in Project &amp; Material first.</div>
+                                ) : (
+                                  <select value={multiDraftProjectId} onChange={e => setMultiDraftProjectId(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
+                                    <option value=''>— Select project —</option>
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.project_id || p.name}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            )}
                             {multiDraftPurpose === 'other' && (
                               <input value={multiDraftOther} onChange={e => setMultiDraftOther(e.target.value)} placeholder="Describe the reason…" style={{ marginTop: 6, fontSize: 12 }} />
                             )}

@@ -1530,10 +1530,12 @@ export function StudentsPanel({ toast, session }) {
            action buttons under each user */
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
           {filtered.map(s => (
-            <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: s.photo_url ? '0 12px 14px' : '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55, ...(s.photo_denial_flagged ? { borderColor: '#f59e0b', background: '#fefce8' } : {}) }}>
-              {s.photo_url
-                ? <img src={s.photo_url} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
-                : <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><PersonAvatar user={s} /></div>}
+            <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55, ...(s.photo_denial_flagged ? { borderColor: '#f59e0b', background: '#fefce8' } : {}) }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                {s.photo_url
+                  ? <img src={s.photo_url} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }} />
+                  : <PersonAvatar user={s} />}
+              </div>
               <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {s.nick_name?.trim() || sFirstName(s) || '—'}
               </div>
@@ -1733,10 +1735,12 @@ function StaffListPanel({ toast, session }) {
            action buttons under each member */
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
           {staff.map(s => (
-            <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: s.photo_url ? '0 12px 14px' : '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55 }}>
-              {s.photo_url
-                ? <img src={s.photo_url} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
-                : <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><PersonAvatar user={s} /></div>}
+            <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                {s.photo_url
+                  ? <img src={s.photo_url} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }} />
+                  : <PersonAvatar user={s} />}
+              </div>
               <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
               {s.email && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.email}</div>}
               <div style={{ marginTop: 4, marginBottom: 10, display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
