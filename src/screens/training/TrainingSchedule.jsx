@@ -581,14 +581,6 @@ export function ExamTab({ session }) {
     if (autoEq) {
       localStorage.removeItem('examEquipment')
       setSelectedEq(autoEq)
-      setLoading(false)
-      return
-    }
-    // For students, show equipment they're scheduled to train on
-    if (!isAdminStaff && session.userId) {
-      const { data: sched } = await sb.from('training_schedule')
-        .select('equipment_id').eq('user_id', session.userId).eq('status', 'confirmed')
-      if (sched?.length) setSelectedEq(sched[0].equipment_id)
     }
     setLoading(false)
   }
