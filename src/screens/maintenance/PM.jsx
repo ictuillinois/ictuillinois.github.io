@@ -1447,7 +1447,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
   }
 
   const done = tasks.filter(t => t.status === 'done').length
-  const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0
+  const pct = tasks.length ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / tasks.length) : 0
   const statusStyle = (s) => ({ todo: { background: '#f1f1f1', color: '#555' }, in_progress: { background: ORANGE_LIGHT, color: ORANGE }, done: { background: '#e8f5e9', color: '#2e7d32' } }[s] || {})
   const tasksOnDay = (year, month, day) => tasks.filter(t => {
     if (!t.deadline) return false
@@ -1734,7 +1734,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
 
   const userTasks = (uid) => tasks.filter(t => t.assigned_to === uid)
   const doneTasks = (uid) => tasks.filter(t => t.assigned_to === uid && t.status === 'done').length
-  const pct = (uid) => { const tot = userTasks(uid).length; return tot ? Math.round((doneTasks(uid) / tot) * 100) : 0 }
+  const pct = (uid) => { const ut = userTasks(uid); return ut.length ? Math.round(ut.reduce((s, t) => s + (t.progress || 0), 0) / ut.length) : 0 }
   const statusStyle = (s) => ({ todo: { background: '#f1f1f1', color: '#555' }, in_progress: { background: ORANGE_LIGHT, color: ORANGE }, done: { background: '#e8f5e9', color: '#2e7d32' } }[s] || {})
   const statusLabel = (s) => ({ todo: 'To Do', in_progress: 'In Progress', done: 'Done' }[s] || s)
 
@@ -1920,7 +1920,7 @@ function StudentTeamView({ userId, groupId, orgId }) {
           {members.map((user, idx) => {
             const utasks = userTasks(user.id)
             const done = utasks.filter(t => t.status === 'done').length
-            const pct = utasks.length ? Math.round((done / utasks.length) * 100) : 0
+            const pct = utasks.length ? Math.round(utasks.reduce((s, t) => s + (t.progress || 0), 0) / utasks.length) : 0
             const isMe = user.id === userId
             const isLast = idx === members.length - 1
             return (
