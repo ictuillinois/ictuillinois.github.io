@@ -793,8 +793,8 @@ export function ExamTab({ session }) {
           {/* Student: material checklist + exam */}
           {!isAdminStaff && (
             <div>
-              {/* Material progress checklist */}
-              {!examMode && !submitted && (
+              {/* Material progress checklist — hidden once exam is passed */}
+              {!examMode && !submitted && !latestResult?.passed && (
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>📚 Before you start the exam</div>
                   {requiresExam === false ? (
@@ -856,6 +856,11 @@ export function ExamTab({ session }) {
                     {latestResult.passed ? '✓ Exam passed' : '✕ Exam not passed'} — {latestResult.score}/{latestResult.total} ({Math.round(latestResult.score/latestResult.total*100)}%)
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Taken {new Date(latestResult.taken_at).toLocaleDateString()}</div>
+                  {latestResult.passed && (
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8, fontStyle: 'italic' }}>
+                      Your exam grade is for your information only and is not visible to your lab manager.
+                    </div>
+                  )}
                   {!latestResult.passed && questions.length > 0 && <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }} onClick={() => { setExamMode(true); setAnswers({}) }}>Retake exam</button>}
                 </div>
               )}
@@ -899,9 +904,14 @@ export function ExamTab({ session }) {
                   <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 6 }}>
                     Pass mark: 70% · Your score: {Math.round(submitted.score/submitted.total*100)}%
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: submitted.passed ? 8 : 24 }}>
                     {submitted.passed ? 'A lab manager will review and approve your training.' : 'Review the SOP and training materials, then try again.'}
                   </div>
+                  {submitted.passed && (
+                    <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', marginBottom: 24 }}>
+                      Your grade is for your information only and will not be shown to your lab manager.
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                     <button className="btn btn-primary" onClick={() => setSubmitted(null)}>Done</button>
                     {!submitted.passed && <button className="btn" onClick={() => { setSubmitted(null); setExamMode(true); setAnswers({}) }}>Retake exam</button>}
