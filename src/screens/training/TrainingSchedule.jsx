@@ -202,19 +202,9 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {(() => {
-                      const eqRow = equipment.find(e => e.id === req.equipment_id)
-                      const needsExam = eqRow?.requires_exam === true || (eqRow?.requires_exam !== false && examEqIds.has(req.equipment_id))
-                      return needsExam ? (
-                        <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
-                          📅 {sched ? 'Change date' : 'Propose training date'}
-                        </button>
-                      ) : (
-                        <button className="btn btn-sm btn-primary" onClick={() => approveDirectly(req)} disabled={saving}>
-                          ✓ Approve Training
-                        </button>
-                      )
-                    })()}
+                    <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
+                      📅 {sched ? 'Change date' : 'Propose training date'}
+                    </button>
                     <button className="btn btn-sm btn-danger" onClick={async () => {
                       await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                       toast('Request denied.'); load()
