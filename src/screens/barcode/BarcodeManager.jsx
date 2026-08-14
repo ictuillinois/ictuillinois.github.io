@@ -31,16 +31,16 @@ function getScanUrl(equipmentId) {
 // QR label for screen preview — colorful logo, iLab logo centered over QR
 function QRLabel({ equipment, size }) {
   const is2x2 = size === '2x2'
-  const containerPx = is2x2 ? 192 : 384
-  const qrPx    = is2x2 ? 112 : 230
-  const logoInQr = is2x2 ? 44  : 88
+  const previewW  = is2x2 ? 192 : 256
+  const previewH  = is2x2 ? 192 : 384
+  const qrPx      = is2x2 ? 112 : 160
+  const logoInQr  = is2x2 ? 44  : 60
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(equipment.id))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
   return (
     <div style={{
-      width: containerPx, height: containerPx,
+      width: previewW, height: previewH,
       background: '#ffffff',
-      border: '2.5px solid #111',
       borderRadius: 6,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: is2x2 ? '6px 8px' : '12px 16px',
@@ -85,8 +85,10 @@ function QRLabel({ equipment, size }) {
 
 function printLabels(equipmentList, size) {
   const is2x2 = size === '2x2'
-  const inchSize = is2x2 ? '2in' : '4in'
-  const containerPx = is2x2 ? 192 : 384
+  const pageW      = is2x2 ? '2in' : '4in'
+  const pageH      = is2x2 ? '2in' : '6in'
+  const containerW = is2x2 ? 192 : 384
+  const containerH = is2x2 ? 192 : 576
   const qrPx     = is2x2 ? 112 : 230
   const logoInQr = is2x2 ? 44  : 88
 
@@ -103,12 +105,12 @@ function printLabels(equipmentList, size) {
 
   const html = `<!DOCTYPE html><html><head><title>QR Labels — ICT-Lab</title>
 <style>
-  @page { size: ${inchSize} ${inchSize}; margin: 0; }
+  @page { size: ${pageW} ${pageH}; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #fff; }
   .label {
-    width: ${containerPx}px; height: ${containerPx}px;
-    background: #fff; border: 2.5px solid #111; border-radius: 6px;
+    width: ${containerW}px; height: ${containerH}px;
+    background: #fff; border-radius: 6px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: ${is2x2 ? '6px 8px' : '12px 16px'};
     font-family: Arial, sans-serif; overflow: hidden; gap: ${is2x2 ? 6 : 12}px;
@@ -212,7 +214,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Label Size</div>
               <div style={{ display: 'flex', gap: 10 }}>
-                {[{ v: '2x2', label: '2 × 2 inches', sub: 'Small — compact equipment' }, { v: '4x4', label: '4 × 4 inches', sub: 'Large — easy scanning from distance' }].map(opt => (
+                {[{ v: '2x2', label: '2 × 2 inches', sub: 'Small — compact equipment' }, { v: '4x6', label: '4 × 6 inches', sub: 'Large — easy scanning from distance' }].map(opt => (
                   <div
                     key={opt.v}
                     onClick={() => setPrintSize(opt.v)}
@@ -257,10 +259,10 @@ function EquipmentBarcodeTab({ equipment, loading }) {
               style={{ width: '100%', padding: '12px', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               onClick={() => printLabels([selected], printSize)}
             >
-              🖨️ Print Label ({printSize === '2x2' ? '2×2 in' : '4×4 in'})
+              🖨️ Print Label ({printSize === '2x2' ? '2×2 in' : '4×6 in'})
             </button>
             <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
-              A print dialog will open. Make sure your printer is set to the correct paper size.
+              A print dialog will open. To save as PDF: choose "Save as PDF", then uncheck "Headers and footers" in More settings.
             </div>
           </>
         ) : (
@@ -352,7 +354,7 @@ function RecordsTab({ equipment, loading }) {
             style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)' }}
           >
             <option value="2x2">2 × 2 in</option>
-            <option value="4x4">4 × 4 in</option>
+            <option value="4x6">4 × 6 in</option>
           </select>
           <button
             className="btn btn-primary"
