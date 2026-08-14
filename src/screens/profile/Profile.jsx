@@ -928,9 +928,11 @@ function NotificationPrefsPanel({ userId, role }) {
       { key: 'booking_cancelled', label: 'Booking cancelled' },
     ]},
     { title: '🎓 Training & Certifications', desc: 'Stay on top of your training status.', roles: ['lab_user'], events: [
-      { key: 'training_approved',  label: 'Training certificate approved' },
-      { key: 'training_expiring',  label: 'Training certificate expiring soon' },
-      { key: 'training_submitted', label: 'Training submission received' },
+      { key: 'training_approved',    label: 'Training certificate approved' },
+      { key: 'training_expiring',    label: 'Training certificate expiring soon' },
+      { key: 'training_submitted',   label: 'Training submission received' },
+      { key: 'training_scheduled',   label: 'Training date proposed by lab manager' },
+      { key: 'training_confirmed',   label: 'Training date confirmed' },
     ]},
     { title: '📋 Task Board', desc: 'Notifications from the PM workspace.', roles: ['user', 'admin'], events: [
       { key: 'task_assigned',       label: 'Task assigned to me' },

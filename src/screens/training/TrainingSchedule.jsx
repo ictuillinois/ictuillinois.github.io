@@ -51,7 +51,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     const orgId = session?.organizationId
     let retQ = sb.from('retraining_requests').select('*').order('id', { ascending: false })
     let schedQ = sb.from('training_schedule').select('*').order('created_at', { ascending: false })
-    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true)
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, requires_exam').eq('is_active', true)
     if (orgId) { retQ = retQ.eq('organization_id', orgId); schedQ = schedQ.eq('organization_id', orgId); eqQ = eqQ.eq('organization_id', orgId) }
     const [{ data: reqs }, { data: sched }, { data: eq }, { data: examRows }] = await Promise.all([
       retQ, schedQ, eqQ,
@@ -202,15 +202,19 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {!examEqIds.has(req.equipment_id) ? (
-                      <button className="btn btn-sm btn-primary" onClick={() => approveDirectly(req)} disabled={saving}>
-                        ✓ Approve Training
-                      </button>
-                    ) : (
-                      <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
-                        📅 {sched ? 'Change date' : 'Propose training date'}
-                      </button>
-                    )}
+                    {(() => {
+                      const eqRow = equipment.find(e => e.id === req.equipment_id)
+                      const needsExam = eqRow?.requires_exam === true || (eqRow?.requires_exam !== false && examEqIds.has(req.equipment_id))
+                      return needsExam ? (
+                        <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
+                          📅 {sched ? 'Change date' : 'Propose training date'}
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm btn-primary" onClick={() => approveDirectly(req)} disabled={saving}>
+                          ✓ Approve Training
+                        </button>
+                      )
+                    })()}
                     <button className="btn btn-sm btn-danger" onClick={async () => {
                       await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                       toast('Request denied.'); load()
@@ -290,8 +294,8 @@ export function UserTrainingSchedule({ session }) {
     await sb.from('training_schedule').update({ status: 'confirmed', confirmed_date: sched.proposed_date, updated_at: new Date().toISOString() }).eq('id', sched.id)
     const eq = equipment.find(e => e.id === sched.equipment_id)
     const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
-    // Notify managers that the lab user accepted the proposed time
     const orgId = session?.organizationId
+    // Notify managers
     if (orgId) {
       sb.from('users').select('id')
         .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
@@ -306,6 +310,13 @@ export function UserTrainingSchedule({ session }) {
           }
         })
     }
+    // Notify the lab user themselves
+    await sb.from('notifications').insert({
+      user_id: session.userId, type: 'training_confirmed',
+      title: `Training confirmed: ${eqName}`,
+      body: `Your training for ${eqName} on ${fmtDT(sched.proposed_date)} is confirmed.`,
+      read: false,
+    }).catch(() => {})
     toast('Training date accepted ✓'); load()
   }
 
@@ -313,6 +324,23 @@ export function UserTrainingSchedule({ session }) {
     const date = counterDate[sched.id]
     if (!date) { toast('Select a date.'); return }
     await sb.from('training_schedule').update({ status: 'countered', counter_date: new Date(date).toISOString(), updated_at: new Date().toISOString() }).eq('id', sched.id)
+    // Notify managers of the counter-proposal
+    const eq = equipment.find(e => e.id === sched.equipment_id)
+    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const orgId = session?.organizationId
+    if (orgId) {
+      sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
+        .then(({ data: managers }) => {
+          if (managers?.length) {
+            sb.from('notifications').insert(managers.map(m => ({
+              user_id: m.id, type: 'training_request',
+              title: `${session.username} proposed a new training time`,
+              body: `New time proposed for ${eqName}: ${fmtDT(new Date(date))}.`,
+              read: false,
+            }))).catch(() => {})
+          }
+        })
+    }
     toast('Counter-proposal sent ✓')
     setCounterDate(d => ({ ...d, [sched.id]: '' })); load()
   }
@@ -348,8 +376,24 @@ export function UserTrainingSchedule({ session }) {
             <div style={{ fontSize: 13, marginBottom: 12 }}>
               <strong>{sched.proposed_by}</strong> proposed: <strong>{fmtDT(sched.proposed_date)}</strong>
               {sched.notes && <div style={{ color: 'var(--text3)', marginTop: 4 }}>Note: {sched.notes}</div>}
+              {sched.status === 'countered' && <div style={{ color: '#92400e', marginTop: 4, fontStyle: 'italic' }}>Your counter-proposal is awaiting confirmation from the lab manager.</div>}
             </div>
-            <button className="btn btn-sm btn-primary" onClick={() => acceptDate(sched)}>✓ Accept the time</button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {sched.status !== 'countered' && (
+                <button className="btn btn-sm btn-primary" onClick={() => acceptDate(sched)}>✓ Accept the time</button>
+              )}
+              {counterDate[sched.id] !== undefined ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                  <input type="datetime-local" value={counterDate[sched.id]} onChange={e => setCounterDate(d => ({ ...d, [sched.id]: e.target.value }))} style={{ fontSize: 13 }} />
+                  <button className="btn btn-sm btn-primary" onClick={() => proposeCounter(sched)}>Send</button>
+                  <button className="btn btn-sm" onClick={() => setCounterDate(d => { const n = { ...d }; delete n[sched.id]; return n })}>Cancel</button>
+                </div>
+              ) : (
+                <button className="btn btn-sm" onClick={() => setCounterDate(d => ({ ...d, [sched.id]: '' }))}>
+                  ✗ Deny & propose another time
+                </button>
+              )}
+            </div>
           </div>
         )
       })}
@@ -518,6 +562,7 @@ export function ExamTab({ session }) {
   const [editQuestion, setEditQuestion] = useState(null)
   const [newQ, setNewQ] = useState({ question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a' })
   const [progress, setProgress] = useState(null)
+  const [requiresExam, setRequiresExam] = useState(null)
 
   const isAdminStaff = canEdit(session)
 
@@ -549,14 +594,22 @@ export function ExamTab({ session }) {
   }
 
   async function loadEquipmentData() {
-    const [{ data: q }, { data: r }, { data: p }] = await Promise.all([
+    const [{ data: q }, { data: r }, { data: p }, { data: eqInfo }] = await Promise.all([
       sb.from('equipment_exam_questions').select('*').eq('equipment_id', selectedEq).order('order_num'),
       sb.from('equipment_exam_results').select('*, users(name)').eq('equipment_id', selectedEq).order('taken_at', { ascending: false }),
       session.userId ? sb.from('equipment_material_progress').select('*').eq('user_id', session.userId).eq('equipment_id', selectedEq).maybeSingle() : { data: null },
+      sb.from('equipment_inventory').select('requires_exam').eq('id', selectedEq).maybeSingle(),
     ])
     setQuestions(q || [])
     setResults(r || [])
     setProgress(p || null)
+    setRequiresExam(eqInfo?.requires_exam ?? null)
+  }
+
+  async function saveRequiresExam(val) {
+    await sb.from('equipment_inventory').update({ requires_exam: val }).eq('id', selectedEq)
+    setRequiresExam(val)
+    toast(val === false ? 'Exam not required — training requests will be auto-approved.' : 'Exam required saved.')
   }
 
   async function saveQuestion() {
@@ -622,6 +675,28 @@ export function ExamTab({ session }) {
           {/* Admin: manage questions + see all results */}
           {isAdminStaff && (
             <div>
+              {/* Exam requirement toggle */}
+              <div className="card" style={{ marginBottom: 16, background: requiresExam === false ? '#fefce8' : 'var(--surface)', borderColor: requiresExam === false ? '#fcd34d' : 'var(--border)' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={requiresExam !== false}
+                    onChange={e => saveRequiresExam(e.target.checked ? null : false)}
+                    style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>This equipment requires an exam before training</div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                      {requiresExam === false
+                        ? 'Exam not required — training requests will be approved directly without scheduling an exam.'
+                        : 'Students must pass an exam before their training can be approved.'}
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {requiresExam !== false && (
+              <div>
               <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>📝 Exam Questions</div>
 
                   {/* PDF Upload to extract questions */}
@@ -698,6 +773,8 @@ export function ExamTab({ session }) {
                 </div>
               )}
             </div>
+            )}
+            </div>
           )}
 
           {/* Student: material checklist + exam */}
@@ -707,6 +784,12 @@ export function ExamTab({ session }) {
               {!examMode && !submitted && (
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>📚 Before you start the exam</div>
+                  {requiresExam === false ? (
+                    <div style={{ fontSize: 13, color: '#085041', marginTop: 8, padding: '8px 0' }}>
+                      Your lab manager will review your training request and approve your training directly. No exam is required for this equipment — you will be notified once your training is approved.
+                    </div>
+                  ) : (
+                  <>
                   <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
                     Confirm you have reviewed all training materials for <strong>{equipment.find(e => e.id === selectedEq)?.nickname || equipment.find(e => e.id === selectedEq)?.equipment_name}</strong>.
                   </div>
@@ -747,6 +830,8 @@ export function ExamTab({ session }) {
                     <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
                       Please confirm both items above to unlock the exam.
                     </div>
+                  )}
+                  </>
                   )}
                 </div>
               )}
