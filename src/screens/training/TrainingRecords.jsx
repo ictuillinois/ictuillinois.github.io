@@ -712,6 +712,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
   const [pendingRetraining, setPendingRetraining] = useState([])
   const [trainingSchedules, setTrainingSchedules] = useState([])
   const [passedExams, setPassedExams] = useState([])
+  const [materialProgress, setMaterialProgress] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddEquip, setShowAddEquip] = useState(false)
   const [newEquip, setNewEquip] = useState({ name: '', description: '' })
@@ -742,18 +743,46 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
     let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
     if (ids.length) examQ = examQ.in('user_id', ids)
     else if (session?.role === 'lab_user' && session?.userId) examQ = examQ.eq('user_id', session.userId)
-    const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }, { data: exams }] = await Promise.all([
-      equipQuery, recQuery, pendingQ, schedQ, examQ,
+    let progQ = sb.from('equipment_material_progress').select('*')
+    if (ids.length) progQ = progQ.in('user_id', ids)
+    else if (session?.role === 'lab_user' && session?.userId) progQ = progQ.eq('user_id', session.userId)
+    const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }, { data: exams }, { data: prog }] = await Promise.all([
+      equipQuery, recQuery, pendingQ, schedQ, examQ, progQ,
     ])
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
     setTrainingSchedules(scheds || [])
     setPassedExams(exams || [])
+    setMaterialProgress(prog || [])
     setLoading(false)
   }
 
   function getRecords(userId) { return records.filter(r => r.user_id === userId) }
+  function getProgress(userId, equipmentId) {
+    return materialProgress.find(p => String(p.user_id) === String(userId) && p.equipment_id === equipmentId)
+  }
+  function getPassedExam(userId, equipmentId) {
+    return passedExams.find(e => String(e.user_id) === String(userId) && e.equipment_id === equipmentId)
+  }
+  // Manager review checklist shown under each pending training row
+  function reviewChecklist(userId, equipmentId) {
+    const prog = getProgress(userId, equipmentId)
+    const exam = getPassedExam(userId, equipmentId)
+    const chip = (ok, label) => (
+      <span key={label} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: ok ? '#E1F5EE' : '#fef2f2', color: ok ? '#085041' : '#b91c1c', border: `1px solid ${ok ? '#9FE1CB' : '#fecaca'}` }}>
+        {ok ? '✓' : '✗'} {label}
+      </span>
+    )
+    return (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '6px 14px', background: '#fafaf5', borderTop: '1px dashed var(--border)' }}>
+        <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>Review:</span>
+        {chip(!!prog?.watched_video, 'Video watched')}
+        {chip(!!prog?.downloaded_sop, 'SOP downloaded')}
+        {chip(!!exam, exam ? `Exam passed (${Math.round(exam.score / exam.total * 100)}%)` : 'Exam passed')}
+      </div>
+    )
+  }
   function isExpiringSoon(rec) {
     if (!rec.expires_at) return false
     const days = (new Date(rec.expires_at) - new Date()) / (1000 * 60 * 60 * 24)
@@ -1129,7 +1158,8 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                       {pendingReqs.map(req => {
                         const eq = equipment.find(e => e.id === req.equipment_id)
                         return (
-                          <tr key={`req-${req.id}`} style={{ background: '#fef3c7' }}>
+                          <React.Fragment key={`req-${req.id}`}>
+                          <tr style={{ background: '#fef3c7' }}>
                             <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || req.equipment_name}</td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
@@ -1144,6 +1174,10 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                               </td>
                             )}
                           </tr>
+                          {canManage && (
+                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, req.equipment_id)}</td></tr>
+                          )}
+                          </React.Fragment>
                         )
                       })}
                       {pendingScheds.map(sched => {
@@ -1156,7 +1190,8 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                         const dateVal = isConfirmed ? sched.confirmed_date : sched.proposed_date
                         const goToHub = () => { localStorage.setItem('selectEquipment', sched.equipment_id); setScreen('equipmenthub') }
                         return (
-                          <tr key={`sched-${sched.id}`} style={{ background: bg }}>
+                          <React.Fragment key={`sched-${sched.id}`}>
+                          <tr style={{ background: bg }}>
                             <td style={{ fontWeight: 500 }}>
                               <button onClick={goToHub} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', fontSize: 'inherit' }}>
                                 {eq?.nickname || eq?.equipment_name || '—'}
@@ -1181,13 +1216,18 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                               </td>
                             )}
                           </tr>
+                          {canManage && (
+                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, sched.equipment_id)}</td></tr>
+                          )}
+                          </React.Fragment>
                         )
                       })}
                       {examApprovalsFiltered.map(exam => {
                         const eq = equipment.find(e => e.id === exam.equipment_id)
                         const pct = Math.round(exam.score / exam.total * 100)
                         return (
-                          <tr key={`exam-${exam.equipment_id}`} style={{ background: '#E1F5EE' }}>
+                          <React.Fragment key={`exam-${exam.equipment_id}`}>
+                          <tr style={{ background: '#E1F5EE' }}>
                             <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
                             <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(exam.taken_at).toLocaleDateString()}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>Self</td>
@@ -1206,6 +1246,10 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                               </td>
                             )}
                           </tr>
+                          {canManage && (
+                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, exam.equipment_id)}</td></tr>
+                          )}
+                          </React.Fragment>
                         )
                       })}
                     </tbody>

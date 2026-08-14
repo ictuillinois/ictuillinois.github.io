@@ -658,13 +658,14 @@ export function ExamTab({ session }) {
       const eq = equipment.find(e => e.id === selectedEq)
       const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
       if (orgId) {
+        const checklist = `Video watched: ${progress?.watched_video ? 'Yes' : 'No'} · SOP downloaded: ${progress?.downloaded_sop ? 'Yes' : 'No'} · Exam: Passed (${score}/${questions.length})`
         sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
           .then(({ data: managers }) => {
             if (managers?.length) {
               sb.from('notifications').insert(managers.map(m => ({
                 user_id: m.id, type: 'training_request',
                 title: `${session.username} passed the exam for ${eqName}`,
-                body: 'Review and approve their training in Training Records → Equipment tab.',
+                body: `${checklist}. Review and approve in Training Records → Equipment tab.`,
                 read: false,
               }))).catch(() => {})
             }
