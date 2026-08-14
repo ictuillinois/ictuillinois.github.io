@@ -1652,12 +1652,16 @@ function TaskViewModal({ task, onClose }) {
   )
 }
 
-function Team({ orgId, isSolo }) {
+function Team({ orgId, isSolo, userId, isAdmin, userName }) {
+  const { toast } = useAppStore()
   const [staffUsers, setStaffUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [colWidths, setColWidths] = useState({})
   const resizing = useRef(null)
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [newTeamTask, setNewTeamTask] = useState({ title: '', assigned_to: [], deadline: '', priority: 'medium', notes: '' })
+  const [addingTask, setAddingTask] = useState(false)
 
   useEffect(() => {
     let usersQ = sb.from('users').select('id, name, role').eq('role', 'user').eq('is_active', true).order('name')
@@ -1681,6 +1685,38 @@ function Team({ orgId, isSolo }) {
   }, [])
 
   const [viewTask, setViewTask] = useState(null)
+
+  async function addTeamTask() {
+    if (!newTeamTask.title.trim()) { toast('Task title required.'); return }
+    setAddingTask(true)
+    const assignees = newTeamTask.assigned_to.length > 0 ? newTeamTask.assigned_to : staffUsers.map(u => u.id)
+    const rows = assignees.map(assigneeId => ({
+      title: newTeamTask.title.trim(),
+      assigned_to: assigneeId,
+      deadline: newTeamTask.deadline || null,
+      priority: newTeamTask.priority,
+      notes: newTeamTask.notes || null,
+      status: 'todo',
+      login_mode: isSolo ? 'solo' : 'team',
+      organization_id: orgId || null,
+      created_by: userId || null,
+    }))
+    const { data, error } = await sb.from('tasks').insert(rows).select()
+    if (error) { toast('Error: ' + error.message); setAddingTask(false); return }
+    if (userId && data) {
+      for (const t of data) {
+        if (t.assigned_to && t.assigned_to !== userId) {
+          sendNotification(t.assigned_to, 'task_assigned', 'New task assigned', `${userName || 'Lab Manager'} assigned you: ${t.title}`, t.id).catch(() => {})
+        }
+      }
+    }
+    setTasks(prev => [...prev, ...(data || [])])
+    setNewTeamTask({ title: '', assigned_to: [], deadline: '', priority: 'medium', notes: '' })
+    setShowAddTask(false)
+    setAddingTask(false)
+    toast(`Task assigned to ${assignees.length} team member${assignees.length > 1 ? 's' : ''} ✓`)
+  }
+
   const userTasks = (uid) => tasks.filter(t => t.assigned_to === uid)
   const doneTasks = (uid) => tasks.filter(t => t.assigned_to === uid && t.status === 'done').length
   const pct = (uid) => { const tot = userTasks(uid).length; return tot ? Math.round((doneTasks(uid) / tot) * 100) : 0 }
@@ -1691,8 +1727,77 @@ function Team({ orgId, isSolo }) {
   if (staffUsers.length === 0) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)', fontSize: 14 }}>No lab managers found.</div>
 
   return (
-    <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 12, userSelect: resizing.current ? 'none' : 'auto' }}>
+    <div>
       {viewTask && <TaskViewModal task={viewTask} onClose={() => setViewTask(null)} />}
+
+      {/* Quick Assign Task to Team */}
+      {isAdmin && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: showAddTask ? 12 : 0 }}>
+            <button className="btn btn-sm btn-primary" onClick={() => setShowAddTask(v => !v)}>
+              {showAddTask ? 'Cancel' : '+ Assign Task to Team'}
+            </button>
+          </div>
+          {showAddTask && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 4 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Assign Task to Team Member(s)</div>
+
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>Task title</label>
+                <input value={newTeamTask.title} onChange={e => setNewTeamTask(t => ({ ...t, title: e.target.value }))} placeholder="What needs to be done?" />
+              </div>
+
+              <div className="field" style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ marginBottom: 0 }}>Assign to <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more, or assign to all</span></label>
+                  <button type="button"
+                    onClick={() => setNewTeamTask(t => ({ ...t, assigned_to: t.assigned_to.length === staffUsers.length ? [] : staffUsers.map(u => u.id) }))}
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent)' : 'var(--border)'}`, background: newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent-light)' : 'var(--surface2)', color: newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+                    {newTeamTask.assigned_to.length === staffUsers.length ? '✓ All Team' : 'All Team'}
+                  </button>
+                </div>
+                <MultiAssignSelect users={staffUsers} selected={newTeamTask.assigned_to} onChange={v => setNewTeamTask(t => ({ ...t, assigned_to: v }))} />
+                {newTeamTask.assigned_to.length === 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>No selection = assign to all team members</div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <label>Deadline <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(optional)</span></label>
+                  <input type="date" value={newTeamTask.deadline} onChange={e => setNewTeamTask(t => ({ ...t, deadline: e.target.value }))} />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Priority</label>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                    {['low', 'medium', 'high'].map(p => (
+                      <button key={p} type="button"
+                        onClick={() => setNewTeamTask(t => ({ ...t, priority: p }))}
+                        style={{ padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${newTeamTask.priority === p ? ({ low: '#22c55e', medium: '#f59e0b', high: '#ef4444' }[p]) : 'var(--border)'}`, background: newTeamTask.priority === p ? ({ low: '#dcfce7', medium: '#fef3c7', high: '#fee2e2' }[p]) : 'var(--surface2)', color: newTeamTask.priority === p ? ({ low: '#166534', medium: '#92400e', high: '#991b1b' }[p]) : 'var(--text2)', cursor: 'pointer', fontWeight: 600, fontSize: 12, textTransform: 'capitalize' }}>
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label>Notes <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(optional)</span></label>
+                <textarea value={newTeamTask.notes} onChange={e => setNewTeamTask(t => ({ ...t, notes: e.target.value }))} placeholder="Additional details…" rows={2} style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={addTeamTask} disabled={addingTask}>
+                  {addingTask ? 'Saving…' : `Assign Task${newTeamTask.assigned_to.length === 0 ? ' to All' : newTeamTask.assigned_to.length > 1 ? ` to ${newTeamTask.assigned_to.length} members` : ''}`}
+                </button>
+                <button className="btn" onClick={() => { setShowAddTask(false); setNewTeamTask({ title: '', assigned_to: [], deadline: '', priority: 'medium', notes: '' }) }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 12, userSelect: resizing.current ? 'none' : 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 'max-content', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
         {staffUsers.map((user, idx) => {
           const width = colWidths[user.id] || 230
@@ -1759,6 +1864,7 @@ function Team({ orgId, isSolo }) {
         })}
       </div>
       <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, textAlign: 'right' }}>↔ Drag column edge to resize</div>
+      </div>
     </div>
   )
 }
@@ -2850,7 +2956,7 @@ export default function PM() {
       </div>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
       {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isStudent} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isStudent={isStudent} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setStudentGroupId(gid || null); if (!gid && activeTab === 'team') setSidebarSubTab('tasks') }} />}
-      {activeTab === 'team'      && !isStudent && <Team orgId={orgId} isSolo={isSolo} />}
+      {activeTab === 'team'      && !isStudent && <Team orgId={orgId} isSolo={isSolo} userId={userId} isAdmin={isAdmin} userName={userName} />}
       {activeTab === 'team'      && isStudent && studentGroupId && <StudentTeamView userId={userId} groupId={studentGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
       {activeTab === 'meetings'  && !isStudent && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
