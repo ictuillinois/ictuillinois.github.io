@@ -145,7 +145,6 @@ ${items.map(labelHtml).join('\n')}
 
 const LABEL_TYPES = [
   { v: 'equipment', icon: '🔧', label: 'Equipment', sub: 'Lab equipment & instruments' },
-  { v: 'material',  icon: '🧪', label: 'Material',  sub: 'Samples, chemicals, supplies' },
   { v: 'other',     icon: '📦', label: 'Other',     sub: 'Any other item' },
 ]
 
@@ -238,16 +237,16 @@ function EquipmentBarcodeTab({ equipment, loading }) {
       {labelType === 'equipment' && sidebarSlot && createPortal(listPanel, sidebarSlot)}
       {labelType === 'equipment' && isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>{listPanel}</div>}
 
-      {/* Material / Other: name input */}
+      {/* Other: name input */}
       {labelType !== 'equipment' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            {labelType === 'material' ? 'Material / Sample Name' : 'Item Name'}
+            Item Name
           </div>
           <input
             value={customName}
             onChange={e => setCustomName(e.target.value)}
-            placeholder={labelType === 'material' ? 'e.g. Sample A, NaCl solution, Reagent #3…' : 'Enter item name…'}
+            placeholder="Enter item name…"
             style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 14, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
           />
         </div>
@@ -309,14 +308,14 @@ function EquipmentBarcodeTab({ equipment, loading }) {
           </>
         ) : (
           <div style={{ background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, minHeight: 360 }}>
-            <div style={{ fontSize: 48 }}>{labelType === 'equipment' ? '🔲' : labelType === 'material' ? '🧪' : '📦'}</div>
+            <div style={{ fontSize: 48 }}>{labelType === 'equipment' ? '🔲' : '📦'}</div>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
               {labelType === 'equipment' ? 'Select equipment to generate a QR label' : 'Enter a name above to generate a QR label'}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.6, maxWidth: 280 }}>
               {labelType === 'equipment'
                 ? 'Choose any piece of equipment from the list on the left to preview and print its QR code label.'
-                : `Type the ${labelType} name above — the QR code will encode it so the scan page shows the right information.`}
+                : 'Type the item name above — the QR code will encode it so the scan page shows the right information.'}
             </div>
           </div>
         )}

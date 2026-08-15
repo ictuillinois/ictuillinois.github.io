@@ -42,15 +42,33 @@ function generateBarcodeId(project, material, allMaterials) {
   return `${projectId}-${abbr}-${seq}`
 }
 
-function PrintLabel({ material, project, barcodeId }) {
+function buildScanUrl(material, project, allMaterials) {
+  const name = material.name || typeLabel(material.material_type)
+  const barcodeId = material.barcode_id || generateBarcodeId(project, material, allMaterials)
+  const params = new URLSearchParams({
+    item: name,
+    type: 'material',
+    project: project.name || '',
+    pid: project.project_id || '',
+    mtype: material.material_type || '',
+    barcode: barcodeId,
+  })
+  if (material.sampling_date) params.set('sampled', material.sampling_date)
+  return `https://ictlab.app/?${params.toString()}`
+}
+
+function PrintLabel({ material, project, allMaterials }) {
+  const barcodeId = material.barcode_id || generateBarcodeId(project, material, allMaterials)
+  const scanUrl   = buildScanUrl(material, project, allMaterials)
+  const name      = material.name || typeLabel(material.material_type)
   return (
     <div id="print-label" style={{ width: '4in', height: '4in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>LabStock — ICT Lab</div>
-      <QRCode value={barcodeId} size={160} />
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
+      <QRCode value={scanUrl} size={160} />
       <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{barcodeId}</div>
       <div style={{ width: '100%', borderTop: '1px solid #ddd', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
-        <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{typeLabel(material.material_type)}</div>
+        <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{name} · {typeLabel(material.material_type)}</div>
         {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
       </div>
     </div>
@@ -225,7 +243,7 @@ export default function MaterialStorage({ project }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: 12 }}>
-                    <QRCode value={selected.barcode_id} size={100} />
+                    <QRCode value={buildScanUrl(selected, project, materials)} size={100} />
                   </div>
                   <div>
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{selected.barcode_id}</div>
@@ -233,7 +251,7 @@ export default function MaterialStorage({ project }) {
                     <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                       <button className="btn btn-sm" onClick={() => setEditingBarcode(selected.id)}>✏️ Edit</button>
                       <button className="btn btn-sm" onClick={() => setShowScanner(true)}>📷 Scan new</button>
-                      <button className="btn btn-sm btn-primary" onClick={() => setShowPrint(true)}>🖨️ Print label</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
                     </div>
                   </div>
                 </div>
@@ -248,13 +266,14 @@ export default function MaterialStorage({ project }) {
               <BarcodeEditForm material={selected} onSave={(val) => saveBarcode(selected, val)} onCancel={() => setEditingBarcode(null)} saving={saving} />
             ) : (
               <div>
-                <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14 }}>No barcode assigned yet. Auto-generate one or scan/enter manually.</p>
+                <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14 }}>No barcode ID assigned yet. Auto-generate one or scan/enter manually.</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button className="btn btn-primary btn-sm" onClick={() => assignBarcode(selected)}>⚡ Auto-generate</button>
                   <button className="btn btn-sm" onClick={() => setShowScanner(true)}>📷 Scan barcode</button>
                   <button className="btn btn-sm" onClick={() => setEditingBarcode(selected.id)}>⌨️ Enter manually</button>
+                  <button className="btn btn-sm" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
                 </div>
-                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Auto-generated format: {generateBarcodeId(project, selected, materials)}</div>
+                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Auto-generated ID: {generateBarcodeId(project, selected, materials)}</div>
               </div>
             )}
           </div>
@@ -293,7 +312,7 @@ export default function MaterialStorage({ project }) {
               <button className="btn btn-sm" onClick={() => setShowPrint(false)}>✕</button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, background: 'var(--surface2)', padding: 20, borderRadius: 'var(--radius)' }}>
-              <PrintLabel material={selected} project={project} barcodeId={selected.barcode_id} />
+              <PrintLabel material={selected} project={project} allMaterials={materials} />
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16, textAlign: 'center' }}>Make sure your Brother QL-1110NWB is connected and set to 4" tape.</div>
             <div style={{ display: 'flex', gap: 10 }}>

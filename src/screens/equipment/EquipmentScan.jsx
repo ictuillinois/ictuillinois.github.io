@@ -92,17 +92,37 @@ function EquipmentInfoSection({ equipment, onClose }) {
   )
 }
 
-function MaterialInfoSection({ name, type, onClose }) {
+const MTYPE_LABELS = { aggregate: 'Aggregate', asphalt_binder: 'Asphalt Binder', plant_mix: 'Plant Mix', cores: 'Cores', other: 'Other' }
+
+function InfoRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--surface2)' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 110, flexShrink: 0 }}>{label}</div>
+      <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+function MaterialInfoSection({ name, type, project, pid, mtype, sampled, barcode, onClose }) {
   const typeLabel = type === 'material' ? 'Material / Sample' : 'Item'
   const typeIcon  = type === 'material' ? '🧪' : '📦'
+  const hasDetails = project || pid || mtype || sampled || barcode
   return (
     <SectionCard title={`🏷️ ${typeLabel} Info`} onClose={onClose}>
-      <div style={{ textAlign: 'center', padding: '20px 0 8px' }}>
-        <div style={{ fontSize: 44, marginBottom: 12 }}>{typeIcon}</div>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6, color: 'var(--text)' }}>{name || 'Unknown Item'}</div>
-        <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
-          {typeLabel} — scan to identify this item in ICT-Lab.
+      <div style={{ padding: '16px 0 8px' }}>
+        <div style={{ textAlign: 'center', marginBottom: hasDetails ? 20 : 0 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{typeIcon}</div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{name || 'Unknown Item'}</div>
         </div>
+        {hasDetails && (
+          <div>
+            {project  && <InfoRow label="Project"       value={project} />}
+            {pid      && <InfoRow label="Title"         value={pid} />}
+            {mtype    && <InfoRow label="Material Type" value={MTYPE_LABELS[mtype] || mtype} />}
+            {sampled  && <InfoRow label="Sampled"       value={sampled} />}
+            {barcode  && <InfoRow label="Barcode ID"    value={barcode} />}
+          </div>
+        )}
       </div>
     </SectionCard>
   )
@@ -273,9 +293,14 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
 
 
 // URL params are the canonical source — evaluated once at load, survive re-mounts
-const EQ_FROM_URL    = new URLSearchParams(window.location.search).get('eq')
-const SCAN_TYPE      = new URLSearchParams(window.location.search).get('type') || 'equipment'
-const SCAN_ITEM_NAME = new URLSearchParams(window.location.search).get('item') || ''
+const EQ_FROM_URL        = new URLSearchParams(window.location.search).get('eq')
+const SCAN_TYPE          = new URLSearchParams(window.location.search).get('type') || 'equipment'
+const SCAN_ITEM_NAME     = new URLSearchParams(window.location.search).get('item') || ''
+const SCAN_PROJECT       = new URLSearchParams(window.location.search).get('project') || ''
+const SCAN_PID           = new URLSearchParams(window.location.search).get('pid') || ''
+const SCAN_MATERIAL_TYPE = new URLSearchParams(window.location.search).get('mtype') || ''
+const SCAN_SAMPLED       = new URLSearchParams(window.location.search).get('sampled') || ''
+const SCAN_BARCODE       = new URLSearchParams(window.location.search).get('barcode') || ''
 
 export default function EquipmentScan() {
   const { scanEquipmentId, setScreen, session, setScanEquipmentId } = useAppStore()
@@ -448,7 +473,7 @@ export default function EquipmentScan() {
                 <EquipmentInfoSection equipment={equipment} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'info' && !isEquipment && (
-                <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} onClose={() => setActiveSection(null)} />
+                <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} project={SCAN_PROJECT} pid={SCAN_PID} mtype={SCAN_MATERIAL_TYPE} sampled={SCAN_SAMPLED} barcode={SCAN_BARCODE} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'sop' && (
                 <HowToSection videos={videos} sop={sop} onClose={() => setActiveSection(null)} />
