@@ -54,7 +54,8 @@ function buildScanUrl(material, project, allMaterials) {
     barcode: barcodeId,
   })
   if (material.sampling_date) params.set('sampled', material.sampling_date)
-  return `https://ictlab.app/?${params.toString()}`
+  const base = window.location.hostname === 'localhost' ? 'https://ictlab.labhive.app/' : window.location.origin + '/'
+  return `${base}?${params.toString()}`
 }
 
 function PrintLabel({ material, project, allMaterials }) {

@@ -339,8 +339,15 @@ export default function EquipmentScan() {
   }
 
   function handleOption(id) {
-    if (id === 'openapp') { setScreen('dashboard'); return }
-    if (id === 'book') { if (equipment?.id) setScanEquipmentId(equipment.id); setScreen('booking'); return }
+    if (id === 'openapp') {
+      if (!session) { window.location.href = window.location.origin + '/'; return }
+      setScreen('dashboard'); return
+    }
+    if (id === 'book') {
+      if (!session) { window.location.href = window.location.origin + '/'; return }
+      if (equipment?.id) setScanEquipmentId(equipment.id)
+      setScreen('booking'); return
+    }
     setActiveSection(prev => prev === id ? null : id)
   }
 
@@ -375,7 +382,8 @@ export default function EquipmentScan() {
     </div>
   )
 
-  if (isEquipment && !equipment) return (
+  // When logged in and equipment not found: show error. When public (no session): fall through to show boxes
+  if (isEquipment && !equipment && session) return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
       <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
       <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Equipment not found</div>
@@ -399,10 +407,10 @@ export default function EquipmentScan() {
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, marginBottom: 6 }}>
               {isEquipment
-                ? <>{equipment.equipment_name}{equipment.nickname && <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text3)', marginLeft: 8 }}>({equipment.nickname})</span>}</>
+                ? <>{equipment ? equipment.equipment_name : 'Equipment'}{equipment?.nickname && <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text3)', marginLeft: 8 }}>({equipment.nickname})</span>}</>
                 : (SCAN_ITEM_NAME || 'Unlabeled Item')}
             </div>
-            {isEquipment && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {isEquipment && equipment && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {equipment.category && (
                 <span style={{ fontSize: 12, padding: '4px 10px', background: '#e0f2fe', color: '#0369a1', borderRadius: 20, fontWeight: 500 }}>{equipment.category}</span>
               )}
@@ -419,6 +427,20 @@ export default function EquipmentScan() {
           </div>
         </div>
       </div>
+
+      {/* Login banner for public (unauthenticated) scans */}
+      {!session && (
+        <div style={{ background: '#fef9ee', border: '1px solid #fde68a', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 22 }}>🔑</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 2 }}>Log in for full access</div>
+            <div style={{ fontSize: 12, color: '#92400e', opacity: 0.85 }}>Select an option below — some features require an ICT-Lab account.</div>
+          </div>
+          <button onClick={() => { window.location.href = window.location.origin + '/' }} style={{ padding: '8px 14px', borderRadius: 8, background: '#92400e', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+            Log In →
+          </button>
+        </div>
+      )}
 
       {/* option cards */}
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
@@ -470,13 +492,31 @@ export default function EquipmentScan() {
               </div>
 
               {isActive && opt.id === 'info' && isEquipment && (
-                <EquipmentInfoSection equipment={equipment} onClose={() => setActiveSection(null)} />
+                session && equipment
+                  ? <EquipmentInfoSection equipment={equipment} onClose={() => setActiveSection(null)} />
+                  : <SectionCard title="🏷️ Equipment Info" onClose={() => setActiveSection(null)}>
+                      <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                        <div style={{ fontSize: 36, marginBottom: 10 }}>🔑</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Log in to view equipment details</div>
+                        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Equipment information is only available to ICT-Lab users.</div>
+                        <button onClick={() => { window.location.href = window.location.origin + '/' }} className="btn btn-primary">Log In to ICT-Lab</button>
+                      </div>
+                    </SectionCard>
               )}
               {isActive && opt.id === 'info' && !isEquipment && (
                 <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} project={SCAN_PROJECT} pid={SCAN_PID} mtype={SCAN_MATERIAL_TYPE} sampled={SCAN_SAMPLED} barcode={SCAN_BARCODE} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'sop' && (
-                <HowToSection videos={videos} sop={sop} onClose={() => setActiveSection(null)} />
+                session
+                  ? <HowToSection videos={videos} sop={sop} onClose={() => setActiveSection(null)} />
+                  : <SectionCard title="📖 Standard Operating Procedure" onClose={() => setActiveSection(null)}>
+                      <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                        <div style={{ fontSize: 36, marginBottom: 10 }}>🔑</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Log in to view SOPs and videos</div>
+                        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16 }}>Standard operating procedures are only available to ICT-Lab users.</div>
+                        <button onClick={() => { window.location.href = window.location.origin + '/' }} className="btn btn-primary">Log In to ICT-Lab</button>
+                      </div>
+                    </SectionCard>
               )}
               {isActive && opt.id === 'calibration' && (
                 isStaff && isEquipment ? (
@@ -495,11 +535,12 @@ export default function EquipmentScan() {
         })}
       </div>
 
-      {/* Back to dashboard */}
+      {/* Back to dashboard / go to login */}
       <div style={{ marginTop: 28, textAlign: 'center' }}>
-        <button className="btn" onClick={() => setScreen('dashboard')} style={{ fontSize: 13 }}>
-          ← Back to Dashboard
-        </button>
+        {session
+          ? <button className="btn" onClick={() => setScreen('dashboard')} style={{ fontSize: 13 }}>← Back to Dashboard</button>
+          : <button className="btn" onClick={() => { window.location.href = window.location.origin + '/' }} style={{ fontSize: 13 }}>← Go to ICT-Lab</button>
+        }
       </div>
     </div>
   )

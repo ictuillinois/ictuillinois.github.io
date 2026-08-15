@@ -292,6 +292,22 @@ export default function App() {
     if (!session || session.role !== 'admin') return <AdminLogin />
   }
 
+  // Public QR scan — show the 5-box scan page without requiring login
+  if (!session && (SCAN_EQ_ID || SCAN_ITEM_QR)) {
+    return (
+      <Suspense fallback={
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexDirection: 'column' }}>
+          <div className="spinner" />
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text3)' }}>Loading…</div>
+        </div>
+      }>
+        <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 16px 40px' }}>
+          <EquipmentScan />
+        </div>
+      </Suspense>
+    )
+  }
+
   if (!session) return (
     <>
       <Login />
