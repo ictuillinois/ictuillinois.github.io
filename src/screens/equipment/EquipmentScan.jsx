@@ -34,9 +34,10 @@ function ILabLogo({ size = 40 }) {
 }
 
 const OPTION_META = [
-  { id: 'info',        icon: '🏷️',  label: 'Equipment Info',               sub: 'View details, location, condition, and book',             color: '#0369a1', bg: '#e0f2fe' },
+  { id: 'info',        icon: '🏷️',  label: 'Info',                        sub: 'View details and location',                              color: '#0369a1', bg: '#e0f2fe' },
   { id: 'sop',         icon: '📖',  label: 'Standard Operating Procedure', sub: 'Watch how-to videos, read the SOP, or turn on/off guide', color: '#1D9E75', bg: '#E1F5EE' },
   { id: 'calibration', icon: '🔧',  label: 'Calibration',                  sub: 'Maintenance schedule and records — Lab Manager access',   color: '#92400e', bg: '#fef3c7' },
+  { id: 'book',        icon: '📅',  label: 'Book this Equipment',          sub: 'Reserve a time slot on the lab calendar',                 color: '#1D9E75', bg: '#E1F5EE' },
   { id: 'openapp',     icon: '🚀',  label: 'Open ICT-Lab',                 sub: 'Go to your dashboard — projects, training, and more',     color: '#534AB7', bg: '#EEEDFE' },
 ]
 
@@ -58,7 +59,7 @@ function SectionCard({ title, children, onClose }) {
   )
 }
 
-function EquipmentInfoSection({ equipment, onClose, onBook }) {
+function EquipmentInfoSection({ equipment, onClose }) {
   const fmt = d => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
   const condColor = { Good: '#1D9E75', Fair: '#92400e', Poor: '#a32d2d', 'Out of Service': '#a32d2d' }
   const InfoRow = ({ label, value }) => value ? (
@@ -75,7 +76,7 @@ function EquipmentInfoSection({ equipment, onClose, onBook }) {
         {equipment.condition    && <span style={{ fontSize: 12, padding: '4px 10px', background: `${condColor[equipment.condition] || '#888'}18`, color: condColor[equipment.condition] || '#888', borderRadius: 20, fontWeight: 500 }}>{equipment.condition}</span>}
         {equipment.out_of_service && <span style={{ fontSize: 12, padding: '4px 10px', background: '#fcebeb', color: '#a32d2d', borderRadius: 20, fontWeight: 700 }}>🚫 Out of Service</span>}
       </div>
-      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', marginBottom: 14 }}>
+      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px' }}>
         <InfoRow label="Manufacturer"   value={equipment.manufacturer} />
         <InfoRow label="Model"          value={equipment.model} />
         <InfoRow label="Serial Number"  value={equipment.serial_number} />
@@ -87,11 +88,22 @@ function EquipmentInfoSection({ equipment, onClose, onBook }) {
           </div>
         )}
       </div>
-      {!equipment.out_of_service && (
-        <button onClick={onBook} style={{ width: '100%', padding: '12px', borderRadius: 9, fontSize: 14, fontWeight: 700, background: '#E1F5EE', color: '#1D9E75', border: '1.5px solid #b2dfcb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          📅 Book this Equipment →
-        </button>
-      )}
+    </SectionCard>
+  )
+}
+
+function MaterialInfoSection({ name, type, onClose }) {
+  const typeLabel = type === 'material' ? 'Material / Sample' : 'Item'
+  const typeIcon  = type === 'material' ? '🧪' : '📦'
+  return (
+    <SectionCard title={`🏷️ ${typeLabel} Info`} onClose={onClose}>
+      <div style={{ textAlign: 'center', padding: '20px 0 8px' }}>
+        <div style={{ fontSize: 44, marginBottom: 12 }}>{typeIcon}</div>
+        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6, color: 'var(--text)' }}>{name || 'Unknown Item'}</div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
+          {typeLabel} — scan to identify this item in ICT-Lab.
+        </div>
+      </div>
     </SectionCard>
   )
 }
@@ -260,8 +272,10 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
 
 
 
-// URL param is the canonical source — survives re-mounts after navigation
-const EQ_FROM_URL = new URLSearchParams(window.location.search).get('eq')
+// URL params are the canonical source — evaluated once at load, survive re-mounts
+const EQ_FROM_URL    = new URLSearchParams(window.location.search).get('eq')
+const SCAN_TYPE      = new URLSearchParams(window.location.search).get('type') || 'equipment'
+const SCAN_ITEM_NAME = new URLSearchParams(window.location.search).get('item') || ''
 
 export default function EquipmentScan() {
   const { scanEquipmentId, setScreen, session, setScanEquipmentId } = useAppStore()
@@ -271,14 +285,13 @@ export default function EquipmentScan() {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState(null)
   const isStaff = session?.role === 'admin' || session?.role === 'user'
+  const isEquipment = SCAN_TYPE === 'equipment'
 
-  // Resolve the equipment ID: prefer store value, fall back to URL param.
-  // Re-hydrate the store from URL if the store value was cleared (e.g. after
-  // visiting the Booking screen and coming back).
-  const resolvedId = scanEquipmentId || EQ_FROM_URL
+  // For equipment labels: resolve the equipment ID (store → URL param)
+  const resolvedId = isEquipment ? (scanEquipmentId || EQ_FROM_URL) : null
 
   useEffect(() => {
-    if (!scanEquipmentId && EQ_FROM_URL) setScanEquipmentId(EQ_FROM_URL)
+    if (isEquipment && !scanEquipmentId && EQ_FROM_URL) setScanEquipmentId(EQ_FROM_URL)
   }, [])
 
   useEffect(() => {
@@ -302,12 +315,8 @@ export default function EquipmentScan() {
 
   function handleOption(id) {
     if (id === 'openapp') { setScreen('dashboard'); return }
+    if (id === 'book') { if (equipment?.id) setScanEquipmentId(equipment.id); setScreen('booking'); return }
     setActiveSection(prev => prev === id ? null : id)
-  }
-
-  function handleBook() {
-    if (equipment?.id) setScanEquipmentId(equipment.id)
-    setScreen('booking')
   }
 
   // Handle case where user navigates to this screen without a scan (e.g., admin)
@@ -317,14 +326,14 @@ export default function EquipmentScan() {
     }
   }
 
-  if (loading && resolvedId) return (
+  if (isEquipment && loading && resolvedId) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 14 }}>
       <div className="spinner" />
       <div style={{ fontSize: 13, color: 'var(--text3)' }}>Loading equipment info…</div>
     </div>
   )
 
-  if (!resolvedId) return (
+  if (isEquipment && !resolvedId) return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
       <ILabLogo size={64} />
       <div style={{ marginTop: 16, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Equipment QR Lookup</div>
@@ -341,7 +350,7 @@ export default function EquipmentScan() {
     </div>
   )
 
-  if (!equipment) return (
+  if (isEquipment && !equipment) return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
       <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
       <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Equipment not found</div>
@@ -351,22 +360,24 @@ export default function EquipmentScan() {
   )
 
   const conditionColor = { Good: '#1D9E75', Fair: '#92400e', Poor: '#a32d2d', 'Out of Service': '#a32d2d' }
+  const typePrefix = isEquipment ? 'Equipment' : SCAN_TYPE === 'material' ? 'Material' : 'Item'
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
-      {/* Equipment header */}
+      {/* Header — equipment name or material name */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           <ILabLogo size={48} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-              Equipment · ICT Lab
+              {typePrefix} · ICT Lab
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, marginBottom: 6 }}>
-              {equipment.equipment_name}
-              {equipment.nickname && <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text3)', marginLeft: 8 }}>({equipment.nickname})</span>}
+              {isEquipment
+                ? <>{equipment.equipment_name}{equipment.nickname && <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text3)', marginLeft: 8 }}>({equipment.nickname})</span>}</>
+                : (SCAN_ITEM_NAME || 'Unlabeled Item')}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {isEquipment && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {equipment.category && (
                 <span style={{ fontSize: 12, padding: '4px 10px', background: '#e0f2fe', color: '#0369a1', borderRadius: 20, fontWeight: 500 }}>{equipment.category}</span>
               )}
@@ -379,43 +390,52 @@ export default function EquipmentScan() {
               {equipment.out_of_service && (
                 <span style={{ fontSize: 12, padding: '4px 10px', background: '#fcebeb', color: '#a32d2d', borderRadius: 20, fontWeight: 700 }}>🚫 Out of Service</span>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       </div>
 
-      {/* 4 option cards */}
+      {/* option cards */}
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
         What would you like to do?
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {OPTION_META.map(opt => {
+          if (opt.id === 'book' && !isEquipment) return null
           const isActive = activeSection === opt.id
-          const isNavigate = opt.id === 'openapp'
-          const isLocked = opt.id === 'calibration' && !isStaff
+          const isNavigate = opt.id === 'openapp' || opt.id === 'book'
+          const isLocked =
+            (opt.id === 'sop' && !isEquipment) ||
+            (opt.id === 'calibration' && (!isEquipment || !isStaff))
+          const label = opt.id === 'info'
+            ? (isEquipment ? 'Equipment Info' : SCAN_TYPE === 'material' ? 'Material Info' : 'Item Info')
+            : opt.label
+          const lockNote = opt.id === 'calibration' && !isStaff
+            ? '— Lab Manager only'
+            : isLocked ? '— Equipment only' : null
           return (
             <div key={opt.id}>
               <div
-                onClick={() => handleOption(opt.id)}
+                onClick={() => isLocked ? undefined : handleOption(opt.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 14,
                   padding: '16px 16px',
                   background: isActive ? opt.bg : 'var(--surface)',
                   border: isActive ? `2px solid ${opt.color}` : '1px solid var(--border)',
                   borderRadius: 'var(--radius-lg)',
-                  cursor: 'pointer',
+                  cursor: isLocked ? 'default' : 'pointer',
                   transition: 'all 0.13s',
-                  opacity: isLocked ? 0.6 : 1,
+                  opacity: isLocked ? 0.5 : 1,
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = opt.color }}
+                onMouseEnter={e => { if (!isActive && !isLocked) e.currentTarget.style.borderColor = opt.color }}
                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'var(--border)' }}
               >
-                <div style={{ fontSize: 26, flexShrink: 0 }}>{opt.icon}</div>
+                <div style={{ fontSize: 26, flexShrink: 0 }}>{isLocked ? '🔒' : opt.icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: isActive ? opt.color : 'var(--text)' }}>
-                    {opt.label}
-                    {isLocked && <span style={{ marginLeft: 8, fontSize: 11, color: '#92400e', fontWeight: 400 }}>— Lab Manager only</span>}
+                    {label}
+                    {lockNote && <span style={{ marginLeft: 8, fontSize: 11, color: '#92400e', fontWeight: 400 }}>{lockNote}</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{opt.sub}</div>
                 </div>
@@ -424,14 +444,17 @@ export default function EquipmentScan() {
                 </div>
               </div>
 
-              {isActive && opt.id === 'info' && (
-                <EquipmentInfoSection equipment={equipment} onClose={() => setActiveSection(null)} onBook={handleBook} />
+              {isActive && opt.id === 'info' && isEquipment && (
+                <EquipmentInfoSection equipment={equipment} onClose={() => setActiveSection(null)} />
+              )}
+              {isActive && opt.id === 'info' && !isEquipment && (
+                <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'sop' && (
                 <HowToSection videos={videos} sop={sop} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'calibration' && (
-                isStaff ? (
+                isStaff && isEquipment ? (
                   <MaintenanceSection equipment={equipment} session={session} onClose={() => setActiveSection(null)} onGoToInventory={() => setScreen('equipment')} />
                 ) : (
                   <SectionCard title="🔧 Calibration" onClose={() => setActiveSection(null)}>

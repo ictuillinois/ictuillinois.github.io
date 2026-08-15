@@ -22,19 +22,21 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
   <text x="256" y="256" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="96" font-weight="800" fill="#000">ICT-Lab</text>
 </svg>`
 
-function getScanUrl(equipmentId) {
+function getScanUrl(id, type = 'equipment', name = '') {
   const base = (isNative() || window.location.hostname !== 'localhost') ? 'https://ictlab.app/' : `${window.location.origin}/`
-  return `${base}?eq=${equipmentId}`
+  if (type === 'equipment') return `${base}?eq=${id}&type=equipment`
+  return `${base}?item=${encodeURIComponent(name)}&type=${type}`
 }
 
 // QR label for screen preview — colorful logo, iLab logo centered over QR
-function QRLabel({ equipment, size }) {
+// item = { id, name, type: 'equipment'|'material'|'other' }
+function QRLabel({ item, size }) {
   const is2x2 = size === '2x2'
   const previewW  = is2x2 ? 192 : 256
   const previewH  = is2x2 ? 192 : 384
   const qrPx      = is2x2 ? 112 : 160
   const logoInQr  = is2x2 ? 44  : 60
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(equipment.id))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
   return (
     <div style={{
@@ -67,7 +69,7 @@ function QRLabel({ equipment, size }) {
         ◀ SCAN ME ▶
       </div>
 
-      {/* Equipment name */}
+      {/* Item name */}
       <div style={{
         fontSize: is2x2 ? 8 : 13, fontWeight: 700,
         color: '#111', textAlign: 'center',
@@ -75,14 +77,14 @@ function QRLabel({ equipment, size }) {
         textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         width: '100%',
       }}>
-        {equipment.equipment_name}
-        {equipment.nickname ? ` (${equipment.nickname})` : ''}
+        {item.name}
       </div>
     </div>
   )
 }
 
-function printLabels(equipmentList, size) {
+// items = array of { id, name, type: 'equipment'|'material'|'other' }
+function printLabels(items, size) {
   const is2x2 = size === '2x2'
   const pageW      = is2x2 ? '2in' : '4in'
   const pageH      = is2x2 ? '2in' : '6in'
@@ -91,10 +93,10 @@ function printLabels(equipmentList, size) {
   const qrPx     = is2x2 ? 112 : 230
   const logoInQr = is2x2 ? 44  : 88
 
-  const labelHtml = (eq) => {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(eq.id))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+  const labelHtml = (item) => {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
     const logoSvg = PRINT_LOGO_SVG(logoInQr)
-    const name = (eq.equipment_name + (eq.nickname ? ` (${eq.nickname})` : '')).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const name = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')
     return `<div class="label">
   <div class="qr-wrap"><img class="qr-img" src="${qrUrl}" alt="QR"/><div class="qr-logo">${logoSvg}</div></div>
   <div class="scan-me">&#9664; SCAN ME &#9654;</div>
@@ -123,7 +125,7 @@ function printLabels(equipmentList, size) {
   .scan-me { font-size: ${is2x2 ? 8 : 14}px; font-weight: 800; color: #333; letter-spacing: 0.18em; text-transform: uppercase; text-align: center; }
   .eq-name { font-size: ${is2x2 ? 8 : 13}px; font-weight: 700; color: #111; text-align: center; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 </style></head><body>
-${equipmentList.map(labelHtml).join('\n')}
+${items.map(labelHtml).join('\n')}
 <script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script>
 </body></html>`
 
@@ -141,13 +143,26 @@ ${equipmentList.map(labelHtml).join('\n')}
 
 // ── Equipment Barcode tab ─────────────────────────────────────────────────────
 
+const LABEL_TYPES = [
+  { v: 'equipment', icon: '🔧', label: 'Equipment', sub: 'Lab equipment & instruments' },
+  { v: 'material',  icon: '🧪', label: 'Material',  sub: 'Samples, chemicals, supplies' },
+  { v: 'other',     icon: '📦', label: 'Other',     sub: 'Any other item' },
+]
+
 function EquipmentBarcodeTab({ equipment, loading }) {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [selected, setSelected] = useState(null)
   const [printSize, setPrintSize] = useState('2x2')
   const [copied, setCopied] = useState(false)
+  const [labelType, setLabelType] = useState('equipment')
+  const [customName, setCustomName] = useState('')
   const isMobile = useIsMobile()
+
+  // Unified item for QR generation
+  const activeItem = labelType === 'equipment'
+    ? (selected ? { id: selected.id, name: selected.equipment_name + (selected.nickname ? ` (${selected.nickname})` : ''), type: 'equipment' } : null)
+    : (customName.trim() ? { id: null, name: customName.trim(), type: labelType } : null)
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))]
   const filtered = equipment.filter(e => {
@@ -158,8 +173,8 @@ function EquipmentBarcodeTab({ equipment, loading }) {
   })
 
   function copyUrl() {
-    if (!selected) return
-    navigator.clipboard.writeText(getScanUrl(selected.id))
+    if (!activeItem) return
+    navigator.clipboard.writeText(getScanUrl(activeItem.id, activeItem.type, activeItem.name))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -202,28 +217,56 @@ function EquipmentBarcodeTab({ equipment, loading }) {
 
   return (
     <div>
-      {sidebarSlot && createPortal(listPanel, sidebarSlot)}
-      {isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>{listPanel}</div>}
+      {/* Label subject type selector */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Label Subject</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {LABEL_TYPES.map(opt => (
+            <div key={opt.v} onClick={() => { setLabelType(opt.v); setSelected(null); setCustomName('') }}
+              style={{ flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                border: labelType === opt.v ? '2px solid var(--accent)' : '2px solid var(--border)',
+                background: labelType === opt.v ? 'var(--accent-light)' : 'var(--surface)',
+                transition: 'all 0.12s' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: labelType === opt.v ? 'var(--accent)' : 'var(--text)', marginBottom: 2 }}>{opt.icon} {opt.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{opt.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Equipment: sidebar list */}
+      {labelType === 'equipment' && sidebarSlot && createPortal(listPanel, sidebarSlot)}
+      {labelType === 'equipment' && isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>{listPanel}</div>}
+
+      {/* Material / Other: name input */}
+      {labelType !== 'equipment' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            {labelType === 'material' ? 'Material / Sample Name' : 'Item Name'}
+          </div>
+          <input
+            value={customName}
+            onChange={e => setCustomName(e.target.value)}
+            placeholder={labelType === 'material' ? 'e.g. Sample A, NaCl solution, Reagent #3…' : 'Enter item name…'}
+            style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 14, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
+          />
+        </div>
+      )}
 
       {/* Right: preview + print */}
       <div>
-        {selected ? (
+        {activeItem ? (
           <>
             {/* Print size toggle */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Label Size</div>
               <div style={{ display: 'flex', gap: 10 }}>
                 {[{ v: '2x2', label: '2 × 2 inches', sub: 'Small — compact equipment' }, { v: '4x6', label: '4 × 6 inches', sub: 'Large — easy scanning from distance' }].map(opt => (
-                  <div
-                    key={opt.v}
-                    onClick={() => setPrintSize(opt.v)}
-                    style={{
-                      flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                  <div key={opt.v} onClick={() => setPrintSize(opt.v)}
+                    style={{ flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
                       border: printSize === opt.v ? '2px solid var(--accent)' : '2px solid var(--border)',
                       background: printSize === opt.v ? 'var(--accent-light)' : 'var(--surface)',
-                      transition: 'all 0.12s',
-                    }}
-                  >
+                      transition: 'all 0.12s' }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: printSize === opt.v ? 'var(--accent)' : 'var(--text)', marginBottom: 2 }}>{opt.label}</div>
                     <div style={{ fontSize: 11, color: 'var(--text3)' }}>{opt.sub}</div>
                   </div>
@@ -235,7 +278,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Label Preview</div>
               <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <QRLabel equipment={selected} size={printSize} />
+                <QRLabel item={activeItem} size={printSize} />
               </div>
             </div>
 
@@ -244,7 +287,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Scan URL</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ flex: 1, fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text2)', background: 'var(--surface2)', borderRadius: 6, padding: '8px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {getScanUrl(selected.id)}
+                  {getScanUrl(activeItem.id, activeItem.type, activeItem.name)}
                 </div>
                 <button onClick={copyUrl} className="btn btn-sm" style={{ flexShrink: 0, background: copied ? '#E1F5EE' : undefined, color: copied ? '#1D9E75' : undefined }}>
                   {copied ? '✓ Copied' : 'Copy'}
@@ -256,7 +299,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
             <button
               className="btn btn-primary"
               style={{ width: '100%', padding: '12px', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-              onClick={() => printLabels([selected], printSize)}
+              onClick={() => printLabels([activeItem], printSize)}
             >
               🖨️ Print Label ({printSize === '2x2' ? '2×2 in' : '4×6 in'})
             </button>
@@ -266,10 +309,14 @@ function EquipmentBarcodeTab({ equipment, loading }) {
           </>
         ) : (
           <div style={{ background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, minHeight: 360 }}>
-            <div style={{ fontSize: 48 }}>🔲</div>
-            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>Select equipment to generate a QR label</div>
+            <div style={{ fontSize: 48 }}>{labelType === 'equipment' ? '🔲' : labelType === 'material' ? '🧪' : '📦'}</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
+              {labelType === 'equipment' ? 'Select equipment to generate a QR label' : 'Enter a name above to generate a QR label'}
+            </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.6, maxWidth: 280 }}>
-              Choose any piece of equipment from the list on the left to preview and print its QR code label.
+              {labelType === 'equipment'
+                ? 'Choose any piece of equipment from the list on the left to preview and print its QR code label.'
+                : `Type the ${labelType} name above — the QR code will encode it so the scan page shows the right information.`}
             </div>
           </div>
         )}
@@ -312,7 +359,7 @@ function RecordsTab({ equipment, loading }) {
   function exportSelected() {
     const list = equipment.filter(e => selected.has(e.id))
     if (!list.length) return
-    printLabels(list, exportSize)
+    printLabels(list.map(e => ({ id: e.id, name: e.equipment_name + (e.nickname ? ` (${e.nickname})` : ''), type: 'equipment' })), exportSize)
   }
 
   const selectedCount = [...selected].filter(id => equipment.some(e => e.id === id)).length
