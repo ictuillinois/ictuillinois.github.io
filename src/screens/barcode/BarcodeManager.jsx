@@ -23,7 +23,7 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
 </svg>`
 
 function getScanUrl(id, type = 'equipment', name = '') {
-  const base = (isNative() || window.location.hostname !== 'localhost') ? 'https://ictlab.app/' : `${window.location.origin}/`
+  const base = 'https://ictlab.app/'
   if (type === 'equipment') return `${base}?eq=${id}&type=equipment`
   return `${base}?item=${encodeURIComponent(name)}&type=${type}`
 }
