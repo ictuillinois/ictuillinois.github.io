@@ -11,7 +11,7 @@ const FAQ = [
   {
     id: 'features',
     q: 'What modules are available?',
-    a: 'ICT-Lab includes:\n• Project Workspace — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (staff)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (staff)',
+    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (staff)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (staff)',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions', 'available'],
     followups: ['booking', 'training', 'projects'],
   },
@@ -45,9 +45,9 @@ const FAQ = [
   },
   {
     id: 'projects',
-    q: 'What is the Project Workspace?',
-    a: 'The Project Workspace lets you create and manage research projects. You can track material inventory with barcode scanning, record test results, and store project files and links. Research Engineers can also assign you to projects.',
-    keywords: ['project', 'research', 'material', 'test result', 'workspace', 'sample', 'inventory', 'project workspace', 'barcode'],
+    q: 'What is the Project & Material?',
+    a: 'The Project & Material lets you create and manage research projects. You can track material inventory with barcode scanning, record test results, and store project files and links. Research Engineers can also assign you to projects.',
+    keywords: ['project', 'research', 'material', 'test result', 'workspace', 'sample', 'inventory', 'project & material', 'barcode'],
     followups: ['qr', 'features', 'contact'],
   },
   {

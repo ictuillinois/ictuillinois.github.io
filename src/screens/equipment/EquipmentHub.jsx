@@ -223,7 +223,7 @@ function EquipmentInfo({ equipment, session }) {
           <div>
             {showVideoForm && (
               <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 14 }}>
-                <div className="field"><label>Title *</label><input value={videoForm.title} onChange={e => setVideoForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. How to operate the Gyratory Compactor" autoFocus /></div>
+                <div className="field"><label>Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={videoForm.title} onChange={e => setVideoForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. How to operate the Gyratory Compactor" autoFocus /></div>
                 <div className="field"><label>Video URL or external link</label><input value={videoForm.video_url} onChange={e => setVideoForm(f => ({ ...f, video_url: e.target.value }))} placeholder="https://youtube.com/watch?v=… or any URL" /></div>
                 <div className="field"><label>Description</label><textarea rows={2} value={videoForm.description} onChange={e => setVideoForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'vertical' }} /></div>
                 <div style={{ display: 'flex', gap: 10 }}>
@@ -770,12 +770,12 @@ function SoloAddEquipmentModal({ categories, session, onClose, onSaved, onGoToCa
             </div>
           )}
           <div className="grid-2">
-            <div className="field"><label>Equipment Name *</label><input value={form.equipment_name} onChange={e => setForm(f => ({ ...f, equipment_name: e.target.value }))} placeholder="e.g. Digital Caliper" autoFocus /></div>
+            <div className="field"><label>Equipment Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.equipment_name} onChange={e => setForm(f => ({ ...f, equipment_name: e.target.value }))} placeholder="e.g. Digital Caliper" autoFocus /></div>
             <div className="field"><label>Nickname / ID</label><input value={form.nickname} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} placeholder="e.g. CAL-01" /></div>
           </div>
           <div className="grid-2">
             <div className="field">
-              <label>Category *</label>
+              <label>Category <span style={{ color: '#c84b2f' }}>*</span></label>
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} disabled={noCats}>
                 <option value="">{noCats ? '— Create a category first —' : '— Select —'}</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}

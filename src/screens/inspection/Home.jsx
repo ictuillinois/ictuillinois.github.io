@@ -255,11 +255,11 @@ function SupplyModal({ supply, rooms, defaultRoomId, onClose, onSaved }) {
           {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
       </div>
-      <div className="field"><label>Supply name *</label>
+      <div className="field"><label>Supply name <span style={{ color: '#c84b2f' }}>*</span></label>
         <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Nitrile Gloves (M)" />
       </div>
       <div className="grid-2">
-        <div className="field"><label>Unit *</label>
+        <div className="field"><label>Unit <span style={{ color: '#c84b2f' }}>*</span></label>
           <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
             {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
           </select>

@@ -7,7 +7,7 @@ const FEATURES = [
   { icon: '📚', label: 'Equipment Hub',     desc: 'SOPs, training videos, standards & exams library' },
   { icon: '📅', label: 'Reserve Equipment', desc: 'Book equipment with a shared calendar & approvals' },
   { icon: '🎓', label: 'Training Records',  desc: 'Certificates, compliance tracking & exam history' },
-  { icon: '🧪', label: 'Project Workspace', desc: 'Research projects, materials & test results' },
+  { icon: '🧪', label: 'Project & Material', desc: 'Research projects, materials & test results' },
   { icon: '📋', label: 'Task Board',        desc: 'Tasks, meetings, deadlines & team calendar' },
 ]
 

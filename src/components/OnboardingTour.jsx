@@ -60,7 +60,7 @@ const SCREEN_TIPS = {
     body: 'Upload your training certificates here — each one is reviewed and approved by a Research Engineer. Complete all required training before using lab equipment.\n\nCheck the Safety tab for required lab safety steps first.',
   },
   projects: {
-    title: 'Project Workspace',
+    title: 'Project & Material',
     body: 'Create and manage your research projects here. Track material inventory with barcode scanning, record test results, and store project files and links.',
   },
   home: {

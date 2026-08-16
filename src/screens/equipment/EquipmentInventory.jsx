@@ -133,7 +133,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
         <div style={{ padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Basic Info</div>
           <div className="grid-2">
-            <div className="field"><label>Equipment Name *</label><input value={form.equipment_name} onChange={e => setForm(f => ({ ...f, equipment_name: e.target.value }))} placeholder="e.g. Gyratory Compactor" autoFocus /></div>
+            <div className="field"><label>Equipment Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.equipment_name} onChange={e => setForm(f => ({ ...f, equipment_name: e.target.value }))} placeholder="e.g. Gyratory Compactor" autoFocus /></div>
             <div className="field"><label>Nickname / ID</label><input value={form.nickname} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} placeholder="e.g. Servopac" /></div>
           </div>
           <div className="grid-2">
@@ -988,14 +988,14 @@ function CalibrationTab({ session }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="field">
-                    <label>Calibration Date *</label>
+                    <label>Calibration Date <span style={{ color: '#c84b2f' }}>*</span></label>
                     <input type="date" value={modal.form.start_date} onChange={e => {
                       const next = calcNextDue(e.target.value, modal.form.interval_months)
                       setModal(m => ({ ...m, form: { ...m.form, start_date: e.target.value, next_due_date: next || m.form.next_due_date } }))
                     }} />
                   </div>
                   <div className="field">
-                    <label>Interval (months) *</label>
+                    <label>Interval (months) <span style={{ color: '#c84b2f' }}>*</span></label>
                     <input type="number" min="1" placeholder="e.g. 12" value={modal.form.interval_months} onChange={e => {
                       const next = calcNextDue(modal.form.start_date, e.target.value)
                       setModal(m => ({ ...m, form: { ...m.form, interval_months: e.target.value, next_due_date: next || m.form.next_due_date } }))
@@ -1054,7 +1054,7 @@ function CalibrationTab({ session }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="field">
-                    <label>Calibration Date *</label>
+                    <label>Calibration Date <span style={{ color: '#c84b2f' }}>*</span></label>
                     <input type="date" value={modal.recalForm.start_date} onChange={e => {
                       const latest = getLatestRecord(modal.equipmentId)
                       const next = calcNextDue(e.target.value, latest?.interval_months)
@@ -1068,7 +1068,7 @@ function CalibrationTab({ session }) {
                   </div>
                 </div>
                 <div className="field">
-                  <label>New Calibration Document *</label>
+                  <label>New Calibration Document <span style={{ color: '#c84b2f' }}>*</span></label>
                   <input type="file" ref={docRef} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ fontSize: 12 }} />
                 </div>
                 <div className="field">

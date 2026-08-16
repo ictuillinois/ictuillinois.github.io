@@ -149,7 +149,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
       {form.material_type === 'aggregate' && (
         <div>
           <div className="field">
-            <label>Sieve Sizes <span style={{ color: 'var(--accent2)' }}>*</span></label>
+            <label>Sieve Sizes <span style={{ color: '#c84b2f' }}>*</span></label>
             <CheckList options={SIEVE_SIZES} selected={form.agg_sieve_sizes || []} onChange={v => setForm(f => ({ ...f, agg_sieve_sizes: v }))} required />
             {(!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) && (
               <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Select at least one sieve size</div>
@@ -173,7 +173,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
       {form.material_type === 'asphalt_binder' && (
         <div>
           <div className="field">
-            <label>Binder PG Grade <span style={{ color: 'var(--accent2)' }}>*</span></label>
+            <label>Binder PG Grade <span style={{ color: '#c84b2f' }}>*</span></label>
             <select value={isCustomPG ? 'Other' : form.ab_binder_pg} onChange={e => setPG(e.target.value)}>
               <option value="">— Select PG Grade —</option>
               {PG_GRADES.map(g => <option key={g} value={g}>{g}</option>)}
@@ -213,7 +213,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
             <input value={form.pm_mix_design || ''} onChange={e => setForm(f => ({ ...f, pm_mix_design: e.target.value }))} placeholder="e.g. Mix design #2024-07" />
           </div>
           <div className="field">
-            <label>Binder PG Grade <span style={{ color: 'var(--accent2)' }}>*</span></label>
+            <label>Binder PG Grade <span style={{ color: '#c84b2f' }}>*</span></label>
             <select value={PG_GRADES.slice(0,-1).includes(form.pm_binder_pg) ? form.pm_binder_pg : (form.pm_binder_pg ? 'Other' : '')}
               onChange={e => setForm(f => ({ ...f, pm_binder_pg: e.target.value === 'Other' ? '' : e.target.value }))}>
               <option value="">— Select PG Grade —</option>
@@ -236,7 +236,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
       {/* ── OTHER ── */}
       {form.material_type === 'other' && (
         <div className="field">
-          <label>Additional Info <span style={{ color: 'var(--accent2)' }}>*</span></label>
+          <label>Additional Info <span style={{ color: '#c84b2f' }}>*</span></label>
           <textarea rows={3} value={form.other_info || ''} onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))} placeholder="Describe the material type and any relevant details…" style={{ resize: 'vertical' }} />
         </div>
       )}
@@ -530,7 +530,7 @@ function SoloMaterialTypeForm({ form, setForm }) {
   return (
     <Section title="1 · Material Type">
       <div className="field">
-        <label>Type <span style={{ color: 'var(--accent2)' }}>*</span></label>
+        <label>Type <span style={{ color: '#c84b2f' }}>*</span></label>
         <select value={isCustom ? '__custom__' : (form.material_type || '')} onChange={e => handleTypeSelect(e.target.value)}>
           <option value="">— Select material type —</option>
           {SOLO_MATERIAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}

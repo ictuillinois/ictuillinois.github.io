@@ -666,7 +666,7 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
           <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Add vehicle training</div>
             <div className="field">
-              <label>Vehicle name *</label>
+              <label>Vehicle name <span style={{ color: '#c84b2f' }}>*</span></label>
               <input value={form.vehicleName} onChange={e => setForm(f => ({ ...f, vehicleName: e.target.value }))} placeholder="e.g. Golf Cart #1, Forklift" autoFocus />
             </div>
             <div className="grid-2">
@@ -1039,7 +1039,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
             <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 16 }}>
               <div style={{ fontWeight: 600, marginBottom: 12 }}>New equipment</div>
               <div className="grid-2">
-                <div className="field" style={{ marginBottom: 0 }}><label>Name *</label><input value={newEquip.name} onChange={e => setNewEquip(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gyratory Compactor" autoFocus /></div>
+                <div className="field" style={{ marginBottom: 0 }}><label>Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={newEquip.name} onChange={e => setNewEquip(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Gyratory Compactor" autoFocus /></div>
                 <div className="field" style={{ marginBottom: 0 }}><label>Nickname</label><input value={newEquip.description} onChange={e => setNewEquip(f => ({ ...f, description: e.target.value }))} placeholder="e.g. Servopac" /></div>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -1382,7 +1382,7 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 400, width: '100%', border: '1px solid var(--border)' }}>
         <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{form.isRetraining ? '🔄 Add retraining record' : 'Add equipment training'}</div>
         {form.isRetraining && <div style={{ fontSize: 12, color: '#0369a1', background: '#e0f2fe', borderRadius: 6, padding: '6px 10px', marginBottom: 12 }}>This will be recorded as retraining.</div>}
-        <div className="field"><label>Equipment *</label>
+        <div className="field"><label>Equipment <span style={{ color: '#c84b2f' }}>*</span></label>
           <select value={form.equipmentId} onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value }))}>
             <option value="">— Select equipment —</option>
             {equipment.map(e => {
@@ -1793,7 +1793,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
                 <button onClick={() => setAssigning(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
               </div>
               <div className="field">
-                <label>Assign to lab user *</label>
+                <label>Assign to lab user <span style={{ color: '#c84b2f' }}>*</span></label>
                 <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} autoFocus>
                   <option value="">— Select lab user —</option>
                   {students.map(s => {

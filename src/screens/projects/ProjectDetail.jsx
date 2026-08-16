@@ -102,7 +102,7 @@ export default function ProjectDetail() {
       {showEditModal && (
         <Modal onClose={() => setShowEditModal(false)}>
           <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Edit project</div>
-          <div className="field"><label>Project name *</label><input value={form.name} onChange={e => setForm({...form,name:e.target.value})} /></div>
+          <div className="field"><label>Project name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm({...form,name:e.target.value})} /></div>
           <div className="field"><label>Assigned to</label><input value={form.assigned_to} onChange={e => setForm({...form,assigned_to:e.target.value})} /></div>
           <div className="field"><label>Status</label><select value={form.status} onChange={e => setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="on hold">On Hold</option><option value="completed">Completed</option></select></div>
           <div className="grid-2">
@@ -116,7 +116,7 @@ export default function ProjectDetail() {
       {showAddSupply && (
         <Modal onClose={() => setShowAddSupply(false)}>
           <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Add material / supply</div>
-          <div className="field"><label>Item name *</label><input value={supplyForm.name} onChange={e => setSupplyForm({...supplyForm,name:e.target.value})} placeholder="e.g. Nitrile gloves (M)" /></div>
+          <div className="field"><label>Item name <span style={{ color: '#c84b2f' }}>*</span></label><input value={supplyForm.name} onChange={e => setSupplyForm({...supplyForm,name:e.target.value})} placeholder="e.g. Nitrile gloves (M)" /></div>
           <div className="grid-2">
             <div className="field"><label>Quantity</label><input type="number" value={supplyForm.quantity} onChange={e => setSupplyForm({...supplyForm,quantity:parseFloat(e.target.value)||0})} min="0" /></div>
             <div className="field"><label>Unit</label><input value={supplyForm.unit} onChange={e => setSupplyForm({...supplyForm,unit:e.target.value})} placeholder="pcs / boxes / mL…" /></div>

@@ -314,7 +314,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           {panel && <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400, marginTop: 4 }}>Drag on the calendar to adjust time</div>}
         </div>
 
-        <div className="field"><label>Equipment *</label>
+        <div className="field"><label>Equipment <span style={{ color: '#c84b2f' }}>*</span></label>
           <select value={form.equipment_id} onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))}>
             <option value="">— Select equipment —</option>
             {equipmentList.map(e => <option key={e.id} value={e.id}>{e.nickname || e.equipment_name}</option>)}
@@ -331,16 +331,16 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
         )}
 
         <div className="field">
-          <label>Start time *</label>
+          <label>Start time <span style={{ color: '#c84b2f' }}>*</span></label>
           <input type="datetime-local" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
         </div>
         <div className="field">
-          <label>End time *</label>
+          <label>End time <span style={{ color: '#c84b2f' }}>*</span></label>
           <input type="datetime-local" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
         </div>
 
         <div className="field">
-          <label>Purpose of use *</label>
+          <label>Purpose of use <span style={{ color: '#c84b2f' }}>*</span></label>
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
             {[
               { id: 'project', icon: '🧪', label: 'Project' },
@@ -3073,7 +3073,7 @@ function BookingCalendar({ session }) {
                       {multiDraftIdx >= selectedEq.length && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 4 }}>
                           <div className="field" style={{ margin: 0, minWidth: 200 }}>
-                            <label style={{ fontSize: 11 }}>Purpose of use *</label>
+                            <label style={{ fontSize: 11 }}>Purpose of use <span style={{ color: '#c84b2f' }}>*</span></label>
                             <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                               {[{ id: 'project', label: '🧪 Project' }, { id: 'thesis', label: '📚 Thesis' }, { id: 'other', label: '📝 Other' }].map(opt => (
                                 <div key={opt.id} onClick={() => setMultiDraftPurpose(opt.id)}

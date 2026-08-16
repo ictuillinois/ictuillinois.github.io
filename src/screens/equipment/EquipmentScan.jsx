@@ -72,10 +72,12 @@ function InfoRow({ label, value }) {
   )
 }
 
-function MaterialInfoSection({ name, type, project, pid, mtype, sampled, barcode, onClose }) {
+function MaterialInfoSection({ name, type, project, pid, mtype, sampled, barcode, source, owner, storage, qty, storedDate, onClose }) {
   const typeLabel = type === 'material' ? 'Material / Sample' : 'Item'
   const typeIcon  = type === 'material' ? '🧪' : '📦'
-  const hasDetails = project || pid || mtype || sampled || barcode
+  const hasMaterialDetails = project || pid || mtype || sampled || barcode
+  const hasOtherDetails = source || mtype || owner || storage || qty || storedDate
+  const hasDetails = type === 'other' ? hasOtherDetails : hasMaterialDetails
   return (
     <SectionCard title={`🏷️ ${typeLabel} Info`} onClose={onClose}>
       <div style={{ padding: '16px 0 8px' }}>
@@ -83,14 +85,27 @@ function MaterialInfoSection({ name, type, project, pid, mtype, sampled, barcode
           <div style={{ fontSize: 40, marginBottom: 8 }}>{typeIcon}</div>
           <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{name || 'Unknown Item'}</div>
         </div>
-        {hasDetails && (
-          <div>
-            {project  && <InfoRow label="Project"       value={project} />}
-            {pid      && <InfoRow label="Title"         value={pid} />}
-            {mtype    && <InfoRow label="Material Type" value={MTYPE_LABELS[mtype] || mtype} />}
-            {sampled  && <InfoRow label="Sampled"       value={sampled} />}
-            {barcode  && <InfoRow label="Barcode ID"    value={barcode} />}
-          </div>
+        {type === 'other' ? (
+          hasOtherDetails && (
+            <div>
+              {source     && <InfoRow label="Source / Send From"     value={source} />}
+              {mtype      && <InfoRow label="Type / Material / Item" value={mtype} />}
+              {owner      && <InfoRow label="PI / Owner"             value={owner} />}
+              {storage    && <InfoRow label="Storage Location"       value={storage} />}
+              {qty        && <InfoRow label="Total / Weight"         value={qty} />}
+              {storedDate && <InfoRow label="Date of Storage"        value={storedDate} />}
+            </div>
+          )
+        ) : (
+          hasMaterialDetails && (
+            <div>
+              {project  && <InfoRow label="Project"       value={project} />}
+              {pid      && <InfoRow label="Title"         value={pid} />}
+              {mtype    && <InfoRow label="Material Type" value={MTYPE_LABELS[mtype] || mtype} />}
+              {sampled  && <InfoRow label="Sampled"       value={sampled} />}
+              {barcode  && <InfoRow label="Barcode ID"    value={barcode} />}
+            </div>
+          )
         )}
       </div>
     </SectionCard>
@@ -270,6 +285,11 @@ const SCAN_PID           = new URLSearchParams(window.location.search).get('pid'
 const SCAN_MATERIAL_TYPE = new URLSearchParams(window.location.search).get('mtype') || ''
 const SCAN_SAMPLED       = new URLSearchParams(window.location.search).get('sampled') || ''
 const SCAN_BARCODE       = new URLSearchParams(window.location.search).get('barcode') || ''
+const SCAN_SOURCE        = new URLSearchParams(window.location.search).get('source') || ''
+const SCAN_OWNER         = new URLSearchParams(window.location.search).get('owner') || ''
+const SCAN_STORAGE_LOC   = new URLSearchParams(window.location.search).get('storage') || ''
+const SCAN_QTY           = new URLSearchParams(window.location.search).get('qty') || ''
+const SCAN_STORED_DATE   = new URLSearchParams(window.location.search).get('stored_date') || ''
 
 export default function EquipmentScan() {
   const { scanEquipmentId, setScreen, session, setScanEquipmentId } = useAppStore()
@@ -473,7 +493,7 @@ export default function EquipmentScan() {
                     </SectionCard>
               )}
               {isActive && opt.id === 'info' && !isEquipment && (
-                <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} project={SCAN_PROJECT} pid={SCAN_PID} mtype={SCAN_MATERIAL_TYPE} sampled={SCAN_SAMPLED} barcode={SCAN_BARCODE} onClose={() => setActiveSection(null)} />
+                <MaterialInfoSection name={SCAN_ITEM_NAME} type={SCAN_TYPE} project={SCAN_PROJECT} pid={SCAN_PID} mtype={SCAN_MATERIAL_TYPE} sampled={SCAN_SAMPLED} barcode={SCAN_BARCODE} source={SCAN_SOURCE} owner={SCAN_OWNER} storage={SCAN_STORAGE_LOC} qty={SCAN_QTY} storedDate={SCAN_STORED_DATE} onClose={() => setActiveSection(null)} />
               )}
               {isActive && opt.id === 'sop' && (
                 session

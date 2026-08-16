@@ -32,7 +32,7 @@ function getModules(role, loginMode, activeModules) {
 
 function getAllModulesForStudent() {
   return [
-    { key: 'projects',   screen: 'projects',   label: 'Project Workspace', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
+    { key: 'projects',   screen: 'projects',   label: 'Project & Material', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
     { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'barcode',    screen: 'barcode',    label: 'QR Scan',           sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
     { key: 'training',   screen: 'training',   label: 'Training Records',  sub: 'Safety steps & certifications',    icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
@@ -245,7 +245,7 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
   const trainingPct = Math.round((data.trainingsComplete/data.trainingsTotal)*100)
   const trainingColor = trainingPct===100?'#1D9E75':trainingPct>=50?'#0369a1':'#c84b2f'
   const allQuickLinks = [
-    { key:'projects',   icon:'🧪', label:'Project Workspace', sub:'Inventory, results & workspace', screen:'projects',   color:'#534AB7' },
+    { key:'projects',   icon:'🧪', label:'Project & Material', sub:'Inventory, results & workspace', screen:'projects',   color:'#534AB7' },
     { key:'booking',    icon:'📅', label:'Book Equipment',    sub:'Reserve lab equipment',          screen:'booking',    color:'#0369a1' },
     { key:'barcode',    icon:'📷', label:'QR Scan',            sub:'Scan lab materials',             screen:'barcode',    color:'#00796b' },
     { key:'training',   icon:'🎓', label:'Training Records',  sub:'Safety steps & certifications',  screen:'training',   color:'#0369a1' },

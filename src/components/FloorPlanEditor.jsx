@@ -311,13 +311,13 @@ Rules:
 
       {/* Plan name */}
       <div className="field" style={{ maxWidth: 340 }}>
-        <label>Floor plan name *</label>
+        <label>Floor plan name <span style={{ color: '#c84b2f' }}>*</span></label>
         <input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="e.g. Building A · Floor 1" />
       </div>
 
       {/* Image upload */}
       <div className="field">
-        <label>Floor plan image (PNG or JPG) *</label>
+        <label>Floor plan image (PNG or JPG) <span style={{ color: '#c84b2f' }}>*</span></label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 8, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, background: 'var(--surface2)', fontWeight: 500 }}>
             {uploading ? '⏳ Processing…' : imageUrl ? '🔄 Replace image' : '📤 Upload image'}

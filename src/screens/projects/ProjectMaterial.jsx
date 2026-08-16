@@ -62,8 +62,8 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         </div>
       </div>
       <div className="grid-2">
-        <div className="field"><label>Project Name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-        <div className="field"><label>Project Title *</label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+        <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
       </div>
       <div className="grid-2">
         <div className="field"><label>CFOP (Funding Code)</label><input value={form.cfop} onChange={e => setForm(f => ({ ...f, cfop: e.target.value }))} /></div>
@@ -149,8 +149,8 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
     <Modal onClose={onClose}>
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>New project</div>
       <div className="grid-2">
-        <div className="field"><label>Project Name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
-        <div className="field"><label>Project Title *</label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
+        <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
       </div>
       <div className="grid-2">
         <div className="field"><label>CFOP (Funding Code)</label><input value={form.cfop} onChange={e => setForm(f => ({ ...f, cfop: e.target.value }))} /></div>
@@ -175,6 +175,75 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
           {saving ? 'Creating…' : 'Create project'}
         </button>
         <button className="btn" onClick={onClose}>Cancel</button>
+      </div>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
+        ℹ️ Additional details (members, dates, notes) can be filled in after the project is created.
+      </div>
+    </Modal>
+  )
+}
+
+// ── New Material Modal ──────────────────────────────────────────
+function NewMaterialModal({ onClose, onCreated }) {
+  const { session, toast } = useAppStore()
+  const [form, setForm] = useState({ name: '', sampling_date: '', project_id: '' })
+  const [projects, setProjects] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
+
+  useEffect(() => {
+    async function loadProjects() {
+      let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('name')
+      if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+      const { data } = await q
+      setProjects(data || [])
+    }
+    loadProjects()
+  }, [])
+
+  async function create() {
+    setErrMsg('')
+    if (!form.name.trim()) { setErrMsg('Material name is required.'); return }
+    setSaving(true)
+    const payload = {
+      name: form.name.trim(),
+      sampling_date: form.sampling_date || null,
+      project_id: form.project_id || null,
+      organization_id: session?.organizationId || null,
+    }
+    const { data, error } = await sb.from('project_materials').insert(payload).select().single()
+    setSaving(false)
+    if (error) { setErrMsg(error.message); return }
+    toast('Material added!'); if (onCreated) onCreated(data); onClose()
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Add material</div>
+      <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
+      <div className="grid-2">
+        <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
+      </div>
+      <div className="field">
+        <label>Project related to this material</label>
+        <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
+          <option value="">— None / standalone —</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.project_id ? ` · ${p.project_id}` : ''}</option>)}
+        </select>
+      </div>
+      {errMsg && (
+        <div style={{ background: '#fdf0ed', border: '1px solid #e24b4a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#c0392b' }}>
+          ⚠️ {errMsg}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button className="btn btn-primary" onClick={create} disabled={saving}>
+          {saving ? 'Adding…' : 'Add material'}
+        </button>
+        <button className="btn" onClick={onClose}>Cancel</button>
+      </div>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
+        ℹ️ Additional details (material type, source, quantities, photos) can be filled in after saving.
       </div>
     </Modal>
   )
@@ -234,7 +303,7 @@ function SubmitResultPanel({ projects, session }) {
       <div className="card">
         <div className="grid-2">
           <div className="field">
-            <label>Project *</label>
+            <label>Project <span style={{ color: '#c84b2f' }}>*</span></label>
             <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
               <option value="">— Select project —</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -246,7 +315,7 @@ function SubmitResultPanel({ projects, session }) {
           </div>
         </div>
         <div className="field">
-          <label>Description / Values *</label>
+          <label>Description / Values <span style={{ color: '#c84b2f' }}>*</span></label>
           <textarea rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Test details, values, observations…" style={{ resize: 'vertical' }} />
         </div>
         <div className="field">
@@ -457,7 +526,7 @@ function ResultsTab({ projects, session, allowedNames }) {
           {/* Row 1: Test Name + Specimen Name */}
           <div className="grid-2">
             <div className="field">
-              <label>Test Name *</label>
+              <label>Test Name <span style={{ color: '#c84b2f' }}>*</span></label>
               <input value={form.test_name} onChange={e => setForm(f => ({ ...f, test_name: e.target.value }))}
                 placeholder="e.g. Marshall Stability, Density Test…" autoFocus />
             </div>
@@ -471,7 +540,7 @@ function ResultsTab({ projects, session, allowedNames }) {
           {/* Row 2: Project + Date */}
           <div className="grid-2">
             <div className="field">
-              <label>Project *</label>
+              <label>Project <span style={{ color: '#c84b2f' }}>*</span></label>
               <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
                 <option value="">— Select project —</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.project_name}</option>)}
@@ -485,7 +554,7 @@ function ResultsTab({ projects, session, allowedNames }) {
 
           {/* Row 3: Equipment picker (team only) */}
           {!isSolo && <div className="field">
-            <label>Equipment *</label>
+            <label>Equipment <span style={{ color: '#c84b2f' }}>*</span></label>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
                 <input value={equipSearch} onChange={e => setEquipSearch(e.target.value)}
@@ -1572,7 +1641,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: 'var(--accent)' }}>+ New Test Result</div>
               <div className="grid-2">
                 <div className="field">
-                  <label>Test Name *</label>
+                  <label>Test Name <span style={{ color: '#c84b2f' }}>*</span></label>
                   <input value={addForm.test_name} onChange={e => setAddForm(f => ({ ...f, test_name: e.target.value }))} placeholder="e.g. Marshall Stability, Density Test…" autoFocus />
                 </div>
                 <div className="field">
@@ -1582,7 +1651,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
               </div>
               <div className="grid-2">
                 <div className="field">
-                  <label>Project *</label>
+                  <label>Project <span style={{ color: '#c84b2f' }}>*</span></label>
                   <select value={addForm.project_id} onChange={e => setAddForm(f => ({ ...f, project_id: e.target.value }))}>
                     <option value="">— Select project —</option>
                     {(session?.userId === null || session?.dbRole === 'user' || session?.dbRole === 'admin'
@@ -2001,6 +2070,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
+  const [showMaterialModal, setShowMaterialModal] = useState(false)
   const [activeProjectId, setActiveProjectId] = useState(null)
   const [activeProject, setActiveProject] = useState(null)
   const [subTab, setSubTab] = useState('info')
@@ -2084,9 +2154,14 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
     <div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
         {!viewingShared && (
-          <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowNewModal(true)}>
-            + New project
-          </button>
+          <>
+            <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowNewModal(true)}>
+              + Add project
+            </button>
+            <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowMaterialModal(true)}>
+              + Add material
+            </button>
+          </>
         )}
       </div>
 
@@ -2202,6 +2277,13 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
           onCreated={(id) => { setActiveProjectId(id); loadProjects(); onProjectCreated?.() }}
         />
       )}
+
+      {showMaterialModal && (
+        <NewMaterialModal
+          onClose={() => setShowMaterialModal(false)}
+          onCreated={() => {}}
+        />
+      )}
     </div>
   )
 }
@@ -2214,7 +2296,7 @@ export default function ProjectMaterial() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">Project Workspace</div>
+        <div className="section-title">Project & Material</div>
         <HelpPanel screen="projects" />
       </div>
       <MaterialInventoryTab session={session} isSolo={isSolo} />

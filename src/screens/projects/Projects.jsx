@@ -167,11 +167,11 @@ function EquipmentTestResults() {
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>New test result</div>
                 <div className="grid-2" style={{ gap: 10, marginBottom: 10 }}>
                   <div className="field" style={{ marginBottom: 0 }}>
-                    <label>Date *</label>
+                    <label>Date <span style={{ color: '#c84b2f' }}>*</span></label>
                     <input type="date" value={newRow.date} onChange={e => setNewRow(r => ({ ...r, date: e.target.value }))} />
                   </div>
                   <div className="field" style={{ marginBottom: 0 }}>
-                    <label>Sample Name *</label>
+                    <label>Sample Name <span style={{ color: '#c84b2f' }}>*</span></label>
                     <input value={newRow.sample_name} onChange={e => setNewRow(r => ({ ...r, sample_name: e.target.value }))} placeholder="e.g. Sample A-1" />
                   </div>
                 </div>
@@ -183,7 +183,7 @@ function EquipmentTestResults() {
                     </select>
                   </div>
                   <div className="field" style={{ marginBottom: 0 }}>
-                    <label>Result *</label>
+                    <label>Result <span style={{ color: '#c84b2f' }}>*</span></label>
                     <ResultInput type={newRow.result_type} value={newRow.result_value} onChange={v => setNewRow(r => ({ ...r, result_value: v }))} />
                   </div>
                 </div>
@@ -389,8 +389,8 @@ function ProjectInfo({ project, users, onSaved }) {
         </div>
       </div>
       <div className="grid-2">
-        <div className="field"><label>Project Name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Soil Analysis Q2" /></div>
-        <div className="field"><label>Project Title *</label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} placeholder="e.g. Pavement Analysis 2026" /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Soil Analysis Q2" /></div>
+        <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} placeholder="e.g. Pavement Analysis 2026" /></div>
       </div>
       <div className="grid-2">
         <div className="field"><label>CFOP (Budget/Funding Code)</label><input value={form.cfop} onChange={e => setForm(f => ({ ...f, cfop: e.target.value }))} placeholder="e.g. 1-23456-789" /></div>
@@ -505,8 +505,8 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
     <Modal onClose={onClose}>
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>New project</div>
       <div className="grid-2">
-        <div className="field"><label>Project Name *</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Soil Analysis Q2" autoFocus /></div>
-        <div className="field"><label>Project Title *</label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} placeholder="e.g. Pavement Analysis 2026" /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Soil Analysis Q2" autoFocus /></div>
+        <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} placeholder="e.g. Pavement Analysis 2026" /></div>
       </div>
       <div className="grid-2">
         <div className="field"><label>CFOP (Budget/Funding Code)</label><input value={form.cfop} onChange={e => setForm(f => ({ ...f, cfop: e.target.value }))} placeholder="e.g. 1-23456-789" /></div>
@@ -918,7 +918,7 @@ export default function Projects() {
   return (
     <div>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="section-title">Project Workspace</div>
+        <div className="section-title">Project & Material</div>
         <HelpPanel screen="projects" />
       </div>
 

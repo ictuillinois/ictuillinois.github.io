@@ -220,8 +220,8 @@ function SoloProfile({ session }) {
       {activeTab === 'info' && (
         <div className="card">
           <div className="grid-2">
-            <div className="field"><label>First Name *</label><input autoComplete="given-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-            <div className="field"><label>Last Name *</label><input autoComplete="family-name" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></div>
+            <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input autoComplete="given-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input autoComplete="family-name" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></div>
           </div>
           <div className="field">
             <label>Nick Name <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 12 }}>(optional — shown instead of first name)</span></label>
@@ -1602,15 +1602,15 @@ function StudentModal({ student, session, onClose, onSave }) {
       <form onSubmit={e => e.preventDefault()} autoComplete="on" style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:28, maxWidth:520, width:'100%', maxHeight:'90vh', overflowY:'auto', border:'1px solid var(--border)' }}>
         <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{student ? 'Edit lab user' : 'Add lab user'}</div>
         <div className="grid-2">
-          <div className="field"><label>First Name *</label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Ivan" autoFocus /></div>
-          <div className="field"><label>Last Name *</label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Akonya" /></div>
+          <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Ivan" autoFocus /></div>
+          <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Akonya" /></div>
         </div>
         <div className="grid-2">
           <div className="field"><label>Nickname <span style={{ fontWeight:400, color:'var(--text3)' }}>(optional)</span></label><input value={form.nickname} onChange={e=>setForm(f=>({...f,nickname:e.target.value}))} placeholder="e.g. Alex" /></div>
           <div className="field"><label>Email Address</label><input type="email" value={form.emailAddr} onChange={e=>setForm(f=>({...f,emailAddr:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         </div>
         <div className="field">
-          <label>Password{student ? ' (leave blank to keep current)' : ' *'}</label>
+          <label>Password{student ? ' (leave blank to keep current)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
           <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={student ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
           <PasswordStrengthHint password={form.password} />
         </div>
@@ -1626,7 +1626,7 @@ function StudentModal({ student, session, onClose, onSave }) {
         </div>
         {orgProjects.length > 0 && (
           <div className="field">
-            <label>Assigned Projects *</label>
+            <label>Assigned Projects <span style={{ color: '#c84b2f' }}>*</span></label>
             <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'8px 12px', maxHeight:180, overflowY:'auto' }}>
               {orgProjects.map(p => (
                 <div key={p.id} onClick={() => toggleProject(p.id)}
@@ -1794,13 +1794,13 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
       <form onSubmit={e => e.preventDefault()} autoComplete="on" style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:28, maxWidth:480, width:'100%', border:'1px solid var(--border)' }}>
         <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{staff ? 'Edit lab manager' : 'Add lab manager'}</div>
         <div className="grid-2">
-          <div className="field"><label>First Name *</label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Sara" autoFocus /></div>
-          <div className="field"><label>Last Name *</label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Chen" /></div>
+          <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Sara" autoFocus /></div>
+          <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Chen" /></div>
         </div>
         <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         <div className="grid-2">
           <div className="field">
-            <label>Password{staff ? ' (leave blank to keep)' : ' *'}</label>
+            <label>Password{staff ? ' (leave blank to keep)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
             <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={staff ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
             <PasswordStrengthHint password={form.password} />
           </div>
@@ -2219,8 +2219,8 @@ function UserProfileForm({ session, toast }) {
       </div>
       <div className="card">
         <div className="grid-2">
-          <div className="field"><label>First Name *</label><input autoComplete="given-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-          <div className="field"><label>Last Name *</label><input autoComplete="family-name" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></div>
+          <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input autoComplete="given-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+          <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input autoComplete="family-name" value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} /></div>
         </div>
         <div className="grid-2">
           <div className="field">
@@ -2614,7 +2614,7 @@ export default function Profile() {
 function AccessModal({ user, toast, session, onClose }) {
   const ALL_SCREENS = [
     { key: 'home',         label: 'Supply Inventory',    icon: '📦', moduleKey: 'supply' },
-    { key: 'projects',     label: 'Project Workspace',  icon: '🧪', moduleKey: 'projects' },
+    { key: 'projects',     label: 'Project & Material',  icon: '🧪', moduleKey: 'projects' },
     { key: 'training',     label: 'Training Records',    icon: '🎓', moduleKey: 'training' },
     { key: 'equipment',    label: 'Equipment List', icon: '🔧', moduleKey: 'equipment' },
     { key: 'equipmenthub', label: 'Equipment',           icon: '📚', moduleKey: 'equipmenthub' },
@@ -2696,7 +2696,7 @@ function AccessModal({ user, toast, session, onClose }) {
 function IconImageManager({ toast, session }) {
   const ALL_MODULES = [
     { key: 'supply',         label: 'Supply Inventory',    icon: '📦', bg: '#E1F5EE' },
-    { key: 'projects',       label: 'Project Workspace',  icon: '🧪', bg: '#EEEDFE' },
+    { key: 'projects',       label: 'Project & Material',  icon: '🧪', bg: '#EEEDFE' },
     { key: 'training',       label: 'Training Records',    icon: '🎓', bg: '#e0f2fe' },
     { key: 'equipment',      label: 'Equipment List', icon: '🔧', bg: '#fef3c7' },
     { key: 'equipmenthub',   label: 'Equipment',           icon: '📚', bg: '#E1F5EE' },

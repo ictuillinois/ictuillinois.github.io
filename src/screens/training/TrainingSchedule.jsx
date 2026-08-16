@@ -725,7 +725,7 @@ export function ExamTab({ session }) {
               {/* Add/Edit question manually */}
               <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 10 }}>{editQuestion ? '✏️ Edit question' : '+ Add question manually'}</div>
-                <div className="field"><label>Question *</label><textarea rows={2} value={newQ.question} onChange={e => setNewQ(f => ({ ...f, question: e.target.value }))} style={{ resize: 'vertical' }} /></div>
+                <div className="field"><label>Question <span style={{ color: '#c84b2f' }}>*</span></label><textarea rows={2} value={newQ.question} onChange={e => setNewQ(f => ({ ...f, question: e.target.value }))} style={{ resize: 'vertical' }} /></div>
                 <div className="grid-2">
                   <div className="field"><label>Option A</label><input value={newQ.option_a} onChange={e => setNewQ(f => ({ ...f, option_a: e.target.value }))} /></div>
                   <div className="field"><label>Option B</label><input value={newQ.option_b} onChange={e => setNewQ(f => ({ ...f, option_b: e.target.value }))} /></div>

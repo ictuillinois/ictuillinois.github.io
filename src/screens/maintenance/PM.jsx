@@ -1496,7 +1496,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
             {/* Body */}
             <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="field" style={{ marginBottom: 0 }}>
-                <label>Task title *</label>
+                <label>Task title <span style={{ color: '#c84b2f' }}>*</span></label>
                 <input value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} placeholder="What needs to be done?" autoFocus />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
@@ -2867,7 +2867,7 @@ function Reminders({ userId }) {
               <div style={{ fontWeight: 600, fontSize: 16 }}>{editId ? 'Edit reminder' : 'Add reminder'}</div>
               <button onClick={() => { setShowAdd(false); setEditId(null) }} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
             </div>
-            <div className="field"><label>Title *</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="What to remember…" autoFocus /></div>
+            <div className="field"><label>Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="What to remember…" autoFocus /></div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="field"><label>Start day <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(opt)</span></label><input type="date" value={form.start_day} onChange={e => setForm({ ...form, start_day: e.target.value })} /></div>
               <div className="field"><label>End day <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(opt)</span></label><input type="date" value={form.end_day} onChange={e => setForm({ ...form, end_day: e.target.value })} /></div>

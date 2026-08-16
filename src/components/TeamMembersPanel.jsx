@@ -184,7 +184,7 @@ export default function TeamMembersPanel({ session }) {
       invite.inviter_id,
       'team_invite',
       `${myName} accepted your project team invite`,
-      'Check Project Workspace → Workspace → Project Members.'
+      'Check Project & Material → Workspace → Project Members.'
     )
     toast(`Joined ${firstName(invite.inviterName)}'s project team!`)
     load()

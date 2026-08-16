@@ -267,15 +267,15 @@ function NewConvModal({ session, staff, orgName, onSent, onClose }) {
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', lineHeight: 1, padding: 4 }}>✕</button>
         </div>
         <div className="field">
-          <label>To *</label>
+          <label>To <span style={{ color: '#c84b2f' }}>*</span></label>
           <UserMultiSelectDropdown users={staff} selectedIds={receiverIds} onChange={setReceiverIds} isLabUser={isLabUser} orgName={orgName} />
         </div>
         <div className="field">
-          <label>Subject *</label>
+          <label>Subject <span style={{ color: '#c84b2f' }}>*</span></label>
           <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Equipment question, Booking issue…" />
         </div>
         <div className="field">
-          <label>Message *</label>
+          <label>Message <span style={{ color: '#c84b2f' }}>*</span></label>
           <textarea rows={4} value={body} onChange={e => setBody(e.target.value)} placeholder="Write your message here…" style={{ resize: 'vertical' }} />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>

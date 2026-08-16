@@ -99,7 +99,7 @@ export default function CustomerServiceModal({ onClose }) {
         </div>
       ) : (
         <div className="field">
-          <label>Your email address *</label>
+          <label>Your email address <span style={{ color: '#c84b2f' }}>*</span></label>
           <input
             type="email"
             value={email}
@@ -110,7 +110,7 @@ export default function CustomerServiceModal({ onClose }) {
       )}
 
       <div className="field">
-        <label>Subject *</label>
+        <label>Subject <span style={{ color: '#c84b2f' }}>*</span></label>
         <input
           value={subject}
           onChange={e => setSubject(e.target.value)}
@@ -119,7 +119,7 @@ export default function CustomerServiceModal({ onClose }) {
       </div>
 
       <div className="field">
-        <label>Message *</label>
+        <label>Message <span style={{ color: '#c84b2f' }}>*</span></label>
         <textarea
           value={message}
           onChange={e => setMessage(e.target.value)}

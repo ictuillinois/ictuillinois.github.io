@@ -28,7 +28,7 @@ const HELP_CONTENT = {
     ],
   },
   projects: {
-    title: 'Project Workspace',
+    title: 'Project & Material',
     description: 'Manage research projects, track materials used, and store project files. Each project has its own materials log, file storage, and status tracking.',
     tips: [
       'Create a project first, then add materials and upload files to it',

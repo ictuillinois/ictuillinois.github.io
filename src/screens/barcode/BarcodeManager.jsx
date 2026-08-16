@@ -22,9 +22,21 @@ const PRINT_LOGO_SVG = (size) => `<svg width="${size}" height="${size}" viewBox=
   <text x="256" y="256" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-size="96" font-weight="800" fill="#000">ICT-Lab</text>
 </svg>`
 
-function getScanUrl(id, type = 'equipment', name = '') {
+function getScanUrl(id, type = 'equipment', name = '', meta = {}) {
   const base = window.location.hostname === 'localhost' ? 'https://ictlab.labhive.app/' : window.location.origin + '/'
   if (type === 'equipment') return `${base}?eq=${id}&type=equipment`
+  if (type === 'other') {
+    const p = new URLSearchParams()
+    p.set('item', name)
+    p.set('type', 'other')
+    if (meta.source)     p.set('source', meta.source)
+    if (meta.mtype)      p.set('mtype', meta.mtype)
+    if (meta.owner)      p.set('owner', meta.owner)
+    if (meta.storage)    p.set('storage', meta.storage)
+    if (meta.qty)        p.set('qty', meta.qty)
+    if (meta.storedDate) p.set('stored_date', meta.storedDate)
+    return `${base}?${p.toString()}`
+  }
   return `${base}?item=${encodeURIComponent(name)}&type=${type}`
 }
 
@@ -36,7 +48,7 @@ function QRLabel({ item, size }) {
   const previewH  = is2x2 ? 192 : 384
   const qrPx      = is2x2 ? 112 : 160
   const logoInQr  = is2x2 ? 44  : 60
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name, item.meta || {}))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
   return (
     <div style={{
@@ -94,7 +106,7 @@ function printLabels(items, size) {
   const logoInQr = is2x2 ? 44  : 88
 
   const labelHtml = (item) => {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name, item.meta || {}))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
     const logoSvg = PRINT_LOGO_SVG(logoInQr)
     const name = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')
     return `<div class="label">
@@ -156,12 +168,23 @@ function EquipmentBarcodeTab({ equipment, loading }) {
   const [copied, setCopied] = useState(false)
   const [labelType, setLabelType] = useState('equipment')
   const [customName, setCustomName] = useState('')
+  const [otherName, setOtherName] = useState('')
+  const [otherSource, setOtherSource] = useState('')
+  const [otherMType, setOtherMType] = useState('')
+  const [otherOwner, setOtherOwner] = useState('')
+  const [otherStorage, setOtherStorage] = useState('')
+  const [otherQty, setOtherQty] = useState('')
+  const [otherDate, setOtherDate] = useState('')
   const isMobile = useIsMobile()
+
+  const otherReady = labelType === 'other' && otherName.trim() && otherSource.trim() && otherMType.trim() && otherOwner.trim() && otherStorage.trim() && otherDate.trim()
 
   // Unified item for QR generation
   const activeItem = labelType === 'equipment'
     ? (selected ? { id: selected.id, name: selected.equipment_name + (selected.nickname ? ` (${selected.nickname})` : ''), type: 'equipment' } : null)
-    : (customName.trim() ? { id: null, name: customName.trim(), type: labelType } : null)
+    : labelType === 'other'
+      ? (otherReady ? { id: null, name: otherName.trim(), type: 'other', meta: { source: otherSource.trim(), mtype: otherMType.trim(), owner: otherOwner.trim(), storage: otherStorage.trim(), qty: otherQty.trim(), storedDate: otherDate.trim() } } : null)
+      : (customName.trim() ? { id: null, name: customName.trim(), type: labelType } : null)
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))]
   const filtered = equipment.filter(e => {
@@ -173,7 +196,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
 
   function copyUrl() {
     if (!activeItem) return
-    navigator.clipboard.writeText(getScanUrl(activeItem.id, activeItem.type, activeItem.name))
+    navigator.clipboard.writeText(getScanUrl(activeItem.id, activeItem.type, activeItem.name, activeItem.meta || {}))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -221,7 +244,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Label Subject</div>
         <div style={{ display: 'flex', gap: 10 }}>
           {LABEL_TYPES.map(opt => (
-            <div key={opt.v} onClick={() => { setLabelType(opt.v); setSelected(null); setCustomName('') }}
+            <div key={opt.v} onClick={() => { setLabelType(opt.v); setSelected(null); setCustomName(''); setOtherName(''); setOtherSource(''); setOtherMType(''); setOtherOwner(''); setOtherStorage(''); setOtherQty(''); setOtherDate('') }}
               style={{ flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
                 border: labelType === opt.v ? '2px solid var(--accent)' : '2px solid var(--border)',
                 background: labelType === opt.v ? 'var(--accent-light)' : 'var(--surface)',
@@ -237,18 +260,36 @@ function EquipmentBarcodeTab({ equipment, loading }) {
       {labelType === 'equipment' && sidebarSlot && createPortal(listPanel, sidebarSlot)}
       {labelType === 'equipment' && isMobile && <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 16 }}>{listPanel}</div>}
 
-      {/* Other: name input */}
-      {labelType !== 'equipment' && (
+      {/* Other: 7-field form */}
+      {labelType === 'other' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-            Item Name
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            Item Details
           </div>
-          <input
-            value={customName}
-            onChange={e => setCustomName(e.target.value)}
-            placeholder="Enter item name…"
-            style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 14, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[
+              { key: 'name',    label: 'Item Name',              placeholder: 'e.g. Chemical Reagent A',  required: true,  inputType: 'text',  value: otherName,    set: setOtherName },
+              { key: 'source',  label: 'Source / Send From',     placeholder: 'e.g. Dr. Smith lab',       required: true,  inputType: 'text',  value: otherSource,  set: setOtherSource },
+              { key: 'mtype',   label: 'Type / Material / Item', placeholder: 'e.g. Chemical, Buffer…',   required: true,  inputType: 'text',  value: otherMType,   set: setOtherMType },
+              { key: 'owner',   label: 'PI / Owner',             placeholder: 'e.g. Prof. Johnson',       required: true,  inputType: 'text',  value: otherOwner,   set: setOtherOwner },
+              { key: 'storage', label: 'Storage Location',       placeholder: 'e.g. Freezer B, Shelf 3',  required: true,  inputType: 'text',  value: otherStorage, set: setOtherStorage },
+              { key: 'qty',     label: 'Total Number / Weight',  placeholder: 'e.g. 500 mL, 12 units',    required: false, inputType: 'text',  value: otherQty,     set: setOtherQty },
+              { key: 'date',    label: 'Date of Storage',        placeholder: '',                          required: true,  inputType: 'date',  value: otherDate,    set: setOtherDate },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>
+                  {f.label}{f.required && <span style={{ color: '#c84b2f', marginLeft: 2 }}>*</span>}
+                </label>
+                <input
+                  type={f.inputType}
+                  value={f.value}
+                  onChange={e => f.set(e.target.value)}
+                  placeholder={f.placeholder}
+                  style={{ width: '100%', padding: '8px 12px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: 'var(--sans)', background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -286,7 +327,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Scan URL</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ flex: 1, fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text2)', background: 'var(--surface2)', borderRadius: 6, padding: '8px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {getScanUrl(activeItem.id, activeItem.type, activeItem.name)}
+                  {getScanUrl(activeItem.id, activeItem.type, activeItem.name, activeItem.meta || {})}
                 </div>
                 <button onClick={copyUrl} className="btn btn-sm" style={{ flexShrink: 0, background: copied ? '#E1F5EE' : undefined, color: copied ? '#1D9E75' : undefined }}>
                   {copied ? '✓ Copied' : 'Copy'}
@@ -310,12 +351,12 @@ function EquipmentBarcodeTab({ equipment, loading }) {
           <div style={{ background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, minHeight: 360 }}>
             <div style={{ fontSize: 48 }}>{labelType === 'equipment' ? '🔲' : '📦'}</div>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
-              {labelType === 'equipment' ? 'Select equipment to generate a QR label' : 'Enter a name above to generate a QR label'}
+              {labelType === 'equipment' ? 'Select equipment to generate a QR label' : 'Fill in all required fields above to generate a QR label'}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.6, maxWidth: 280 }}>
               {labelType === 'equipment'
                 ? 'Choose any piece of equipment from the list on the left to preview and print its QR code label.'
-                : 'Type the item name above — the QR code will encode it so the scan page shows the right information.'}
+                : 'Complete all required fields (*) above — the QR code will encode all the details so the scan page shows the right information.'}
             </div>
           </div>
         )}
