@@ -223,7 +223,7 @@ function NewMaterialModal({ onClose, onCreated }) {
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Add material</div>
       <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
       <div className="grid-2">
-        <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
+        <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value, storage_date: (!f.storage_date || f.storage_date === f.sampling_date) ? e.target.value : f.storage_date }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
       </div>
       <div className="field">
