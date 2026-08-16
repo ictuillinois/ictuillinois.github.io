@@ -2,36 +2,6 @@ import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 
-function ILabLogo({ size = 40 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="256,4 468,126 468,378 256,500 44,378 44,126" fill="#ffb380"/>
-      <polygon points="256,14 458,132 458,372 256,490 54,372 54,132" fill="#ff7f2a"/>
-      <polygon points="256,30 450,140 450,362 256,472 62,362 62,140" fill="#000080"/>
-      <polygon points="256,58 422,152 422,350 256,444 90,350 90,152" fill="none" stroke="#ff6b00" strokeWidth="1.2" opacity="0.25"/>
-      <circle cx="256" cy="30"  r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="140" r="9" fill="#ff6b00"/>
-      <circle cx="450" cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="256" cy="472" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="362" r="9" fill="#ff6b00"/>
-      <circle cx="62"  cy="140" r="9" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff6b00" strokeWidth="3.5" opacity="0.95"/>
-      <circle cx="394" cy="224" r="16" fill="#ff6b00"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ff9a3c" strokeWidth="3" opacity="0.85" transform="rotate(60 256 224)"/>
-      <circle cx="179.16718" cy="294.86069" r="15" fill="#ff9a3c"/>
-      <ellipse cx="256" cy="224" rx="138" ry="44" fill="none" stroke="#ffba6e" strokeWidth="2.5" opacity="0.75" transform="rotate(-60 256 224)"/>
-      <circle cx="325" cy="105" r="14" fill="#ffba6e"/>
-      <circle cx="256" cy="224" r="38" fill="#ff6b00" opacity="0.10"/>
-      <circle cx="256" cy="224" r="26" fill="#ff6b00" opacity="0.22"/>
-      <circle cx="256" cy="224" r="16" fill="#ff8c00" opacity="0.80"/>
-      <circle cx="256" cy="224" r="9"  fill="#ffb347"/>
-      <text x="258.37772" y="415" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="92" fontWeight="700">
-        <tspan fontStyle="italic" fill="#ff6b00">i</tspan>
-        <tspan fill="#ffffff" dx="-5">Lab</tspan>
-      </text>
-    </svg>
-  )
-}
 
 const OPTION_META = [
   { id: 'info',        icon: '🏷️',  label: 'Info',                        sub: 'View details and location',                              color: '#0369a1', bg: '#e0f2fe' },
@@ -367,7 +337,7 @@ export default function EquipmentScan() {
 
   if (isEquipment && !resolvedId) return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center', padding: '0 20px' }}>
-      <ILabLogo size={64} />
+      <img src={import.meta.env.BASE_URL + 'ict-logo.png'} width={64} height={64} style={{ display: 'block', objectFit: 'contain', margin: '0 auto' }} alt="ICT-Lab" />
       <div style={{ marginTop: 16, fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Equipment QR Lookup</div>
       <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24, lineHeight: 1.6 }}>
         Scan the QR code on a piece of equipment with your phone camera to access its information, book it, or contact the lab manager.
@@ -400,7 +370,7 @@ export default function EquipmentScan() {
       {/* Header — equipment name or material name */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <ILabLogo size={48} />
+          <img src={import.meta.env.BASE_URL + 'ict-logo.png'} width={48} height={48} style={{ display: 'block', objectFit: 'contain', flexShrink: 0 }} alt="ICT-Lab" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               {typePrefix} · ICT Lab
