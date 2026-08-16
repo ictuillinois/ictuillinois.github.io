@@ -154,6 +154,8 @@ export default function App() {
         projectGroup: teamUser.project_group || null,
         mustChangePassword: teamUser.must_change_password === true,
         termsAcceptedVersion: teamUser.terms_accepted_version || null,
+        tourDone: teamUser.tour_done === true,
+        pickerDone: teamUser.picker_done === true,
       })
     }
   }
@@ -211,7 +213,9 @@ export default function App() {
     try {
       if (!userId) { setShowIconPicker(false); return }
       if (SCAN_EQ_ID || SCAN_ITEM_QR) { setShowIconPicker(false); return }
-      // localStorage is the fast/reliable source — immune to RLS issues on user_dashboard_prefs
+      // Fast path: picker_done flag from session (device-agnostic DB field)
+      if (useAppStore.getState().session?.pickerDone) { setShowIconPicker(false); return }
+      // localStorage fast path for same device/browser
       if (localStorage.getItem(`ictlab_picker_done_${userId}`) === 'true') {
         setShowIconPicker(false)
         return
@@ -374,11 +378,8 @@ export default function App() {
               localStorage.setItem('ictlab_admin_dashboard_set', 'true')
             } else {
               localStorage.setItem(`ictlab_picker_done_${session.userId}`, 'true')
-              // Upsert avoids the race condition where tour + picker both try to insert
-              sb.from('user_dashboard_prefs').upsert(
-                { user_id: session.userId, has_set_dashboard: true, active_modules: modules || [] },
-                { onConflict: 'user_id', ignoreDuplicates: false }
-              ).catch(() => {})
+              // Write picker_done to the user's own row — simple UPDATE, no unique-constraint issues
+              sb.from('users').update({ picker_done: true }).eq('id', session.userId).catch(() => {})
             }
             if (modules !== null && modules !== undefined) setActiveModules(modules)
             setShowIconPicker(false)

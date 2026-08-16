@@ -525,12 +525,13 @@ export default function Layout({ children }) {
     const count = parseInt(localStorage.getItem(countKey) || '0', 10) + 1
     localStorage.setItem(countKey, String(count))
     setLoginCount(count)
+    // Fast path: tour_done flag in session (loaded from users table on every login, device-agnostic)
+    if (session?.tourDone) { localStorage.setItem(doneKey, 'true'); return }
     if (localStorage.getItem(doneKey) === 'true') return
-    // Check DB — if user has already configured their dashboard (on any device), skip tour
+    // Fallback DB check for existing users (pre-tour_done column) who have dashboard prefs
     sb.from('user_dashboard_prefs').select('has_set_dashboard, active_modules').eq('user_id', uid).limit(1)
       .then(({ data }) => {
         const row = data?.[0]
-        // has_set_dashboard OR any explicit active_modules array (even []) counts as "done"
         if (row?.has_set_dashboard || Array.isArray(row?.active_modules)) {
           localStorage.setItem(doneKey, 'true')
         } else {
@@ -544,11 +545,9 @@ export default function Layout({ children }) {
     setShowTour(false)
     const uid = session?.userId
     if (!uid) return
-    // Upsert — safe even if picker already inserted the row in the same session
-    await sb.from('user_dashboard_prefs').upsert(
-      { user_id: uid, has_set_dashboard: true },
-      { onConflict: 'user_id', ignoreDuplicates: false }
-    ).catch(() => {})
+    localStorage.setItem(`ictlab_tour_done_${uid}`, 'true')
+    // Write tour_done to the user's own row — simple UPDATE, no unique-constraint issues
+    sb.from('users').update({ tour_done: true }).eq('id', uid).catch(() => {})
   }
 
   return (
