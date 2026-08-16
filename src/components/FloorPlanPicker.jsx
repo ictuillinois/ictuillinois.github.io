@@ -392,7 +392,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [saving, setSaving] = useState(false)
   const canEdit = !!session
   const isSolo = session?.loginMode === 'solo'
-  const isICTOrg = session?.organizationId === '5bab5b33-fff9-4a4a-b617-3dac179f9678'
+  const isICTOrg = true  // ictlab is always the ICT org
 
   useEffect(() => { loadAll() }, [])
 
@@ -431,10 +431,9 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     const plans = planData || []
     setCustomPlans(plans)
 
-    // Default tab: first custom plan if any, else ICT
+    // Default tab: first custom plan if any, else ICT Building
     if (plans.length > 0) setFacility(`custom_${plans[0].id}`)
-    else if (session?.organizationId === '5bab5b33-fff9-4a4a-b617-3dac179f9678') setFacility('ICT')
-    else setFacility(null)
+    else setFacility('ICT')
 
     setLoading(false)
   }
