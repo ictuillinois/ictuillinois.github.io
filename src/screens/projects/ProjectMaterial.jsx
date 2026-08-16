@@ -186,7 +186,7 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
 // ── New Material Modal ──────────────────────────────────────────
 function NewMaterialModal({ onClose, onCreated }) {
   const { session, toast } = useAppStore()
-  const [form, setForm] = useState({ name: '', sampling_date: '', storage_date: '', storage_location: '', project_id: '' })
+  const [form, setForm] = useState({ name: '', sampling_date: '', storage_date: '', project_id: '' })
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -209,7 +209,6 @@ function NewMaterialModal({ onClose, onCreated }) {
       name: form.name.trim(),
       sampling_date: form.sampling_date || null,
       storage_date: form.storage_date || null,
-      storage_location: form.storage_location.trim() || null,
       project_id: form.project_id || null,
       organization_id: session?.organizationId || null,
     }
@@ -227,7 +226,6 @@ function NewMaterialModal({ onClose, onCreated }) {
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
       </div>
-      <div className="field"><label>Storage Location</label><input value={form.storage_location} onChange={e => setForm(f => ({ ...f, storage_location: e.target.value }))} placeholder="e.g. Freezer B, Shelf 3" /></div>
       <div className="field">
         <label>Project related to this material</label>
         <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
