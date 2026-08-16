@@ -806,7 +806,6 @@ export default function ProjectMaterials({ project }) {
   const [showModal, setShowModal] = useState(false)
   const [editMaterial, setEditMaterial] = useState(null)
   const [expanded, setExpanded] = useState(null)
-  const [showFloorMap, setShowFloorMap] = useState(false)
 
   useEffect(() => { load() }, [project.id])
 
@@ -830,10 +829,7 @@ export default function ProjectMaterials({ project }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>{materials.length} material{materials.length !== 1 ? 's' : ''} in this project</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-sm" onClick={() => setShowFloorMap(true)}>🗺️ Floor Map</button>
-          <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
-        </div>
+        <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
       </div>
 
       {materials.length === 0 ? (
@@ -968,19 +964,6 @@ export default function ProjectMaterials({ project }) {
         />
       )}
 
-      {/* Floor map viewer */}
-      {showFloorMap && (
-        <FloorPlanPicker
-          projectId={project.id}
-          projectName={project.name}
-          materialId={null}
-          materialType={null}
-          currentLocations={[]}
-          onConfirm={() => {}}
-          onClose={() => setShowFloorMap(false)}
-          viewOnly={true}
-        />
-      )}
     </div>
   )
 }
