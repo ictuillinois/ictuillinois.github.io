@@ -8,7 +8,6 @@ const OPTION_META = [
   { id: 'sop',         icon: '📖',  label: 'Standard Operating Procedure', sub: 'Watch how-to videos, read the SOP, or turn on/off guide', color: '#1D9E75', bg: '#E1F5EE' },
   { id: 'calibration', icon: '🔧',  label: 'Calibration',                  sub: 'Maintenance schedule and records — Lab Manager access',   color: '#92400e', bg: '#fef3c7' },
   { id: 'book',        icon: '📅',  label: 'Book this Equipment',          sub: 'Reserve a time slot on the lab calendar',                 color: '#1D9E75', bg: '#E1F5EE' },
-  { id: 'openapp',     icon: '🚀',  label: 'Open ICT-Lab',                 sub: 'Go to your dashboard — projects, training, and more',     color: '#534AB7', bg: '#EEEDFE' },
 ]
 
 function SectionCard({ title, children, onClose }) {
