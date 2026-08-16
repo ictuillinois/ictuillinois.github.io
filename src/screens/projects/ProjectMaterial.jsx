@@ -2070,6 +2070,8 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
   const [filter, setFilter] = useState('all')
+  const [viewMode, setViewMode] = useState('projects')
+  const [allMaterials, setAllMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showMaterialModal, setShowMaterialModal] = useState(false)
@@ -2097,8 +2099,15 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   }
 
   useEffect(() => { loadProjects() }, [filter, viewingWorkspaceOwnerId])
-  useEffect(() => { loadUsers() }, [])
+  useEffect(() => { loadUsers(); loadAllMaterials() }, [])
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
+
+  async function loadAllMaterials() {
+    let q = sb.from('project_materials').select('id, name, sampling_date, storage_date, project_id, projects(name, project_id)').order('created_at', { ascending: false })
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const { data } = await q
+    setAllMaterials(data || [])
+  }
 
   async function loadProjects() {
     setLoading(true)
@@ -2185,23 +2194,53 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['all','active','on hold','completed'].map(f => (
-          <button key={f} className={'filter-btn' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>View:</span>
+        {['projects', 'materials'].map(m => (
+          <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')} onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null) }}>
+            {m === 'projects' ? '🧪 Projects' : '📦 Materials'}
           </button>
         ))}
+        {viewMode === 'projects' && (
+          <>
+            <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+            {['all','active','on hold','completed'].map(f => (
+              <button key={f} className={'filter-btn' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
+                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       <input ref={photoFileRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { uploadProjectPhoto(e.target.files?.[0]); e.target.value = '' }} />
 
+      {/* ── Materials card grid ── */}
+      {viewMode === 'materials' && (
+        allMaterials.length === 0 ? (
+          <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📦</div><div>No materials yet. Use + Add material to create one.</div></div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
+            {allMaterials.map((m, idx) => (
+              <div key={m.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || '—'}</div>
+                {m.projects?.name && <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🧪 {m.projects.name}</div>}
+                {m.sampling_date && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>📅 {m.sampling_date}</div>}
+                {m.storage_date && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>📦 Stored: {m.storage_date}</div>}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
       {/* ── Project card grid (Training-hub style) ── */}
-      {loading ? (
+      {viewMode === 'projects' && loading ? (
         <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-      ) : projects.length === 0 ? (
+      ) : viewMode === 'projects' && projects.length === 0 ? (
         <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">🧪</div><div>No projects found.</div></div>
-      ) : (
+      ) : viewMode === 'projects' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
           {projects.map(p => {
             const isActive = activeProjectId === p.id

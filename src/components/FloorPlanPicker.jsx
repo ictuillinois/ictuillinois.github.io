@@ -380,7 +380,7 @@ function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN FLOOR PLAN PICKER
 // ══════════════════════════════════════════════════════════════
-export default function FloorPlanPicker({ projectId, projectName, materialId, materialType, currentLocations = [], onConfirm, onClose }) {
+export default function FloorPlanPicker({ projectId, projectName, materialId, materialType, currentLocations = [], onConfirm, onClose, viewOnly = false }) {
   const { session } = useAppStore()
   const [customPlans, setCustomPlans] = useState([])
   const [facility, setFacility] = useState(null)   // set after load
@@ -538,8 +538,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Select storage location</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Tap to select · Occupied locations show project info on tap</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
           </div>
           <button className="btn btn-sm" onClick={onClose}>✕ Close</button>
         </div>
@@ -578,37 +578,45 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)', fontSize: 14 }}>No floor plans available. Ask your admin to add a floor plan.</div>
           ) : facility.startsWith('custom_') ? (() => {
             const plan = customPlans.find(p => `custom_${p.id}` === facility)
-            return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={canEdit} /> : null
+            return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={!viewOnly && canEdit} /> : null
           })() : facility === 'ICT' ? (
-            <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={canEdit} />
+            <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit} />
           ) : (
-            <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={canEdit} />
+            <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit} />
           )}
         </div>
 
-        {/* Selected chips */}
-        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {selected.length === 0
-            ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
-            : selected.map(id => {
-                const det = getLocationDetail(id)
-                return (
-                  <span key={id} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 10px 4px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    📍 {det.detail !== id ? det.detail : id.replace('ICT-', '').replace('MPF-', 'MPF ')}
-                    {canEdit && <button onClick={() => toggleLocation(id, '', '')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
-                  </span>
-                )
-              })
-          }
-        </div>
+        {/* Selected chips (hidden in view-only mode) */}
+        {!viewOnly && (
+          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {selected.length === 0
+              ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
+              : selected.map(id => {
+                  const det = getLocationDetail(id)
+                  return (
+                    <span key={id} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 10px 4px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      📍 {det.detail !== id ? det.detail : id.replace('ICT-', '').replace('MPF-', 'MPF ')}
+                      {canEdit && <button onClick={() => toggleLocation(id, '', '')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
+                    </span>
+                  )
+                })
+            }
+          </div>
+        )}
 
         {/* Footer */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn" onClick={onClose}>Cancel</button>
-          {canEdit && (
-            <button className="btn btn-primary" onClick={confirm} disabled={saving || selected.length === 0}>
-              {saving ? 'Saving…' : `Confirm ${selected.length} location${selected.length !== 1 ? 's' : ''}`}
-            </button>
+          {viewOnly ? (
+            <button className="btn btn-primary" onClick={onClose}>Close</button>
+          ) : (
+            <>
+              <button className="btn" onClick={onClose}>Cancel</button>
+              {canEdit && (
+                <button className="btn btn-primary" onClick={confirm} disabled={saving || selected.length === 0}>
+                  {saving ? 'Saving…' : `Confirm ${selected.length} location${selected.length !== 1 ? 's' : ''}`}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
