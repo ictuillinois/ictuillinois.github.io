@@ -6,8 +6,8 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
-import ProjectMaterials from './ProjectMaterials'
-import MaterialStorage from '../storage/MaterialStorage'
+import ProjectMaterials, { MaterialModal } from './ProjectMaterials'
+import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
 function InfoCell({ label, value }) {
@@ -184,9 +184,15 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
 }
 
 // ── New Material Modal ──────────────────────────────────────────
-function NewMaterialModal({ onClose, onCreated }) {
+function NewMaterialModal({ material, onClose, onCreated }) {
+  const isEdit = !!material
   const { session, toast } = useAppStore()
-  const [form, setForm] = useState({ name: '', sampling_date: '', storage_date: '', project_id: '' })
+  const [form, setForm] = useState({
+    name: material?.name || '',
+    sampling_date: material?.sampling_date || '',
+    storage_date: material?.storage_date || '',
+    project_id: material?.project_id || '',
+  })
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
@@ -201,7 +207,7 @@ function NewMaterialModal({ onClose, onCreated }) {
     loadProjects()
   }, [])
 
-  async function create() {
+  async function save() {
     setErrMsg('')
     if (!form.name.trim()) { setErrMsg('Material name is required.'); return }
     setSaving(true)
@@ -212,15 +218,24 @@ function NewMaterialModal({ onClose, onCreated }) {
       project_id: form.project_id || null,
       organization_id: session?.organizationId || null,
     }
-    const { data, error } = await sb.from('project_materials').insert(payload).select().single()
+    let error
+    if (isEdit) {
+      ({ error } = await sb.from('project_materials').update(payload).eq('id', material.id))
+    } else {
+      const { data, error: insErr } = await sb.from('project_materials').insert(payload).select().single()
+      error = insErr
+      if (!error && onCreated) onCreated(data)
+    }
     setSaving(false)
     if (error) { setErrMsg(error.message); return }
-    toast('Material added!'); if (onCreated) onCreated(data); onClose()
+    toast(isEdit ? 'Material updated.' : 'Material added!')
+    if (isEdit && onCreated) onCreated()
+    onClose()
   }
 
   return (
     <Modal onClose={onClose}>
-      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>Add material</div>
+      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>{isEdit ? 'Edit material' : 'Add material'}</div>
       <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
       <div className="grid-2">
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value, storage_date: (!f.storage_date || f.storage_date === f.sampling_date) ? e.target.value : f.storage_date }))} /></div>
@@ -239,14 +254,16 @@ function NewMaterialModal({ onClose, onCreated }) {
         </div>
       )}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn btn-primary" onClick={create} disabled={saving}>
-          {saving ? 'Adding…' : 'Add material'}
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? (isEdit ? 'Saving…' : 'Adding…') : (isEdit ? 'Save changes' : 'Add material')}
         </button>
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
-        ℹ️ Additional details (material type, source, quantities, photos) can be filled in after saving.
-      </div>
+      {!isEdit && (
+        <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
+          ℹ️ Additional details (material type, source, quantities, photos) can be filled in after saving.
+        </div>
+      )}
     </Modal>
   )
 }
@@ -2072,6 +2089,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const [filter, setFilter] = useState('all')
   const [viewMode, setViewMode] = useState('projects')
   const [allMaterials, setAllMaterials] = useState([])
+  const [selectedMaterialId, setSelectedMaterialId] = useState(null)
+  const [matPanelTab, setMatPanelTab] = useState('info')
+  const [editingMaterial, setEditingMaterial] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showMaterialModal, setShowMaterialModal] = useState(false)
@@ -2103,10 +2123,18 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
 
   async function loadAllMaterials() {
-    let q = sb.from('project_materials').select('id, name, sampling_date, storage_date, project_id, projects(name, project_id)').order('created_at', { ascending: false })
+    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id)').order('created_at', { ascending: false })
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setAllMaterials(data || [])
+  }
+
+  async function deleteStandaloneMaterial(id) {
+    if (!confirm('Delete this material? This cannot be undone.')) return
+    await sb.from('project_materials').delete().eq('id', id)
+    setSelectedMaterialId(null)
+    loadAllMaterials()
+    toast('Material deleted.')
   }
 
   async function loadProjects() {
@@ -2195,9 +2223,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>View:</span>
         {['projects', 'materials'].map(m => (
-          <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')} onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null) }}>
+          <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')}
+            onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null); setSelectedMaterialId(null); setMatPanelTab('info') }}>
             {m === 'projects' ? '🧪 Projects' : '📦 Materials'}
           </button>
         ))}
@@ -2216,24 +2244,115 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       <input ref={photoFileRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { uploadProjectPhoto(e.target.files?.[0]); e.target.value = '' }} />
 
-      {/* ── Materials card grid ── */}
-      {viewMode === 'materials' && (
-        allMaterials.length === 0 ? (
-          <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📦</div><div>No materials yet. Use + Add material to create one.</div></div>
+      {/* ── Materials card grid (standalone only — same card style as projects) ── */}
+      {viewMode === 'materials' && (() => {
+        const standaloneMats = allMaterials.filter(m => !m.project_id)
+        return standaloneMats.length === 0 ? (
+          <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📦</div><div>No standalone materials yet. Use + Add material to create one.</div></div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
-            {allMaterials.map((m, idx) => (
-              <div key={m.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
-                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || '—'}</div>
-                {m.projects?.name && <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🧪 {m.projects.name}</div>}
-                {m.sampling_date && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>📅 {m.sampling_date}</div>}
-                {m.storage_date && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>📦 Stored: {m.storage_date}</div>}
-              </div>
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
+              {standaloneMats.map(m => {
+                const isSel = selectedMaterialId === m.id
+                const firstPhoto = m.photos?.[0]
+                return (
+                  <div key={m.id} className="manage-card"
+                    onClick={() => { if (isSel) { setSelectedMaterialId(null); setMatPanelTab('info') } else { setSelectedMaterialId(m.id); setMatPanelTab('info') } }}
+                    style={{ width: 176, flexShrink: 0, padding: firstPhoto ? '0 12px 14px' : '16px 12px 14px', cursor: 'pointer', overflow: 'hidden',
+                      ...(isSel ? { borderColor: 'var(--accent3)', background: 'var(--accent3-light)', boxShadow: '0 6px 18px rgba(83,74,183,0.18)' } : {}) }}>
+                    {firstPhoto
+                      ? <img src={firstPhoto} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
+                      : <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>}
+                    <div style={{ fontWeight: 600, fontSize: 14, color: isSel ? 'var(--accent3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || '—'}</div>
+                    {m.material_type && <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.material_type}</div>}
+                    {m.sampling_date && <div style={{ marginTop: 8 }}><span className="badge badge-hold" style={{ fontSize: 10, padding: '2px 8px' }}>📅 {m.sampling_date}</span></div>}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ── Selected material detail ── */}
+            {(() => {
+              const m = allMaterials.find(x => x.id === selectedMaterialId)
+              if (!m) return null
+              const MAT_TABS = [
+                { key: 'info',    label: '1 · Material Info' },
+                { key: 'edit',    label: '2 · Material' },
+                { key: 'storage', label: '3 · Material Storage' },
+              ]
+              return (
+                <div style={{ maxWidth: 900, margin: '0 auto', marginBottom: 20 }}>
+                  {/* Header card — same structure as project panel header */}
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 17 }}>{m.name || '—'}</div>
+                        <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
+                          {[m.material_type, m.projects?.name && `Project: ${m.projects.name}${m.projects.project_id ? ` · ${m.projects.project_id}` : ''}`].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <button className="btn btn-sm" onClick={() => { setSelectedMaterialId(null); setMatPanelTab('info') }}>✕ Close</button>
+                    </div>
+                  </div>
+                  {/* Tab bar — same structure as project panel tab bar */}
+                  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', overflowX: 'auto' }}>
+                    {MAT_TABS.map(t => (
+                      <button key={t.key} onClick={() => setMatPanelTab(t.key)}
+                        style={{ padding: '12px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: matPanelTab === t.key ? 'var(--accent3)' : 'var(--text2)', borderBottom: `2px solid ${matPanelTab === t.key ? 'var(--accent3)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Content area — same structure as project panel content area */}
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', padding: 24 }}>
+                    {/* Tab 1: Info — same visual style as ProjectInfo */}
+                    {matPanelTab === 'info' && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                          <button className="btn btn-sm" onClick={() => setMatPanelTab('edit')}>✏️ Edit info</button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+                          {m.material_type && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>{m.material_type}</span>}
+                          {m.projects?.name && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>🧪 {m.projects.name}{m.projects.project_id ? ` · ${m.projects.project_id}` : ''}</span>}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+                          <InfoCell label="Sampling Date" value={m.sampling_date} />
+                          <InfoCell label="Storage Date" value={m.storage_date} />
+                        </div>
+                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {m.project_id ? (
+                            <button className="btn btn-sm"
+                              onClick={() => { setViewMode('projects'); setActiveProjectId(m.projects?.id || m.project_id); setSubTab('materials'); setSelectedMaterialId(null) }}>
+                              Open in project → Materials
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-danger" onClick={() => deleteStandaloneMaterial(m.id)}>🗑️ Delete</button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Tab 2: Edit inline */}
+                    {matPanelTab === 'edit' && (
+                      <MaterialModal
+                        inline
+                        projectId={m.project_id}
+                        projectName={m.projects?.name || ''}
+                        material={m}
+                        onClose={() => setMatPanelTab('info')}
+                        onSaved={() => { loadAllMaterials(); setMatPanelTab('info') }}
+                      />
+                    )}
+                    {/* Tab 3: Storage — same visual style as MaterialStorage */}
+                    {matPanelTab === 'storage' && (
+                      <SingleMaterialStorageTab material={m} onRefresh={loadAllMaterials} />
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+          </>
         )
-      )}
+      })()}
 
       {/* ── Project card grid (Training-hub style) ── */}
       {viewMode === 'projects' && loading ? (
@@ -2322,7 +2441,17 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       {showMaterialModal && (
         <NewMaterialModal
           onClose={() => setShowMaterialModal(false)}
-          onCreated={() => {}}
+          onCreated={() => { setShowMaterialModal(false); loadAllMaterials() }}
+        />
+      )}
+
+      {editingMaterial && (
+        <MaterialModal
+          material={editingMaterial}
+          projectId={editingMaterial.project_id || null}
+          projectName={editingMaterial.projects?.name || ''}
+          onClose={() => setEditingMaterial(null)}
+          onSaved={() => { setEditingMaterial(null); loadAllMaterials() }}
         />
       )}
     </div>

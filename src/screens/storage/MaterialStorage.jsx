@@ -326,3 +326,146 @@ export default function MaterialStorage({ project }) {
     </div>
   )
 }
+
+// ── Single-material storage tab — same UI as MaterialStorage but for one material ──
+export function SingleMaterialStorageTab({ material, onRefresh }) {
+  const { toast } = useAppStore()
+  const [saving, setSaving] = useState(false)
+  const [editingBarcode, setEditingBarcode] = useState(false)
+  const [showPrint, setShowPrint] = useState(false)
+
+  const matName = material.name || typeLabel(material.material_type) || 'Material'
+  const params = new URLSearchParams({ item: matName, type: 'material', mtype: material.material_type || '', barcode: material.barcode_id || matName })
+  if (material.sampling_date) params.set('sampled', material.sampling_date)
+  if (material.projects?.name) params.set('project', material.projects.name)
+  const qrScanUrl = `https://labhive.app/?${params.toString()}`
+
+  async function autoGenBarcode() {
+    const abbr = typeAbbr(material.material_type)
+    const generated = `${abbr}-${material.id.slice(0, 6).toUpperCase()}`
+    const { error } = await sb.from('project_materials').update({ barcode_id: generated, barcode_scanned_at: new Date().toISOString() }).eq('id', material.id)
+    if (error) { toast('Error assigning barcode.'); return }
+    toast(`Barcode assigned: ${generated}`); onRefresh()
+  }
+
+  async function saveBarcode(value) {
+    if (!value.trim()) { toast('Barcode cannot be empty.'); return }
+    setSaving(true)
+    const { error } = await sb.from('project_materials').update({ barcode_id: value.trim(), barcode_scanned_at: new Date().toISOString() }).eq('id', material.id)
+    setSaving(false)
+    if (error?.code === '23505') { toast('This barcode ID already exists.'); return }
+    if (error) { toast('Error saving barcode.'); return }
+    setEditingBarcode(false); toast('Barcode saved.'); onRefresh()
+  }
+
+  async function saveNotes(notes) {
+    await sb.from('project_materials').update({ storage_notes: notes }).eq('id', material.id)
+    toast('Notes saved.'); onRefresh()
+  }
+
+  async function confirmStorage() {
+    if (!material.barcode_id) { toast('Please assign a barcode first.'); return }
+    const { error } = await sb.from('project_materials').update({ storage_confirmed: true }).eq('id', material.id)
+    if (error) { toast('Error confirming storage.'); return }
+    toast('Storage confirmed ✓'); onRefresh()
+  }
+
+  function printLabel() {
+    const el = document.getElementById('print-label-single')?.outerHTML
+    if (!el) return
+    const css = '@page{size:4in 4in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:4in}*{box-sizing:border-box}'
+    const win = window.open(URL.createObjectURL(new Blob([`<!DOCTYPE html><html><head><style>${css}</style></head><body>${el}</body></html>`], { type: 'text/html' })), '_blank')
+    if (!win) return
+    win.addEventListener('load', () => { win.focus(); win.print(); win.addEventListener('afterprint', () => win.close()) })
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Barcode / ID</div>
+        {material.barcode_id && !editingBarcode ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: 12 }}>
+                <QRCode value={qrScanUrl} size={100} />
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{material.barcode_id}</div>
+                {material.barcode_scanned_at && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Assigned {new Date(material.barcode_scanned_at).toLocaleDateString()}</div>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm" onClick={() => setEditingBarcode(true)}>✏️ Edit</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
+                </div>
+              </div>
+            </div>
+            {material.storage_confirmed && (
+              <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-light)', borderRadius: 'var(--radius)', padding: '10px 14px' }}>
+                <span style={{ fontSize: 16 }}>✅</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent)' }}>Storage confirmed</span>
+              </div>
+            )}
+          </div>
+        ) : editingBarcode ? (
+          <BarcodeEditForm material={material} onSave={saveBarcode} onCancel={() => setEditingBarcode(false)} saving={saving} />
+        ) : (
+          <div>
+            <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14 }}>No barcode ID assigned yet. Auto-generate one or enter manually.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary btn-sm" onClick={autoGenBarcode}>⚡ Auto-generate</button>
+              <button className="btn btn-sm" onClick={() => setEditingBarcode(true)}>⌨️ Enter manually</button>
+              <button className="btn btn-sm" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {(material.locations || []).length > 0 && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Location</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {(material.locations || []).map((loc, i) => (
+              <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {loc.detail || loc.location_id || loc.location}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
+        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Notes</div>
+        <StorageNotesForm material={material} onSave={saveNotes} />
+      </div>
+
+      {!material.storage_confirmed && (
+        <button className="btn btn-primary" onClick={confirmStorage} style={{ width: '100%', padding: 14, fontSize: 15 }}>✅ Confirm Storage Complete</button>
+      )}
+
+      {showPrint && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 480, width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>Label Preview (4" × 4")</div>
+              <button className="btn btn-sm" onClick={() => setShowPrint(false)}>✕</button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, background: 'var(--surface2)', padding: 20, borderRadius: 'var(--radius)' }}>
+              <div id="print-label-single" style={{ width: '4in', height: '4in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
+                <QRCode value={qrScanUrl} size={160} />
+                {material.barcode_id && <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{material.barcode_id}</div>}
+                <div style={{ width: '100%', borderTop: '1px solid #ddd', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center' }}>{matName}</div>
+                  {material.material_type && <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{typeLabel(material.material_type)}</div>}
+                  {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16, textAlign: 'center' }}>Make sure your Brother QL-1110NWB is connected and set to 4" tape.</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={printLabel}>🖨️ Print now</button>
+              <button className="btn" onClick={() => setShowPrint(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
