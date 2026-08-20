@@ -147,7 +147,6 @@ function getScreenTabs(screen, session) {
       { key: 'teammates',     icon: '👥', label: 'Teammates' },
       { key: 'dashboard',     icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifications', icon: '🔔', label: 'Notifications' },
-      { key: 'storage',       icon: '🗄️', label: 'Storage' },
       { key: 'password',      icon: '🔑', label: 'Password' },
       { key: 'danger',        icon: '⚠️', label: 'Delete Account' },
     ]
@@ -163,7 +162,6 @@ function getScreenTabs(screen, session) {
       { key: 'password',  icon: '🔑', label: 'Password' },
       { key: 'dashboard', icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifs',    icon: '🔔', label: 'Notifications' },
-      { key: 'storage',   icon: '🗄️', label: 'Storage' },
       { key: 'team',      icon: '🤝', label: 'Project Team' },
       { key: 'danger',    icon: '⚠️', label: 'Delete Account' },
     ]
