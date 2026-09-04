@@ -586,6 +586,22 @@ export default function Layout({ children }) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Home button — admin users only (no sidebar) */}
+          {isAdminUser && (
+            <button
+              onClick={() => setScreen('dashboard')}
+              title="Home"
+              style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: screen === 'dashboard' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.18s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.transform = 'translateY(-1px) scale(1.06)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = screen === 'dashboard' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0) scale(1)' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </button>
+          )}
+
           {/* About — glass icon button */}
           <button
             onClick={() => setShowAbout(true)}
