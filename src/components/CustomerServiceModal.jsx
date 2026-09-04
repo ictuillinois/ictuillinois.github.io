@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
 import Modal from './Modal'
+import { buildEmailHtml } from '../lib/emailTemplate'
 
 const ALLOWED_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -62,6 +63,26 @@ export default function CustomerServiceModal({ onClose }) {
         status: 'open',
       })
       if (error) throw new Error(error.message)
+
+      // Queue formatted email to ICT engineers
+      const senderName = session?.username || email.trim()
+      const emailTitle = `Support Request: ${subject.trim()}`
+      const emailBody = `From: ${senderName} (${email.trim()})\n\n${message.trim()}${attachment_url ? `\n\nAttachment: ${attachment_url}` : ''}`
+      const htmlBody = buildEmailHtml({
+        title: emailTitle,
+        body: emailBody,
+        ctaLabel: 'View in Customer Service Panel →',
+        ctaUrl: 'https://ictlab.app/?screen=dashboard',
+        prefsUrl: 'https://ictlab.app/?screen=dashboard',
+      })
+      await sb.from('email_notifications_queue').insert({
+        to_email: 'ictengineers@mx.uillinois.edu',
+        subject: `[ICT-Lab Support] ${subject.trim()}`,
+        body: emailBody,
+        html_body: htmlBody,
+      })
+      fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+
       setDone(true)
     } catch (e) {
       toast('Failed to send: ' + (e.message || e))
