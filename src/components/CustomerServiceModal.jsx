@@ -62,6 +62,16 @@ export default function CustomerServiceModal({ onClose }) {
         status: 'open',
       })
       if (error) throw new Error(error.message)
+
+      // Email the ICT team
+      const senderName = session?.username || email.trim()
+      await sb.from('email_notifications_queue').insert({
+        to_email: 'ictengineers@mx.uillinois.edu',
+        subject: `[ICT-Lab Support] ${subject.trim()}`,
+        html_body: `<p><strong>From:</strong> ${senderName} &lt;${email.trim()}&gt;</p><p><strong>Subject:</strong> ${subject.trim()}</p><p><strong>Message:</strong></p><p>${message.trim().replace(/\n/g, '<br>')}</p>${attachment_url ? `<p><strong>Attachment:</strong> <a href="${attachment_url}">${attachment_url}</a></p>` : ''}`,
+        body: `From: ${senderName} <${email.trim()}>\nSubject: ${subject.trim()}\n\n${message.trim()}${attachment_url ? `\n\nAttachment: ${attachment_url}` : ''}`,
+      })
+
       setDone(true)
     } catch (e) {
       toast('Failed to send: ' + (e.message || e))
