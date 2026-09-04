@@ -498,7 +498,8 @@ export default function Layout({ children }) {
   const accentLight = session?.loginMode === 'solo' ? '#f0effe' : '#e6f7f2'
   const displayName = session?.role === 'admin' && !session?.userId ? '' : session?.username
 
-  const showSidebar = !isMobile && !isProto && !!session
+  const isAdminUser = session?.role === 'admin' // super admin (userId===null) or org admin
+  const showSidebar = !isMobile && !isProto && !!session && !isAdminUser
 
   const [orgLogoUrl, setOrgLogoUrl] = useState(null)
   const [showAbout,   setShowAbout]   = useState(false)
