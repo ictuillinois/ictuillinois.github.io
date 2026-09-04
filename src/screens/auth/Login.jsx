@@ -15,9 +15,6 @@ export default function Login() {
   const [failCount, setFailCount]   = useState(0)
   const [lockUntil, setLockUntil]   = useState(0)
   const [showHelpLookup, setShowHelpLookup] = useState(false)
-  const [helpEmail, setHelpEmail]   = useState('')
-  const [helpResult, setHelpResult] = useState(null)
-  const [helpLoading, setHelpLoading] = useState(false)
   const [showContact, setShowContact] = useState(false)
   // Shown only when a user has multiple roles — never for single-role accounts
   const [accountPicker, setAccountPicker] = useState(null) // { rows, orgsMap }
@@ -32,19 +29,6 @@ export default function Login() {
     }, 500)
     return () => clearInterval(lockTimerRef.current)
   }, [lockUntil])
-
-  async function findOrgContact() {
-    if (!helpEmail.trim()) return
-    setHelpLoading(true); setHelpResult(null)
-    const { data: user } = await sb.from('users').select('organization_id').ilike('email', helpEmail.trim()).maybeSingle()
-    let org = null
-    if (user?.organization_id) {
-      const { data } = await sb.from('organizations').select('name, contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
-      org = data
-    }
-    setHelpResult(org || { noContact: true })
-    setHelpLoading(false)
-  }
 
   function applySession(user) {
     const adminLevel = user.admin_level || 0
@@ -232,36 +216,17 @@ export default function Login() {
           )}
 
           <div style={{ marginTop: 16 }}>
-            <button type="button" onClick={() => { setShowHelpLookup(v => !v); setHelpResult(null); setHelpEmail('') }}
+            <button type="button" onClick={() => setShowHelpLookup(v => !v)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, width: '100%', textAlign: 'center' }}>
-              {showHelpLookup ? '▲ Hide' : 'Need help logging in? Find your org contact →'}
+              {showHelpLookup ? '▲ Hide' : 'Need help logging in? →'}
             </button>
             {showHelpLookup && (
-              <div style={{ marginTop: 12, background: 'var(--surface2)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 10 }}>Enter your email to find your organization's contact</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="email" value={helpEmail} onChange={e => { setHelpEmail(e.target.value); setHelpResult(null) }}
-                    onKeyDown={e => e.key === 'Enter' && findOrgContact()} placeholder="your@email.com" style={{ flex: 1, fontSize: 13 }} />
-                  <button type="button" onClick={findOrgContact} disabled={helpLoading || !helpEmail.trim()}
-                    style={{ padding: '8px 14px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                    {helpLoading ? '…' : 'Look up'}
-                  </button>
-                </div>
-                {helpResult && (
-                  <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 8, background: helpResult.noContact || !helpResult.contact_email ? 'var(--surface)' : '#E1F5EE', border: '1px solid var(--border)' }}>
-                    {helpResult.noContact || !helpResult.contact_email ? (
-                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                        {helpResult.noContact ? 'No organization contact found for that email. Please reach out to your lab manager directly.' : `Your organization is ${helpResult.name}, but no contact email is configured yet.`}
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 11, color: '#085041', marginBottom: 4 }}>Organization: <strong>{helpResult.name}</strong></div>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#085041' }}>Contact: {helpResult.contact_name || 'Lab Manager'}</div>
-                        <a href={`mailto:${helpResult.contact_email}`} style={{ fontSize: 13, color: '#1D9E75', fontWeight: 500, display: 'block', marginTop: 2 }}>{helpResult.contact_email}</a>
-                      </>
-                    )}
-                  </div>
-                )}
+              <div style={{ marginTop: 12, background: 'var(--surface2)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>Contact the ICT-Lab team for access assistance:</div>
+                <a href="mailto:ictengineers@mx.uillinois.edu"
+                  style={{ fontSize: 13, fontWeight: 600, color: '#1D9E75', textDecoration: 'none' }}>
+                  ictengineers@mx.uillinois.edu
+                </a>
               </div>
             )}
           </div>
