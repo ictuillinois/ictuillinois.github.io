@@ -10,14 +10,16 @@ import { isSupported as localFolderSupported } from '../lib/storage/LocalFolderP
 
 // ── Provider catalogue ─────────────────────────────────────────────────────
 export const PROVIDER_OPTIONS = [
-  { key: 'gdrive',      icon: '🟢', label: 'Google Drive',       color: '#1a73e8', bg: '#e8f0fe', oauth: true },
-  { key: 'onedrive',    icon: '🔵', label: 'Microsoft OneDrive', color: '#0078d4', bg: '#e3f2fd', oauth: true },
-  { key: 'localfolder', icon: '🗂️', label: 'Local Folder',       color: '#534AB7', bg: '#EEEDFE', localfolder: true },
-  { key: 'filesystem',  icon: '📱', label: 'iCloud / Device',    color: '#0369a1', bg: '#e0f2fe', mobileOnly: true },
+  { key: 's3',          icon: '🟠', label: 'AWS S3 (ictlab-files)', color: '#FF9900', bg: '#FFF3E0', server: true },
+  { key: 'gdrive',      icon: '🟢', label: 'Google Drive',          color: '#1a73e8', bg: '#e8f0fe', oauth: true },
+  { key: 'onedrive',    icon: '🔵', label: 'Microsoft OneDrive',    color: '#0078d4', bg: '#e3f2fd', oauth: true },
+  { key: 'localfolder', icon: '🗂️', label: 'Local Folder',          color: '#534AB7', bg: '#EEEDFE', localfolder: true },
+  { key: 'filesystem',  icon: '📱', label: 'iCloud / Device',       color: '#0369a1', bg: '#e0f2fe', mobileOnly: true },
 ]
 
 export const PROVIDER_LABELS = {
   supabase:    { icon: '☁️', label: 'ICT-Lab Cloud' },
+  s3:          { icon: '🟠', label: 'AWS S3' },
   gdrive:      { icon: '🟢', label: 'Google Drive' },
   onedrive:    { icon: '🔵', label: 'Microsoft OneDrive' },
   localfolder: { icon: '🗂️', label: 'Local Folder' },
@@ -50,8 +52,8 @@ function ProviderRow({ opt, connected, active, onSelect, onDisconnect, connectin
         </div>
       </div>
       {connecting === opt.key && <div className="spinner" style={{ width: 16, height: 16, flexShrink: 0 }} />}
-      {connected && !active && <button className="btn btn-sm" style={{ fontSize: 11, flexShrink: 0 }} onClick={e => { e.stopPropagation(); onDisconnect(opt) }}>Disconnect</button>}
-      {active && opt.key !== 'supabase' && <button className="btn btn-sm" style={{ fontSize: 11, flexShrink: 0 }} onClick={e => { e.stopPropagation(); onDisconnect(opt) }}>Disconnect</button>}
+      {!opt.server && connected && !active && <button className="btn btn-sm" style={{ fontSize: 11, flexShrink: 0 }} onClick={e => { e.stopPropagation(); onDisconnect(opt) }}>Disconnect</button>}
+      {!opt.server && active && opt.key !== 'supabase' && <button className="btn btn-sm" style={{ fontSize: 11, flexShrink: 0 }} onClick={e => { e.stopPropagation(); onDisconnect(opt) }}>Disconnect</button>}
     </div>
   )
 }
@@ -322,7 +324,7 @@ function OrgStorageModal({ onClose, toast }) {
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Select provider for {isExternal ? 'organisation storage' : 'backup copies'}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {PROVIDER_OPTIONS.filter(o => o.oauth).map(opt => (
+              {PROVIDER_OPTIONS.filter(o => o.oauth || o.server).map(opt => (
                 <ProviderRow key={opt.key} opt={opt}
                   connected={statuses[opt.key]}
                   active={provider === opt.key}
