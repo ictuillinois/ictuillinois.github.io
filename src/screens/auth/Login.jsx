@@ -83,25 +83,20 @@ export default function Login() {
     setFailCount(0); setLockUntil(0)
     const authUserId = authData.user.id
 
-    // Fetch settings + users rows in parallel
-    const [{ data: settings }, { data: byAuthId }, { data: unlinked }] = await Promise.all([
+    // Fetch settings + all active users rows for this email in parallel
+    const [{ data: settings }, { data: emailRows }] = await Promise.all([
       sb.from('settings').select('key, value').in('key', ['super_admin_auth_id', 'admin_email']),
-      sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true),
-      sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true),
+      sb.from('users').select('*').ilike('email', emailLower).eq('is_active', true),
     ])
     const cfg = Object.fromEntries((settings || []).map(r => [r.key, r.value]))
 
-    // Link any unlinked rows to this auth identity now
-    if (unlinked?.length) {
-      await sb.from('users').update({ auth_id: authUserId }).in('id', unlinked.map(u => u.id))
+    // Link any rows that are missing an auth_id
+    const toLink = (emailRows || []).filter(u => !u.auth_id)
+    if (toLink.length) {
+      await sb.from('users').update({ auth_id: authUserId }).in('id', toLink.map(u => u.id))
     }
 
-    // Merge users rows — deduplicate by id
-    const seen = new Set()
-    const userRows = [...(byAuthId || []), ...(unlinked || [])].filter(u => {
-      if (seen.has(u.id)) return false
-      seen.add(u.id); return true
-    })
+    const userRows = emailRows || []
 
     // Check if this login is also the super admin
     const isSuperAdmin =
