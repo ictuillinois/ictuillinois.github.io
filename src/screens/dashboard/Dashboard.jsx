@@ -592,6 +592,8 @@ function SafetyGate({ onGoToTraining, onRefresh }) {
 
 export default function Dashboard() {
   const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules } = useAppStore()
+  const [inboxOpen, setInboxOpen]   = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
   const [mileageUrl, setMileageUrl] = useState('https://bw4qh7p8sn.us-east-1.awsapprunner.com/')
   const [labSafetyUrl, setLabSafetyUrl] = useState('https://canvas.illinois.edu/')
@@ -632,6 +634,13 @@ export default function Dashboard() {
   }, [session?.userId])
 
   useEffect(() => { loadDashboardPrefs() }, [session?.userId, session?.loginMode])
+
+  useEffect(() => {
+    if (isAdmin && session?.userId) {
+      sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open')
+        .then(({ count }) => setUnreadCount(count || 0))
+    }
+  }, [session?.userId, isAdmin])
 
   async function checkSafetyProgress() {
     if (!isStudent || !session?.userId) { setSafetyComplete(true); return }
@@ -892,19 +901,36 @@ export default function Dashboard() {
       </div>
 
       {isAdmin && (
-        <div
-          onClick={() => setScreen('orgadmin')}
-          style={{ flexShrink: 0, display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', marginBottom:20, cursor:'pointer', transition:'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(29,158,117,0.12)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}>
-          <div style={{ fontSize:28 }}>⚙️</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:600, fontSize:14, color:'var(--text)' }}>Admin Panel</div>
-            <div style={{ fontSize:12, color:'var(--text3)' }}>Manage users, access control & organization settings</div>
+        <div style={{ flexShrink: 0, display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div
+            onClick={() => setScreen('orgadmin')}
+            style={{ flex: 1, minWidth: 200, display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', cursor:'pointer', transition:'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(29,158,117,0.12)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}>
+            <div style={{ fontSize:28 }}>⚙️</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:'var(--text)' }}>Admin Panel</div>
+              <div style={{ fontSize:12, color:'var(--text3)' }}>Manage users, access control & organization settings</div>
+            </div>
+            <div style={{ fontSize:12, color:'var(--text3)' }}>→</div>
           </div>
-          <div style={{ fontSize:12, color:'var(--text3)' }}>→</div>
+          <div
+            onClick={() => setInboxOpen(true)}
+            style={{ position: 'relative', display:'flex', alignItems:'center', gap:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', padding:'14px 20px', cursor:'pointer', transition:'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#1D9E75'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(29,158,117,0.12)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}>
+            {unreadCount > 0 && (
+              <span style={{ position:'absolute', top:-8, right:-8, minWidth:20, height:20, borderRadius:99, background:'#ef4444', color:'#fff', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px', border:'2px solid var(--bg)' }}>{unreadCount}</span>
+            )}
+            <div style={{ fontSize:28 }}>💬</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:'var(--text)' }}>Customer Service</div>
+              <div style={{ fontSize:12, color:'var(--text3)' }}>View & respond to user support messages</div>
+            </div>
+          </div>
         </div>
       )}
+      {inboxOpen && <SupportInbox onClose={() => { setInboxOpen(false); if (isAdmin && session?.userId) sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open').then(({ count }) => setUnreadCount(count || 0)) }} onRead={() => sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open').then(({ count }) => setUnreadCount(count || 0))} />}
 
       <div style={{ flex: 1, minHeight: 0 }}>
         {isStudent && safetyComplete === false
