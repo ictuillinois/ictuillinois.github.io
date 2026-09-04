@@ -14,9 +14,11 @@ async function createAuthUser(email, password) {
   if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
   if (error) {
     if (error.message?.toLowerCase().includes('already registered') || error.message?.toLowerCase().includes('already been registered')) {
-      // If an active user row exists, reuse their Supabase auth identity (multi-role support)
-      const { data: existingUser } = await sb.from('users').select('auth_id').ilike('email', emailLC).eq('is_active', true).maybeSingle()
-      if (existingUser?.auth_id) return { id: existingUser.auth_id, reused: true }
+      // If active user rows exist, reuse their Supabase auth identity (multi-role support)
+      // Use limit(1) — maybeSingle() errors when 2+ rows exist for the same email
+      const { data: existingRows } = await sb.from('users').select('auth_id').ilike('email', emailLC).eq('is_active', true).limit(1)
+      const existingAuthId = existingRows?.[0]?.auth_id
+      if (existingAuthId) return { id: existingAuthId, reused: true }
       // Orphaned auth user — delete it then retry signUp so the new password is correct
       const { data: orphanId } = await sb.rpc('get_auth_user_id_by_email', { p_email: emailLC })
       if (orphanId) try { await sb.rpc('delete_auth_user', { p_auth_id: orphanId }) } catch (_) {}
