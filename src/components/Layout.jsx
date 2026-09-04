@@ -387,6 +387,17 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
               </button>
             ))}
           </nav>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
+            <button
+              onClick={() => setScreen('dashboard')}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${accentColor}`, background: accentLight, color: accentColor, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'background 0.13s, transform 0.1s, box-shadow 0.13s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = accentColor; e.currentTarget.style.color = '#fff'; e.currentTarget.style.boxShadow = `0 4px 12px ${accentColor}40` }}
+              onMouseLeave={e => { e.currentTarget.style.background = accentLight; e.currentTarget.style.color = accentColor; e.currentTarget.style.boxShadow = 'none' }}
+              onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+              onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }}>
+              🏠 <span>Home</span>
+            </button>
+          </div>
         </>
       ) : (
         /* ── Module page expanded: title + sub-tabs + portal + apps nav + home ── */
