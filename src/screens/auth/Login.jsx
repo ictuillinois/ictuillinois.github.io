@@ -83,55 +83,68 @@ export default function Login() {
     setFailCount(0); setLockUntil(0)
     const authUserId = authData.user.id
 
-    // Super admin check
-    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
-    if (saRow?.value === authUserId) {
-      setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
-      setLoading(false); return
-    }
-
-    // Fetch all active rows — by auth_id AND any unlinked rows with the same email
-    const [{ data: byAuthId }, { data: unlinked }] = await Promise.all([
+    // Fetch settings + users rows in parallel
+    const [{ data: settings }, { data: byAuthId }, { data: unlinked }] = await Promise.all([
+      sb.from('settings').select('key, value').in('key', ['super_admin_auth_id', 'admin_email']),
       sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true),
       sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true),
     ])
+    const cfg = Object.fromEntries((settings || []).map(r => [r.key, r.value]))
 
     // Link any unlinked rows to this auth identity now
     if (unlinked?.length) {
       await sb.from('users').update({ auth_id: authUserId }).in('id', unlinked.map(u => u.id))
     }
 
-    // Merge — deduplicate by id
+    // Merge users rows — deduplicate by id
     const seen = new Set()
-    const allRows = [...(byAuthId || []), ...(unlinked || [])].filter(u => {
+    const userRows = [...(byAuthId || []), ...(unlinked || [])].filter(u => {
       if (seen.has(u.id)) return false
       seen.add(u.id); return true
     })
 
-    if (allRows.length === 1) {
-      // Single account — log in directly, no picker
-      applySession(allRows[0])
+    // Check if this login is also the super admin
+    const isSuperAdmin =
+      cfg.super_admin_auth_id === authUserId ||
+      cfg.admin_email?.toLowerCase() === emailLower
+
+    // Build final options list — super admin synthetic entry + user rows
+    const superAdminEntry = isSuperAdmin
+      ? [{ __superAdmin: true, name: 'Super Admin', role: '__super_admin' }]
+      : []
+    const allOptions = [...superAdminEntry, ...userRows]
+
+    if (allOptions.length === 0) {
+      await sb.auth.signOut()
+      setError('No account found. Contact your organization admin.')
       setLoading(false); return
     }
 
-    if (allRows.length > 1) {
-      // Multiple roles — show picker (only these users ever see it)
-      const orgIds = [...new Set(allRows.map(u => u.organization_id).filter(Boolean))]
-      const { data: orgsData } = await sb.from('organizations').select('id, name').in('id', orgIds)
-      const orgsMap = Object.fromEntries((orgsData || []).map(o => [o.id, o.name]))
-      setAccountPicker({ rows: allRows, orgsMap })
+    if (allOptions.length === 1) {
+      // Single option — log in directly, no picker
+      if (allOptions[0].__superAdmin) {
+        setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
+      } else {
+        applySession(allOptions[0])
+      }
       setLoading(false); return
     }
 
-    await sb.auth.signOut()
-    setError('No account found. Contact your organization admin.')
+    // Multiple options — show picker
+    const orgIds = [...new Set(userRows.map(u => u.organization_id).filter(Boolean))]
+    const { data: orgsData } = orgIds.length
+      ? await sb.from('organizations').select('id, name').in('id', orgIds)
+      : { data: [] }
+    const orgsMap = Object.fromEntries((orgsData || []).map(o => [o.id, o.name]))
+    setAccountPicker({ rows: allOptions, orgsMap })
     setLoading(false)
   }
 
   const ROLE_META = {
-    admin:    { label: 'Org Admin',    bg: '#FEF3C7', color: '#92400E' },
-    user:     { label: 'Lab Manager',  bg: '#E1F5EE', color: '#065F46' },
-    lab_user: { label: 'Lab User',     bg: '#EDE9FE', color: '#5B21B6' },
+    __super_admin: { label: 'Super Admin', bg: '#FEE2E2', color: '#991B1B' },
+    admin:         { label: 'Org Admin',   bg: '#FEF3C7', color: '#92400E' },
+    user:          { label: 'Lab Manager', bg: '#E1F5EE', color: '#065F46' },
+    lab_user:      { label: 'Lab User',    bg: '#EDE9FE', color: '#5B21B6' },
   }
 
   return (
@@ -157,7 +170,10 @@ export default function Login() {
                   const meta = ROLE_META[u.role] || { label: u.role, bg: '#f0f0f0', color: '#555' }
                   const orgName = accountPicker.orgsMap[u.organization_id] || ''
                   return (
-                    <button key={u.id} onClick={() => applySession(u)}
+                    <button key={u.__superAdmin ? '__sa' : u.id}
+                      onClick={() => u.__superAdmin
+                        ? setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
+                        : applySession(u)}
                       style={{ padding: '12px 14px', border: '1.5px solid var(--border)', borderRadius: 10, background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{u.name}</div>
