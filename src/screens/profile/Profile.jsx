@@ -1139,22 +1139,15 @@ function AdminProfile() {
 
   useEffect(() => { if (isOrgAdmin && !ADMIN_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('admin') }, [])
 
-  // Super admin: password change + storage settings
+  // Super admin: sidebar tabs control the view (no internal tab bar)
   if (!isOrgAdmin) {
-    const superTab = ['admin', 'storage'].includes(sidebarSubTab) ? sidebarSubTab : 'admin'
+    const isStorage = sidebarSubTab === 'storage'
     return (
-      <div>
-        <div className="section-title" style={{ marginBottom: 20 }}>Profile</div>
-        <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-          {[{ key: 'admin', label: '🔑 Admin Settings' }, { key: 'storage', label: '🗄️ Storage' }].map(t => (
-            <button key={t.key} onClick={() => setSidebarSubTab(t.key)}
-              style={{ padding: '10px 24px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: superTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${superTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {t.label}
-            </button>
-          ))}
-        </ScrollTabs>
-        {superTab === 'admin'   && <AdminSettings session={session} toast={toast} isSuperAdmin />}
-        {superTab === 'storage' && <StorageProviderModal onClose={() => setSidebarSubTab('admin')} toast={toast} inline />}
+      <div key={sidebarSubTab || 'admin'}>
+        <div className="section-title" style={{ marginBottom: 20 }}>{isStorage ? '🗄️ Storage' : '🔑 Admin Settings'}</div>
+        {isStorage
+          ? <StorageProviderModal onClose={() => setSidebarSubTab('admin')} toast={toast} inline />
+          : <AdminSettings session={session} toast={toast} isSuperAdmin />}
       </div>
     )
   }
