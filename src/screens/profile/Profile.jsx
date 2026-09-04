@@ -1130,6 +1130,69 @@ function OrgContactPanel({ session, toast }) {
   )
 }
 
+const ORG_STORAGE_MODE_KEY = 'ictlab_org_storage_mode'
+const ORG_STORAGE_PROVIDER_KEY = 'ictlab_org_cloud_copy'
+const STORAGE_MODES = [
+  { key: 'website_only',      label: 'ICT-Lab Cloud only',     icon: '☁️',  sub: 'Best performance. All files stay on ICT-Lab servers.', recommended: true },
+  { key: 'website_plus_copy', label: 'ICT-Lab Cloud + S3 backup', icon: '☁️➕', sub: 'ICT-Lab keeps the primary copy; a backup goes to AWS S3.' },
+  { key: 'external_only',     label: 'AWS S3 only',            icon: '🟠',  sub: 'Files stored exclusively in AWS S3 (ictlab-files bucket).' },
+]
+
+function SuperAdminStoragePanel({ toast }) {
+  const [mode, setMode_] = useState(() => localStorage.getItem(ORG_STORAGE_MODE_KEY) || 'website_only')
+  const [provider, setProvider_] = useState(() => localStorage.getItem(ORG_STORAGE_PROVIDER_KEY) || '')
+
+  function setMode(m) {
+    setMode_(m)
+    localStorage.setItem(ORG_STORAGE_MODE_KEY, m)
+    if (m !== 'website_only' && !provider) { setProvider_('s3'); localStorage.setItem(ORG_STORAGE_PROVIDER_KEY, 's3') }
+    if (m === 'website_only') { setProvider_(''); localStorage.removeItem(ORG_STORAGE_PROVIDER_KEY) }
+    toast('Storage setting saved ✓')
+  }
+
+  const showProvider = mode !== 'website_only'
+
+  return (
+    <div style={{ maxWidth: 500 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🏢 Organisation Storage Mode</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+          Controls where organisation files are stored for all team members.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {STORAGE_MODES.map(m => (
+            <button key={m.key} onClick={() => setMode(m.key)}
+              style={{ padding: '12px 14px', border: `2px solid ${mode === m.key ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 10, background: mode === m.key ? 'var(--accent-light)' : 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: mode === m.key ? 'var(--accent)' : 'var(--text)' }}>
+                {m.icon} {m.label}{m.recommended ? ' ⭐' : ''}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{m.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {showProvider && (
+        <div className="card">
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🟠 AWS S3 Provider</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.6 }}>
+            Bucket: <strong>ictlab-files</strong> (us-east-1). Files are uploaded via the <code>s3-presign</code> Edge Function — AWS credentials are stored as Supabase secrets only.
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: `2px solid ${provider === 's3' ? '#FF9900' : 'var(--border)'}`, borderRadius: 10, background: provider === 's3' ? '#FFF3E0' : 'var(--surface)' }}>
+            <span style={{ fontSize: 24 }}>🟠</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>AWS S3 (ictlab-files)</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Pre-signed URL architecture • Server-side credentials</div>
+            </div>
+            {provider === 's3'
+              ? <span style={{ fontSize: 11, background: '#FF9900', color: '#fff', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>Active</span>
+              : <button className="btn btn-primary btn-sm" onClick={() => { setProvider_('s3'); localStorage.setItem(ORG_STORAGE_PROVIDER_KEY, 's3'); toast('AWS S3 selected ✓') }}>Select</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AdminProfile() {
   const { session, toast, sidebarSubTab, setSidebarSubTab } = useAppStore()
@@ -1143,10 +1206,10 @@ function AdminProfile() {
   if (!isOrgAdmin) {
     const isStorage = sidebarSubTab === 'storage'
     return (
-      <div key={sidebarSubTab || 'admin'}>
+      <div>
         <div className="section-title" style={{ marginBottom: 20 }}>{isStorage ? '🗄️ Storage' : '🔑 Admin Settings'}</div>
         {isStorage
-          ? <StorageProviderModal onClose={() => setSidebarSubTab('admin')} toast={toast} inline />
+          ? <SuperAdminStoragePanel toast={toast} />
           : <AdminSettings session={session} toast={toast} isSuperAdmin />}
       </div>
     )
