@@ -1354,13 +1354,9 @@ export default function Admin() {
   const [orgModulesModal, setOrgModulesModal]   = useState(null)
   const [appModulesOpen, setAppModulesOpen]     = useState(false)
   const [soloModulesOpen, setSoloModulesOpen]   = useState(false)
-  const [soloUsers, setSoloUsers]               = useState([])
-  const [soloSearch, setSoloSearch]             = useState('')
-  const [soloLoading, setSoloLoading]           = useState(false)
   const [teamUsers, setTeamUsers]               = useState([])
   const [teamSearch, setTeamSearch]             = useState('')
   const [teamLoading, setTeamLoading]           = useState(false)
-  const [userSubTab, setUserSubTab]             = useState('solo')
   const [maintenanceMode, setMaintenanceMode]   = useState(false)
   const [maintBusy, setMaintBusy]               = useState(false)
   const [feedbackModal, setFeedbackModal]       = useState(null) // org object
@@ -1372,7 +1368,6 @@ export default function Admin() {
   useEffect(() => {
     loadOrgs()
     if (isSuperAdmin) {
-      loadSoloUsers()
       sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle()
         .then(({ data }) => setMaintenanceMode(data?.value === 'true'))
     }
@@ -1387,28 +1382,6 @@ export default function Admin() {
     toast(next ? '⚠️ Maintenance mode ON — users see Coming Soon.' : '✓ Maintenance mode OFF — site is live.')
   }
 
-  async function loadSoloUsers() {
-    setSoloLoading(true)
-    const { data } = await sb.from('solo_users').select('id, name, email, created_at, active_modules, is_paid').order('created_at', { ascending: false })
-    setSoloUsers(data || [])
-    setSoloLoading(false)
-  }
-
-  async function toggleSoloPaid(u) {
-    const next = !u.is_paid
-    await sb.from('solo_users').update({ is_paid: next }).eq('id', u.id)
-    setSoloUsers(prev => prev.map(s => s.id === u.id ? { ...s, is_paid: next } : s))
-    toast(`${u.name} marked as ${next ? 'paid ✓' : 'free'}`)
-  }
-
-  async function deleteSoloUser(u) {
-    if (!confirm(`Delete solo account "${u.name}" (${u.email}) permanently?`)) return
-    const { error } = await sb.from('solo_users').delete().eq('id', u.id)
-    if (error) { toast('Delete failed: ' + error.message); return }
-    setSoloUsers(prev => prev.filter(s => s.id !== u.id))
-    toast('Solo account deleted.')
-  }
-
   async function loadTeamUsers() {
     setTeamLoading(true)
     const { data } = await sb.from('users').select('id, name, email, role, is_active, organization_id, created_at').order('organization_id').order('name')
@@ -1421,8 +1394,8 @@ export default function Admin() {
   }, [tab, orgFilter])
 
   useEffect(() => {
-    if (isSuperAdmin && tab === 'useraccounts' && userSubTab === 'team') loadTeamUsers()
-  }, [tab, userSubTab])
+    if (isSuperAdmin && tab === 'useraccounts') loadTeamUsers()
+  }, [tab])
 
   async function loadOrgs() {
     const [{ data: orgData }, { data: countData }, { data: adminData }] = await Promise.all([
@@ -1817,61 +1790,8 @@ export default function Admin() {
       {/* ── USER ACCOUNTS TAB (super admin) ── */}
       {isSuperAdmin && tab === 'useraccounts' && (
         <div>
-          {/* Sub-tab bar */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {[{ key: 'solo', label: '👤 Solo Users' }, { key: 'team', label: '🏢 Team Users' }].map(st => (
-              <button key={st.key} onClick={() => setUserSubTab(st.key)}
-                style={{ padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: `2px solid ${userSubTab === st.key ? 'var(--accent)' : 'var(--border)'}`, cursor: 'pointer', background: userSubTab === st.key ? 'var(--accent-light)' : 'var(--surface)', color: userSubTab === st.key ? 'var(--accent)' : 'var(--text2)' }}>
-                {st.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Solo Users sub-tab */}
-          {userSubTab === 'solo' && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>All solo accounts</div>
-                <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: '#EEEDFE', color: '#534AB7' }}>{soloUsers.length}</span>
-              </div>
-              <input
-                value={soloSearch} onChange={e => setSoloSearch(e.target.value)}
-                placeholder="Search by name or email…"
-                style={{ width: '100%', marginBottom: 12, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, background: 'var(--surface)', color: 'var(--text)', boxSizing: 'border-box' }}
-              />
-              {soloLoading ? (
-                <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-              ) : (() => {
-                const filtered = soloUsers.filter(u =>
-                  !soloSearch || u.name?.toLowerCase().includes(soloSearch.toLowerCase()) || u.email?.toLowerCase().includes(soloSearch.toLowerCase())
-                )
-                if (filtered.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '24px 0', fontSize: 13 }}>No solo accounts found.</div>
-                return filtered.map(u => (
-                  <div key={u.id} className="card" style={{ padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#EEEDFE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {u.name}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: u.is_paid ? '#eafaf1' : '#f0f0f0', color: u.is_paid ? '#27ae60' : '#888' }}>
-                          {u.is_paid ? 'PAID' : 'FREE'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', flexShrink: 0, textAlign: 'right' }}>
-                      {u.created_at ? new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-                    </div>
-                    <button className="btn btn-sm" onClick={() => toggleSoloPaid(u)}>{u.is_paid ? 'Revoke Paid' : 'Mark Paid'}</button>
-                    <button className="btn btn-sm btn-danger" onClick={() => deleteSoloUser(u)}>Delete</button>
-                  </div>
-                ))
-              })()}
-            </div>
-          )}
-
-          {/* Team Users sub-tab */}
-          {userSubTab === 'team' && (
-            <div>
+          {/* Team Users */}
+          <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>All team accounts</div>
                 <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)' }}>{teamUsers.length}</span>
@@ -1926,7 +1846,6 @@ export default function Admin() {
                 })
               })()}
             </div>
-          )}
         </div>
       )}
 
