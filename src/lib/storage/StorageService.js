@@ -28,6 +28,7 @@ import { FilesystemProvider } from './FilesystemProvider'
 import { GoogleDriveProvider } from './GoogleDriveProvider'
 import { OneDriveProvider } from './OneDriveProvider'
 import { LocalFolderProvider } from './LocalFolderProvider'
+import { S3Provider } from './S3Provider'
 
 // ── localStorage keys ──────────────────────────────────────────────────────
 export const PROVIDER_KEY      = 'ictlab_storage_provider'    // external provider for solo
@@ -50,6 +51,7 @@ export const providers = {
   gdrive:      new GoogleDriveProvider(),
   onedrive:    new OneDriveProvider(),
   localfolder: new LocalFolderProvider(),
+  s3:          new S3Provider(),
 }
 
 export function getActiveProviderKey() {
