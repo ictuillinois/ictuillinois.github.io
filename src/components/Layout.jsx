@@ -545,7 +545,7 @@ export default function Layout({ children }) {
     if (!uid) return
     localStorage.setItem(`ictlab_tour_done_${uid}`, 'true')
     // Write tour_done to the user's own row — simple UPDATE, no unique-constraint issues
-    sb.from('users').update({ tour_done: true }).eq('id', uid).catch(() => {})
+    sb.from('users').update({ tour_done: true }).eq('id', uid).then(() => {})
   }
 
   return (

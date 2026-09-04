@@ -379,7 +379,7 @@ export default function App() {
             } else {
               localStorage.setItem(`ictlab_picker_done_${session.userId}`, 'true')
               // Write picker_done to the user's own row — simple UPDATE, no unique-constraint issues
-              sb.from('users').update({ picker_done: true }).eq('id', session.userId).catch(() => {})
+              sb.from('users').update({ picker_done: true }).eq('id', session.userId).then(() => {})
             }
             if (modules !== null && modules !== undefined) setActiveModules(modules)
             setShowIconPicker(false)
