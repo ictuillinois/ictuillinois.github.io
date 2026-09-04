@@ -141,7 +141,10 @@ function getScreenTabs(screen, session) {
   }
 
   if (screen === 'profile') {
-    if (session?.userId === null) return null // super admin — no sub-tabs
+    if (session?.userId === null) return [
+      { key: 'admin',   icon: '🔑', label: 'Admin Settings' },
+      { key: 'storage', icon: '🗄️', label: 'Storage' },
+    ] // super admin
     if (session?.loginMode === 'solo') return [
       { key: 'info',          icon: '👤', label: 'My Info' },
       { key: 'teammates',     icon: '👥', label: 'Teammates' },
@@ -156,6 +159,7 @@ function getScreenTabs(screen, session) {
       { key: 'dashboard', icon: '🎛️', label: 'Dashboard Icons' },
       { key: 'notifs',    icon: '🔔', label: 'Notifications' },
       { key: 'org',       icon: '🏢', label: 'Organization' },
+      { key: 'storage',   icon: '🗄️', label: 'Storage' },
     ]
     return [
       { key: 'info',      icon: '👤', label: 'My Info' },
