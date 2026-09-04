@@ -2,10 +2,17 @@ import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
-import { IconAlert, IconEye, IconEyeOff, IconInfo, IconMail } from '../../components/Icons'
+import { IconAlert, IconEye, IconEyeOff, IconMail } from '../../components/Icons'
+
+const ROLES = [
+  { key: 'admin',    label: 'Admin',       icon: '🔑', sub: 'Super admin or org admin',  dbRoles: ['admin'] },
+  { key: 'user',     label: 'Lab Manager', icon: '👷', sub: 'Manage lab operations',     dbRoles: ['user'] },
+  { key: 'lab_user', label: 'Lab User',    icon: '🎓', sub: 'Student / researcher',       dbRoles: ['lab_user'] },
+]
 
 export default function Login() {
   const { setSession } = useAppStore()
+  const [selectedRole, setSelectedRole] = useState(null) // 'admin' | 'user' | 'lab_user'
   const [identifier, setIdentifier] = useState(() => localStorage.getItem('ictlab_remembered_email') || '')
   const [keepSignedIn, setKeepSignedIn] = useState(() => localStorage.getItem('ictlab_keep_signed_in') !== 'false')
   const [password, setPassword]     = useState('')
@@ -19,7 +26,6 @@ export default function Login() {
   const [helpResult, setHelpResult] = useState(null)
   const [helpLoading, setHelpLoading] = useState(false)
   const [showContact, setShowContact] = useState(false)
-  const [accountPicker, setAccountPicker] = useState(null) // { rows, orgsMap } when multi-role
   const lockTimerRef = useRef(null)
 
   useEffect(() => {
@@ -64,6 +70,7 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault()
     if (lockUntil > Date.now()) return
+    if (!selectedRole) { setError('Please select your account type above.'); return }
     if (!identifier.trim() || !password.trim()) { setError('Please enter your email and password.'); return }
     localStorage.setItem('ictlab_keep_signed_in', String(keepSignedIn))
     if (keepSignedIn) localStorage.setItem('ictlab_remembered_email', identifier.trim())
@@ -82,34 +89,40 @@ export default function Login() {
     setFailCount(0); setLockUntil(0)
     const authUserId = authData.user.id
 
-    // Super admin check
-    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
-    if (saRow?.value === authUserId) {
-      setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
-      setLoading(false); return
+    // Super admin — only reachable via Admin role selection
+    if (selectedRole === 'admin') {
+      const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
+      if (saRow?.value === authUserId) {
+        setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
+        setLoading(false); return
+      }
     }
 
-    // Team user — fetch all active rows for this auth identity
-    const { data: byAuthIdAll } = await sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true)
-    let user = null
-    if (byAuthIdAll?.length === 1) {
-      user = byAuthIdAll[0]
-    } else if (byAuthIdAll?.length > 1) {
-      // Multiple roles — show picker
-      const orgIds = [...new Set(byAuthIdAll.map(u => u.organization_id).filter(Boolean))]
-      const { data: orgsData } = await sb.from('organizations').select('id, name').in('id', orgIds)
-      const orgsMap = Object.fromEntries((orgsData || []).map(o => [o.id, o.name]))
-      setAccountPicker({ rows: byAuthIdAll, orgsMap })
-      setLoading(false); return
-    } else {
-      // Fallback: link by email for legacy rows without auth_id
-      const { data: byEmail } = await sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true).maybeSingle()
+    // Look up the users row matching the selected role
+    const roleConfig = ROLES.find(r => r.key === selectedRole)
+    const { data: rows } = await sb.from('users').select('*')
+      .eq('auth_id', authUserId).eq('is_active', true)
+      .in('role', roleConfig.dbRoles)
+
+    let user = rows?.[0] ?? null
+
+    // Fallback: link legacy row that has no auth_id yet
+    if (!user) {
+      const { data: byEmail } = await sb.from('users').select('*')
+        .ilike('email', emailLower).eq('is_active', true)
+        .in('role', roleConfig.dbRoles).is('auth_id', null).maybeSingle()
       if (byEmail) {
         await sb.from('users').update({ auth_id: authUserId }).eq('id', byEmail.id)
         user = { ...byEmail, auth_id: authUserId }
       }
     }
-    if (!user) { await sb.auth.signOut(); setError('No account found. Contact your organization admin.'); setLoading(false); return }
+
+    if (!user) {
+      await sb.auth.signOut()
+      const roleLabel = ROLES.find(r => r.key === selectedRole)?.label || 'account'
+      setError(`No ${roleLabel} account found for this email. Try a different account type.`)
+      setLoading(false); return
+    }
 
     applySession(user)
     setLoading(false)
@@ -121,41 +134,28 @@ export default function Login() {
       <div style={{ width: '100%', maxWidth: 420 }}>
 
         <div className="card" style={{ padding: '28px 28px 12px' }}>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <img src={`${import.meta.env.BASE_URL}ict-logo.png`} alt="ICT-Lab"
               style={{ width: 160, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
             <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICT-Lab Sign In</div>
-            <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Access is managed by your organization admin</div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Select your account type to continue</div>
           </div>
 
-          {accountPicker ? (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Multiple accounts found</div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Select which account to sign in with:</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {accountPicker.rows.map(u => {
-                  const orgName = accountPicker.orgsMap[u.organization_id] || 'Unknown org'
-                  const roleLabel = u.role === 'admin' ? 'Org Admin' : u.role === 'lab_user' ? 'Lab User' : 'Lab Manager'
-                  const roleBg = u.role === 'admin' ? '#FEF3C7' : u.role === 'lab_user' ? '#EDE9FE' : '#E1F5EE'
-                  const roleColor = u.role === 'admin' ? '#92400E' : u.role === 'lab_user' ? '#5B21B6' : '#065F46'
-                  return (
-                    <button key={u.id} onClick={() => { applySession(u) }}
-                      style={{ padding: '12px 14px', border: '1.5px solid var(--border)', borderRadius: 10, background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{u.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{orgName}</div>
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: roleBg, color: roleColor, flexShrink: 0 }}>{roleLabel}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <button type="button" onClick={() => setAccountPicker(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text3)', padding: 0, width: '100%', textAlign: 'center' }}>
-                ← Back to sign in
-              </button>
-            </div>
-          ) : (
+          {/* Role selector */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {ROLES.map(r => {
+              const active = selectedRole === r.key
+              return (
+                <button key={r.key} type="button" onClick={() => { setSelectedRole(r.key); setError('') }}
+                  style={{ flex: 1, padding: '10px 6px', border: `2px solid ${active ? '#1D9E75' : 'var(--border)'}`, borderRadius: 10, background: active ? '#E1F5EE' : 'var(--surface)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
+                  <div style={{ fontSize: 20, marginBottom: 2 }}>{r.icon}</div>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: active ? '#085041' : 'var(--text)' }}>{r.label}</div>
+                  <div style={{ fontSize: 10, color: active ? '#1D9E75' : 'var(--text3)', marginTop: 1, lineHeight: 1.3 }}>{r.sub}</div>
+                </button>
+              )
+            })}
+          </div>
+
           <form onSubmit={handleLogin}>
             <div className="field">
               <label>Email address</label>
@@ -193,13 +193,12 @@ export default function Login() {
             <button type="submit"
               style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '12px', background: lockUntil <= Date.now() ? '#1D9E75' : 'var(--border)', color: lockUntil <= Date.now() ? '#fff' : 'var(--text3)', border: 'none', borderRadius: 8, cursor: lockUntil <= Date.now() ? 'pointer' : 'not-allowed', fontWeight: 600, transition: 'background 0.2s' }}
               disabled={loading || lockUntil > Date.now()}>
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Signing in…' : selectedRole ? `Sign in as ${ROLES.find(r => r.key === selectedRole)?.label}` : 'Sign in'}
             </button>
             <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
               <a href="/terms/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
             </div>
           </form>
-          )}
 
           <div style={{ marginTop: 16 }}>
             <button type="button" onClick={() => { setShowHelpLookup(v => !v); setHelpResult(null); setHelpEmail('') }}
