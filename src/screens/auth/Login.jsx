@@ -90,29 +90,36 @@ export default function Login() {
       setLoading(false); return
     }
 
-    // Fetch all active rows for this auth identity
-    const { data: allRows } = await sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true)
+    // Fetch all active rows — by auth_id AND any unlinked rows with the same email
+    const [{ data: byAuthId }, { data: unlinked }] = await Promise.all([
+      sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true),
+      sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true),
+    ])
 
-    if (allRows?.length === 1) {
+    // Link any unlinked rows to this auth identity now
+    if (unlinked?.length) {
+      await sb.from('users').update({ auth_id: authUserId }).in('id', unlinked.map(u => u.id))
+    }
+
+    // Merge — deduplicate by id
+    const seen = new Set()
+    const allRows = [...(byAuthId || []), ...(unlinked || [])].filter(u => {
+      if (seen.has(u.id)) return false
+      seen.add(u.id); return true
+    })
+
+    if (allRows.length === 1) {
       // Single account — log in directly, no picker
       applySession(allRows[0])
       setLoading(false); return
     }
 
-    if (allRows?.length > 1) {
-      // Multiple roles — show role picker (only these users ever see it)
+    if (allRows.length > 1) {
+      // Multiple roles — show picker (only these users ever see it)
       const orgIds = [...new Set(allRows.map(u => u.organization_id).filter(Boolean))]
       const { data: orgsData } = await sb.from('organizations').select('id, name').in('id', orgIds)
       const orgsMap = Object.fromEntries((orgsData || []).map(o => [o.id, o.name]))
       setAccountPicker({ rows: allRows, orgsMap })
-      setLoading(false); return
-    }
-
-    // Fallback: link legacy row with no auth_id
-    const { data: byEmail } = await sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true).maybeSingle()
-    if (byEmail) {
-      await sb.from('users').update({ auth_id: authUserId }).eq('id', byEmail.id)
-      applySession({ ...byEmail, auth_id: authUserId })
       setLoading(false); return
     }
 
