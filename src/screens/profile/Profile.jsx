@@ -8,6 +8,7 @@ import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
 import { IconEye, IconEyeOff } from '../../components/Icons'
 import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
+import StorageProviderModal from '../../components/StorageProviderModal'
 import StudentIconManager from '../../components/StudentIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
@@ -83,7 +84,7 @@ async function createAuthUser(email, password) {
 const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','password','danger']
 const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','team','danger']
 const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','team','danger']
-const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org']
+const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org','storage']
 
 // ══════════════════════════════════════════════════════════════
 // SOLO PROFILE — reads from solo_users table
@@ -1138,12 +1139,22 @@ function AdminProfile() {
 
   useEffect(() => { if (isOrgAdmin && !ADMIN_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('admin') }, [])
 
-  // Super admin: password change + notification email
+  // Super admin: password change + storage settings
   if (!isOrgAdmin) {
+    const superTab = ['admin', 'storage'].includes(sidebarSubTab) ? sidebarSubTab : 'admin'
     return (
       <div>
-        <div className="section-title" style={{ marginBottom: 24 }}>Profile</div>
-        <AdminSettings session={session} toast={toast} isSuperAdmin />
+        <div className="section-title" style={{ marginBottom: 20 }}>Profile</div>
+        <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
+          {[{ key: 'admin', label: '🔑 Admin Settings' }, { key: 'storage', label: '🗄️ Storage' }].map(t => (
+            <button key={t.key} onClick={() => setSidebarSubTab(t.key)}
+              style={{ padding: '10px 24px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: superTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${superTab === t.key ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+              {t.label}
+            </button>
+          ))}
+        </ScrollTabs>
+        {superTab === 'admin'   && <AdminSettings session={session} toast={toast} isSuperAdmin />}
+        {superTab === 'storage' && <StorageProviderModal onClose={() => setSidebarSubTab('admin')} toast={toast} inline />}
       </div>
     )
   }
@@ -1154,6 +1165,7 @@ function AdminProfile() {
     { key: 'dashboard', label: '🎛️ Dashboard Icons' },
     { key: 'notifs',    label: '🔔 Notifications' },
     { key: 'org',       label: '🏢 Organization' },
+    { key: 'storage',   label: '🗄️ Storage' },
   ]
   return (
     <div>
@@ -1174,6 +1186,7 @@ function AdminProfile() {
       {adminTab === 'dashboard' && <DashboardIconsPanel session={session} />}
       {adminTab === 'notifs'    && <NotificationPrefsPanel userId={session?.userId} role="admin" />}
       {adminTab === 'org'       && <OrgContactPanel session={session} toast={toast} />}
+      {adminTab === 'storage'   && <StorageProviderModal onClose={() => setSidebarSubTab('admin')} toast={toast} inline />}
     </div>
   )
 }

@@ -253,7 +253,7 @@ function SoloStorageModal({ onClose, toast }) {
 }
 
 // ── Team org-admin storage modal ───────────────────────────────────────────
-function OrgStorageModal({ onClose, toast }) {
+function OrgStorageModal({ onClose, toast, inline = false }) {
   const [mode, setMode_]     = useState(() => localStorage.getItem(ORG_MODE_KEY) || MODE_WEBSITE_ONLY)
   const [provider, setProvider_] = useState(() => localStorage.getItem(ORG_COPY_KEY) || '')
   const [statuses, refreshStatuses] = useProviderStatuses()
@@ -286,13 +286,12 @@ function OrgStorageModal({ onClose, toast }) {
   const needsProvider = mode !== MODE_WEBSITE_ONLY
   const isExternal = mode === MODE_EXTERNAL_ONLY
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 520, width: '100%', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}>
+  const inner = (
+    <div style={{ background: 'var(--surface)', borderRadius: inline ? 0 : 'var(--radius-lg)', padding: 24, maxWidth: inline ? '100%' : 520, width: '100%', border: inline ? 'none' : '1px solid var(--border)', maxHeight: inline ? 'none' : '90vh', overflowY: inline ? 'visible' : 'auto' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>🏢 Organisation Storage</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
+          {!inline && <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>}
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
@@ -340,8 +339,9 @@ function OrgStorageModal({ onClose, toast }) {
           Files in any connected provider remain fully under your organisation's control. ICT-Lab does not access, manage, or delete them.
         </div>
       </div>
-    </div>
   )
+  if (inline) return inner
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>{inner}</div>
 }
 
 // ── Team user (non-admin) secondary storage modal ──────────────────────────
@@ -412,12 +412,12 @@ function TeamUserStorageModal({ onClose, toast }) {
 }
 
 // ── Main exported modal — context-aware ────────────────────────────────────
-export default function StorageProviderModal({ onClose, toast }) {
+export default function StorageProviderModal({ onClose, toast, inline = false }) {
   const { session } = useAppStore()
   const loginMode = session?.loginMode || localStorage.getItem('ictlab_login_mode') || 'team'
-  const isOrgAdmin = loginMode === 'team' && session?.role === 'admin' && session?.userId !== null
+  const isAdmin = loginMode === 'team' && session?.role === 'admin'
 
-  if (loginMode === 'solo') return <SoloStorageModal onClose={onClose} toast={toast} />
-  if (isOrgAdmin) return <OrgStorageModal onClose={onClose} toast={toast} />
-  return <TeamUserStorageModal onClose={onClose} toast={toast} />
+  if (loginMode === 'solo') return <SoloStorageModal onClose={onClose} toast={toast} inline={inline} />
+  if (isAdmin) return <OrgStorageModal onClose={onClose} toast={toast} inline={inline} />
+  return <TeamUserStorageModal onClose={onClose} toast={toast} inline={inline} />
 }
