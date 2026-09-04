@@ -19,6 +19,7 @@ export default function Login() {
   const [helpResult, setHelpResult] = useState(null)
   const [helpLoading, setHelpLoading] = useState(false)
   const [showContact, setShowContact] = useState(false)
+  const [accountPicker, setAccountPicker] = useState(null) // { rows, orgsMap } when multi-role
   const lockTimerRef = useRef(null)
 
   useEffect(() => {
@@ -42,6 +43,22 @@ export default function Login() {
     }
     setHelpResult(org || { noContact: true })
     setHelpLoading(false)
+  }
+
+  function applySession(user) {
+    const adminLevel = user.admin_level || 0
+    const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
+    setSession({
+      role, dbRole: user.role,
+      username: user.nick_name?.trim() || user.name,
+      userId: user.id, email: user.email,
+      adminLevel, photoUrl: user.photo_url, avatar: user.avatar,
+      loginMode: 'team',
+      organizationId: user.organization_id || null,
+      projectGroup: user.project_group || null,
+      mustChangePassword: user.must_change_password === true,
+      termsAcceptedVersion: user.terms_accepted_version || null,
+    })
   }
 
   async function handleLogin(e) {
@@ -72,12 +89,20 @@ export default function Login() {
       setLoading(false); return
     }
 
-    // Team user
+    // Team user — fetch all active rows for this auth identity
+    const { data: byAuthIdAll } = await sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true)
     let user = null
-    const { data: byAuthId } = await sb.from('users').select('*').eq('auth_id', authUserId).eq('is_active', true).maybeSingle()
-    if (byAuthId) {
-      user = byAuthId
+    if (byAuthIdAll?.length === 1) {
+      user = byAuthIdAll[0]
+    } else if (byAuthIdAll?.length > 1) {
+      // Multiple roles — show picker
+      const orgIds = [...new Set(byAuthIdAll.map(u => u.organization_id).filter(Boolean))]
+      const { data: orgsData } = await sb.from('organizations').select('id, name').in('id', orgIds)
+      const orgsMap = Object.fromEntries((orgsData || []).map(o => [o.id, o.name]))
+      setAccountPicker({ rows: byAuthIdAll, orgsMap })
+      setLoading(false); return
     } else {
+      // Fallback: link by email for legacy rows without auth_id
       const { data: byEmail } = await sb.from('users').select('*').ilike('email', emailLower).is('auth_id', null).eq('is_active', true).maybeSingle()
       if (byEmail) {
         await sb.from('users').update({ auth_id: authUserId }).eq('id', byEmail.id)
@@ -86,19 +111,7 @@ export default function Login() {
     }
     if (!user) { await sb.auth.signOut(); setError('No account found. Contact your organization admin.'); setLoading(false); return }
 
-    const adminLevel = user.admin_level || 0
-    const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
-    setSession({
-      role, dbRole: user.role,
-      username: user.nick_name?.trim() || user.name,
-      userId: user.id, email: user.email,
-      adminLevel, photoUrl: user.photo_url, avatar: user.avatar,
-      loginMode: 'team',
-      organizationId: user.organization_id || null,
-      projectGroup: user.project_group || null,
-      mustChangePassword: user.must_change_password === true,
-      termsAcceptedVersion: user.terms_accepted_version || null,
-    })
+    applySession(user)
     setLoading(false)
   }
 
@@ -115,6 +128,34 @@ export default function Login() {
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Access is managed by your organization admin</div>
           </div>
 
+          {accountPicker ? (
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Multiple accounts found</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Select which account to sign in with:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {accountPicker.rows.map(u => {
+                  const orgName = accountPicker.orgsMap[u.organization_id] || 'Unknown org'
+                  const roleLabel = u.role === 'admin' ? 'Org Admin' : u.role === 'lab_user' ? 'Lab User' : 'Lab Manager'
+                  const roleBg = u.role === 'admin' ? '#FEF3C7' : u.role === 'lab_user' ? '#EDE9FE' : '#E1F5EE'
+                  const roleColor = u.role === 'admin' ? '#92400E' : u.role === 'lab_user' ? '#5B21B6' : '#065F46'
+                  return (
+                    <button key={u.id} onClick={() => { applySession(u) }}
+                      style={{ padding: '12px 14px', border: '1.5px solid var(--border)', borderRadius: 10, background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{u.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{orgName}</div>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: roleBg, color: roleColor, flexShrink: 0 }}>{roleLabel}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <button type="button" onClick={() => setAccountPicker(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text3)', padding: 0, width: '100%', textAlign: 'center' }}>
+                ← Back to sign in
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleLogin}>
             <div className="field">
               <label>Email address</label>
@@ -158,6 +199,7 @@ export default function Login() {
               <a href="/terms/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', textDecoration: 'underline' }}>Terms of Service</a>
             </div>
           </form>
+          )}
 
           <div style={{ marginTop: 16 }}>
             <button type="button" onClick={() => { setShowHelpLookup(v => !v); setHelpResult(null); setHelpEmail('') }}

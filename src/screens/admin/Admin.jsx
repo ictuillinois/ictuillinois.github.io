@@ -14,9 +14,9 @@ async function createAuthUser(email, password) {
   if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
   if (error) {
     if (error.message?.toLowerCase().includes('already registered') || error.message?.toLowerCase().includes('already been registered')) {
-      // Block reuse if an active DB row still exists
-      const { data: activeUser } = await sb.from('users').select('id').ilike('email', emailLC).eq('is_active', true).maybeSingle()
-      if (activeUser) throw new Error('This email is already in use by an active account.')
+      // If an active user row exists, reuse their Supabase auth identity (multi-role support)
+      const { data: existingUser } = await sb.from('users').select('auth_id').ilike('email', emailLC).eq('is_active', true).maybeSingle()
+      if (existingUser?.auth_id) return { id: existingUser.auth_id, reused: true }
       // Orphaned auth user — delete it then retry signUp so the new password is correct
       const { data: orphanId } = await sb.rpc('get_auth_user_id_by_email', { p_email: emailLC })
       if (orphanId) try { await sb.rpc('delete_auth_user', { p_auth_id: orphanId }) } catch (_) {}
@@ -533,25 +533,35 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       const emailLC = email.trim().toLowerCase()
       const tempPassword = generateTempPassword()
       let auth_id = null
+      let authReused = false
       try {
         const authUser = await createAuthUser(emailLC, tempPassword)
-        if (authUser) auth_id = authUser.id
+        if (authUser) { auth_id = authUser.id; authReused = !!authUser.reused }
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
 
       // Use SECURITY DEFINER RPC to bypass RLS (admin session may shift during signUp)
-      const { data: newUserId, error } = await sb.rpc('create_team_user', {
+      const { error } = await sb.rpc('create_team_user', {
         p_name: firstName.trim(), p_email: emailLC, p_auth_id: auth_id,
         p_role: role, p_organization_id: orgId,
         p_last_name: lastName.trim() || null,
       })
       if (error) { toast('Error creating user: ' + error.message); return }
 
-      // Fetch the new user's ID to save icon prefs and queue welcome email
-      const { data: newUser } = await sb.from('users').select('id').ilike('email', emailLC).maybeSingle()
+      // Fetch the new user row to save icon prefs + optional welcome email
+      const { data: allNew } = await sb.from('users').select('id').ilike('email', emailLC).order('created_at', { ascending: false })
+      const newUser = allNew?.[0] ?? null
       if (role === 'lab_user' && newUser?.id) await saveIconPrefs(newUser.id)
-      queueWelcomeEmail(sb, { name: firstName.trim(), toEmail: emailLC, orgId, userId: newUser?.id ?? null, password: tempPassword })
-      setSavedCreds({ name: firstName.trim(), email: emailLC, password: tempPassword })
-      onSaved()
+
+      if (authReused) {
+        // Person already has an account — don't force password change, don't send temp-password email
+        if (newUser?.id) await sb.from('users').update({ must_change_password: false }).eq('id', newUser.id)
+        toast(`${firstName.trim()} added as ${role === 'admin' ? 'Org Admin' : 'Lab Manager'} — they sign in with their existing password.`)
+        onSaved(); onClose()
+      } else {
+        queueWelcomeEmail(sb, { name: firstName.trim(), toEmail: emailLC, orgId, userId: newUser?.id ?? null, password: tempPassword })
+        setSavedCreds({ name: firstName.trim(), email: emailLC, password: tempPassword })
+        onSaved()
+      }
     }
   }
 
