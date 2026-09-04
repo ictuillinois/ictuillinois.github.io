@@ -19,7 +19,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
-const RESEND_FROM = Deno.env.get("RESEND_FROM") ?? "LabHive <noreply@labhive.app>";
+const RESEND_FROM = Deno.env.get("RESEND_FROM") ?? "ICT-Lab <noreply@ictlab.app>";
 const BATCH = 50;        // max emails per run
 const MAX_ATTEMPTS = 5;  // give up after this many failures per row
 
