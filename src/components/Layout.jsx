@@ -182,7 +182,7 @@ function IctLabLogo({ height = 40 }) {
 }
 
 // ── Sidebar ────────────────────────────────────────────────────
-function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubTab, setScreen, accentColor, accentLight, forceExpanded = false }) {
+function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubTab, setScreen, accentColor, accentLight, forceExpanded = false, safetyLocked = false }) {
   const isDash      = screen === 'dashboard'
   // Screens that portal a list (equipment, projects…) into the sidebar —
   // hide the Apps section there so the list gets full height; Home stays.
@@ -360,6 +360,13 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
                 (m.key === 'supply'       && ['inspection', 'results', 'history'].includes(screen)) ||
                 (m.key === 'projects'     && screen === 'project-detail') ||
                 (m.key === 'equipmenthub' && screen === 'equipmentscan'))
+              const locked = safetyLocked && m.key !== 'profile'
+              if (locked) return (
+                <button key={m.key} title={`${m.label} (locked)`}
+                  style={{ width: 38, height: 38, borderRadius: 10, border: '1.5px solid transparent', background: 'transparent', cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0, opacity: 0.35, filter: 'grayscale(0.8)' }}>
+                  {m.icon}
+                </button>
+              )
               return iconBtn(() => handleModuleClick(m), m.label, m.icon, isCurrent)
             })}
           </div>
@@ -376,16 +383,28 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
           <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f3f4f6' }}>
             {AppsBadge()}
           </div>
+          {safetyLocked && (
+            <div style={{ margin: '6px 8px 2px', padding: '8px 10px', background: '#fff8f0', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
+              🔒 Complete safety training to unlock all modules
+            </div>
+          )}
           <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
-            {visibleMeta.map(m => (
-              <button key={m.key} className="sidebar-item" onClick={() => handleModuleClick(m)}>
-                <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
-                <span style={{ flex: 1 }}>{m.label}</span>
-                {m.external
-                  ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
-                  : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
-              </button>
-            ))}
+            {visibleMeta.map(m => {
+              const locked = safetyLocked && m.key !== 'profile'
+              return (
+                <button key={m.key} className="sidebar-item"
+                  onClick={locked ? undefined : () => handleModuleClick(m)}
+                  style={locked ? { opacity: 0.4, cursor: 'not-allowed', filter: 'grayscale(0.7)', pointerEvents: 'none' } : {}}>
+                  <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
+                  <span style={{ flex: 1 }}>{m.label}</span>
+                  {locked
+                    ? <span style={{ fontSize: 11 }}>🔒</span>
+                    : m.external
+                      ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
+                      : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
+                </button>
+              )
+            })}
           </nav>
           <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
             <button
@@ -448,18 +467,23 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
                       (m.key === 'supply'       && ['inspection', 'results', 'history'].includes(screen)) ||
                       (m.key === 'projects'     && screen === 'project-detail') ||
                       (m.key === 'equipmenthub' && screen === 'equipmentscan'))
+                    const locked = safetyLocked && m.key !== 'profile'
                     return (
                       <button key={m.key}
-                        className={`sidebar-item${isCurrent ? ' active' : ''}`}
-                        onClick={() => handleModuleClick(m)}
-                        style={isCurrent ? { background: accentLight, color: accentColor } : {}}>
+                        className={`sidebar-item${isCurrent && !locked ? ' active' : ''}`}
+                        onClick={locked ? undefined : () => handleModuleClick(m)}
+                        style={locked
+                          ? { opacity: 0.4, cursor: 'not-allowed', filter: 'grayscale(0.7)', pointerEvents: 'none' }
+                          : isCurrent ? { background: accentLight, color: accentColor } : {}}>
                         <span style={{ fontSize: 15, width: 20, textAlign: 'center', flexShrink: 0 }}>{m.icon}</span>
                         <span style={{ lineHeight: 1.3, flex: 1, fontSize: 13 }}>{m.label}</span>
-                        {isCurrent
-                          ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: accentColor, flexShrink: 0 }} />
-                          : m.external
-                            ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
-                            : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
+                        {locked
+                          ? <span style={{ fontSize: 11 }}>🔒</span>
+                          : isCurrent
+                            ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: accentColor, flexShrink: 0 }} />
+                            : m.external
+                              ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>↗</span>
+                              : <span style={{ fontSize: 12, color: 'var(--text3)' }}>›</span>}
                       </button>
                     )
                   })}
@@ -520,6 +544,26 @@ export default function Layout({ children }) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const tourTriggeredRef = useRef(false)
   useEffect(() => { setMobileDrawerOpen(false) }, [screen, sidebarSubTab])
+
+  // Safety lock — lab users must complete all 4 safety steps before accessing modules
+  const [safetyLocked, setSafetyLocked] = useState(false)
+  useEffect(() => {
+    if (session?.role !== 'lab_user' || !session?.userId) { setSafetyLocked(false); return }
+    const uid = session.userId
+    async function checkSafety() {
+      try {
+        const { data } = await sb.from('lab_safety_progress')
+          .select('step_number').eq('user_id', uid).eq('completed', true)
+        const done = new Set((data || []).map(r => r.step_number))
+        setSafetyLocked(![1, 2, 3, 4].every(n => done.has(n)))
+      } catch { setSafetyLocked(false) }
+    }
+    checkSafety()
+    const sub = sb.channel(`safety_sidebar_${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_safety_progress', filter: `user_id=eq.${uid}` }, checkSafety)
+      .subscribe()
+    return () => { sb.removeChannel(sub) }
+  }, [session?.userId, session?.role])
 
   useEffect(() => {
     const orgId = session?.organizationId
@@ -671,6 +715,7 @@ export default function Layout({ children }) {
             setScreen={setScreen}
             accentColor={accentColor}
             accentLight={accentLight}
+            safetyLocked={safetyLocked}
           />
         )}
 
@@ -733,6 +778,7 @@ export default function Layout({ children }) {
               accentColor={accentColor}
               accentLight={accentLight}
               forceExpanded
+              safetyLocked={safetyLocked}
             />
           </div>
         </div>
