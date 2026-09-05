@@ -132,12 +132,31 @@ export default function App() {
   }, [session?.userId, session?.termsAcceptedVersion])
 
   async function restoreSessionFromAuth(authUser) {
-    const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
-    if (saRow?.value === authUser.id) {
+    const savedUserId = localStorage.getItem('ictlab_active_user_id')
+
+    // Respect the role the user explicitly chose at login
+    if (savedUserId === '__superAdmin') {
       setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
       return
     }
-    const { data: teamUser } = await sb.from('users').select('*').eq('auth_id', authUser.id).eq('is_active', true).maybeSingle()
+
+    // Try to restore the exact users row they chose (by saved id first, then fallback by auth_id)
+    let teamUser = null
+    if (savedUserId) {
+      const { data } = await sb.from('users').select('*').eq('id', savedUserId).eq('is_active', true).maybeSingle()
+      teamUser = data
+    }
+    if (!teamUser) {
+      // Fallback: no saved choice — check if super admin, else pick first matching row
+      const { data: saRow } = await sb.from('settings').select('value').eq('key', 'super_admin_auth_id').maybeSingle()
+      if (saRow?.value === authUser.id) {
+        setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
+        return
+      }
+      const { data } = await sb.from('users').select('*').eq('auth_id', authUser.id).eq('is_active', true).limit(1)
+      teamUser = data?.[0] ?? null
+    }
+
     if (teamUser) {
       const adminLevel = teamUser.admin_level || 0
       const role = teamUser.role === 'admin' || adminLevel >= 1 ? 'admin' : teamUser.role

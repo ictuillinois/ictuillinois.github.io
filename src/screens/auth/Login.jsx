@@ -31,6 +31,7 @@ export default function Login() {
   }, [lockUntil])
 
   function applySession(user) {
+    localStorage.setItem('ictlab_active_user_id', user.id)
     const adminLevel = user.admin_level || 0
     const role = user.role === 'admin' || adminLevel >= 1 ? 'admin' : user.role
     setSession({
@@ -44,6 +45,11 @@ export default function Login() {
       mustChangePassword: user.must_change_password === true,
       termsAcceptedVersion: user.terms_accepted_version || null,
     })
+  }
+
+  function applySuperAdmin() {
+    localStorage.setItem('ictlab_active_user_id', '__superAdmin')
+    setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
   }
 
   async function handleLogin(e) {
@@ -101,11 +107,7 @@ export default function Login() {
 
     if (allOptions.length === 1) {
       // Single option — log in directly, no picker
-      if (allOptions[0].__superAdmin) {
-        setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
-      } else {
-        applySession(allOptions[0])
-      }
+      if (allOptions[0].__superAdmin) { applySuperAdmin() } else { applySession(allOptions[0]) }
       setLoading(false); return
     }
 
@@ -150,9 +152,7 @@ export default function Login() {
                   const orgName = accountPicker.orgsMap[u.organization_id] || ''
                   return (
                     <button key={u.__superAdmin ? '__sa' : u.id}
-                      onClick={() => u.__superAdmin
-                        ? setSession({ role: 'admin', username: 'Admin', userId: null, adminLevel: 3, loginMode: 'team' })
-                        : applySession(u)}
+                      onClick={() => u.__superAdmin ? applySuperAdmin() : applySession(u)}
                       style={{ padding: '12px 14px', border: '1.5px solid var(--border)', borderRadius: 10, background: 'var(--surface)', cursor: 'pointer', textAlign: 'left', width: '100%', display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{u.name}</div>

@@ -8,6 +8,7 @@ export const useAppStore = create((set, get) => ({
   clearSession: () => {
     sb.auth.signOut()
     localStorage.removeItem('ictlab_login_mode')
+    localStorage.removeItem('ictlab_active_user_id')
     set({ session: null, loginMode: null, activeModules: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
   },
 
