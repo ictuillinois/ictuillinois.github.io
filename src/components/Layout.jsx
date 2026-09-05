@@ -61,7 +61,6 @@ const MODULE_META = {
   'project-detail': { icon: '🧪', label: 'Project & Material' },
   pm:               { icon: '📋', label: 'Task Board' },
   barcodeqr:        { icon: '🔲', label: 'QR Labels' },
-  barcode:          { icon: '📷', label: 'Barcode Scanner' },
   labmanagement:    { icon: '⚙️', label: 'Lab Management' },
   orgadmin:         { icon: '🔑', label: 'Admin Panel' },
   profile:          { icon: '👤', label: 'Profile' },
@@ -124,6 +123,10 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
     { key: 'records',   icon: '📋', label: 'Records' },
+    ...(isAdmin || isStaff ? [
+      { key: 'summary', icon: '📊', label: 'Summary' },
+      { key: 'types',   icon: '🏷️', label: 'Material Types' },
+    ] : []),
   ]
 
   if (screen === 'home') {

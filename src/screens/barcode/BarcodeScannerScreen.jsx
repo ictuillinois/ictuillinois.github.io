@@ -456,7 +456,7 @@ function MaterialsTab({ typeLabels, typeColors }) {
 }
 
 // ── Summary Tab ─────────────────────────────────────────────────
-function SummaryTab({ typeLabels, typeColors }) {
+export function SummaryTab({ typeLabels, typeColors }) {
   const { session } = useAppStore()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -721,8 +721,6 @@ export function ScannerContent() {
   const [tab, setTab] = useState('scan')
   const [orgTypes, setOrgTypes] = useState(DEFAULT_TYPES)
 
-  const isAdminOrStaff = session?.role === 'admin' || session?.role === 'user'
-
   useEffect(() => {
     if (session?.loginMode !== 'solo' && session?.organizationId) {
       sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
@@ -735,8 +733,6 @@ export function ScannerContent() {
   const tabs = [
     { key: 'scan',      label: '📷 Scan' },
     { key: 'materials', label: '📦 All Materials' },
-    { key: 'summary',   label: '📊 Summary' },
-    ...(isAdminOrStaff ? [{ key: 'types', label: '🏷️ Material Types' }] : []),
   ]
   return (
     <div>
@@ -750,8 +746,6 @@ export function ScannerContent() {
       </ScrollTabs>
       {tab === 'scan'      && <ScanTab typeLabels={typeLabels} />}
       {tab === 'materials' && <MaterialsTab typeLabels={typeLabels} typeColors={typeColors} />}
-      {tab === 'summary'   && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
-      {tab === 'types'     && <MaterialTypesManager session={session} />}
       <style>{`
         @keyframes scanline {
           0%   { top: 8px; opacity: 1; }

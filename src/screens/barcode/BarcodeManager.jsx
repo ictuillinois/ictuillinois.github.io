@@ -4,6 +4,7 @@ import { useIsMobile } from '../../components/Layout'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { isNative } from '../../lib/scanner.js'
+import { SummaryTab, MaterialTypesManager, buildTypeMap, DEFAULT_TYPES } from './BarcodeScannerScreen'
 
 // ICT-Lab hexagon logo for screen preview
 function ILabLogo({ size = 72 }) {
@@ -532,11 +533,20 @@ export default function BarcodeManager() {
   const { session, sidebarSubTab } = useAppStore()
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
+  const [orgTypes, setOrgTypes] = useState(DEFAULT_TYPES)
   const tab = sidebarSubTab || 'equipment'
 
   const isAdminOrStaff = session?.role === 'admin' || session?.role === 'user'
+  const { labels: typeLabels, colors: typeColors } = buildTypeMap(orgTypes)
 
   useEffect(() => { loadEquipment() }, [])
+
+  useEffect(() => {
+    if (session?.organizationId) {
+      sb.from('organizations').select('material_types').eq('id', session.organizationId).maybeSingle()
+        .then(({ data }) => { if (data?.material_types?.length) setOrgTypes(data.material_types) })
+    }
+  }, [session?.organizationId])
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
@@ -549,22 +559,26 @@ export default function BarcodeManager() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e8eeff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🔲</div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>QR Labels</div>
-            <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Generate and print QR labels for lab equipment</div>
+      {/* Header — hide on summary/types tabs where content is full-width */}
+      {tab !== 'summary' && tab !== 'types' && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e8eeff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>🔲</div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>QR Labels</div>
+              <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Generate and print QR labels for lab equipment</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
+            When scanned with a phone camera, the QR code takes users directly to the equipment options page — SOP, booking, calibration, and contact — after logging in if needed.
           </div>
         </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
-          When scanned with a phone camera, the QR code takes users directly to the equipment options page — SOP, booking, calibration, and contact — after logging in if needed.
-        </div>
-      </div>
+      )}
 
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
+      {tab === 'summary'   && isAdminOrStaff && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
+      {tab === 'types'     && isAdminOrStaff && <MaterialTypesManager session={session} />}
     </div>
   )
 }

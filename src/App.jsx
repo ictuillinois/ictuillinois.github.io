@@ -48,7 +48,6 @@ const BookingEquipment     = lazy(() => import('./screens/equipment/BookingEquip
 const EquipmentInventory   = lazy(() => import('./screens/equipment/EquipmentInventory'))
 const EquipmentHub         = lazy(() => import('./screens/equipment/EquipmentHub'))
 const EquipmentScan        = lazy(() => import('./screens/equipment/EquipmentScan'))
-const BarcodeScannerScreen = lazy(() => import('./screens/barcode/BarcodeScannerScreen'))
 const BarcodeManager       = lazy(() => import('./screens/barcode/BarcodeManager'))
 const TrainingRecords      = lazy(() => import('./screens/training/TrainingRecords'))
 const LabMessage           = lazy(() => import('./screens/messaging/LabMessage'))
@@ -111,7 +110,7 @@ const INTERNAL = new Set([
   'dashboard', 'profile', 'orgadmin',
   'home', 'inspection', 'results', 'history',
   'projects', 'project-detail',
-  'booking', 'barcode', 'barcodeqr',
+  'booking', 'barcodeqr',
   'training', 'remessages', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'equipmentscan',
 ])
 
@@ -350,7 +349,6 @@ export default function App() {
     equipment:        <EquipmentInventory />,
     equipmenthub:     <EquipmentHub />,
     equipmentscan:    <EquipmentScan />,
-    barcode:          <BarcodeScannerScreen />,
     barcodeqr:        <BarcodeManager />,
     training:         <TrainingRecords />,
     remessages:       <LabMessage />,

@@ -6,7 +6,7 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects', 'booking', 'mileage', 'barcode', 'training', 'profile']
+  const studentAllowed = ['projects', 'booking', 'mileage', 'training', 'profile']
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
     if (role === 'lab_user' && !studentAllowed.includes(m.key)) return false
@@ -247,7 +247,6 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
   const allQuickLinks = [
     { key:'projects',   icon:'🧪', label:'Project & Material', sub:'Inventory, results & workspace', screen:'projects',   color:'#534AB7' },
     { key:'booking',    icon:'📅', label:'Book Equipment',    sub:'Reserve lab equipment',          screen:'booking',    color:'#0369a1' },
-    { key:'barcode',    icon:'📷', label:'QR Scan',            sub:'Scan lab materials',             screen:'barcode',    color:'#00796b' },
     { key:'training',   icon:'🎓', label:'Training Records',  sub:'Safety steps & certifications',  screen:'training',   color:'#0369a1' },
     { key:'mileage',    icon:'🚗', label:'Mileage Form',      sub:'Submit reimbursement',           screen:null,         color:'#c84b2f', external:true },
   ]
@@ -610,7 +609,7 @@ export default function Dashboard() {
   const [moduleImages, setModuleImages] = useState(() => {
     const base = import.meta.env.BASE_URL
     const defaults = {   // local SVGs — always available, no fetch needed
-      pm: `${base}icon-pm.svg`, barcode: `${base}icon-barcode.svg`,
+      pm: `${base}icon-pm.svg`,
       barcodeqr: `${base}icon-barcodeqr.svg`, profile: `${base}icon-profile.svg`,
       supply: `${base}icon-supply.svg`,
       projects: `${base}icon-projects.svg`, booking: `${base}icon-booking.svg`,
@@ -781,7 +780,7 @@ export default function Dashboard() {
     return base
   })()
   // Screens not managed by user_screen_access (always allowed if in activeModules)
-  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcode', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement'])
+  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement'])
   const modules = (() => {
     let list = userAccess
       ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))
@@ -797,7 +796,6 @@ export default function Dashboard() {
     const base = import.meta.env.BASE_URL
     const imgs = {
       pm:        `${base}icon-pm.svg`,
-      barcode:   `${base}icon-barcode.svg`,
       barcodeqr: `${base}icon-barcodeqr.svg`,
       profile:   `${base}icon-profile.svg`,
       supply:    `${base}icon-supply.svg`,
