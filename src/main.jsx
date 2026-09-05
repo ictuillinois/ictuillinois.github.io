@@ -11,8 +11,9 @@ import './index.css'
 // build. sessionStorage guard prevents a reload loop if something else broke.
 window.addEventListener('vite:preloadError', (e) => {
   e.preventDefault()
-  if (sessionStorage.getItem('ictlab_chunk_reload')) return
-  sessionStorage.setItem('ictlab_chunk_reload', '1')
+  const last = parseInt(sessionStorage.getItem('ictlab_chunk_reload') || '0', 10)
+  if (Date.now() - last < 15_000) return  // one reload per 15s — prevents loops
+  sessionStorage.setItem('ictlab_chunk_reload', String(Date.now()))
   window.location.reload()
 })
 
