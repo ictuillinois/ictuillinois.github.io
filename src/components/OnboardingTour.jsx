@@ -140,12 +140,13 @@ export function ModuleTip({ screen, userId }) {
 
 // ── Help button with callout bubble ───────────────────────────────────────
 
-export function HelpTourButton({ loginCount, onOpen, accentRgb = '29,198,130' }) {
-  const showCallout = loginCount > 0 && loginCount <= 3
+export function HelpTourButton({ loginCount, tourDone = false, onOpen, accentRgb = '29,198,130' }) {
+  const showCallout = !tourDone && loginCount > 0 && loginCount <= 3
+  const showRings   = !tourDone && loginCount > 0 && loginCount <= 5
   const [calloutVisible, setCalloutVisible] = useState(false)
 
   useEffect(() => {
-    if (!showCallout) return
+    if (!showCallout) { setCalloutVisible(false); return }
     const show = setTimeout(() => setCalloutVisible(true), 1400)
     const hide = setTimeout(() => setCalloutVisible(false), 8000)
     return () => { clearTimeout(show); clearTimeout(hide) }
@@ -170,7 +171,7 @@ export function HelpTourButton({ loginCount, onOpen, accentRgb = '29,198,130' })
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.transform = 'translateY(-1px) scale(1.06)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff' }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}
       >
-        {loginCount > 0 && loginCount <= 5 && (
+        {showRings && (
           <>
             <span style={{ position: 'absolute', inset: -3, borderRadius: 13, border: `2px solid rgba(${accentRgb},0.75)`, animation: 'help-ring 2.2s ease-out infinite', pointerEvents: 'none' }} />
             <span style={{ position: 'absolute', inset: -3, borderRadius: 13, border: `2px solid rgba(${accentRgb},0.45)`, animation: 'help-ring 2.2s ease-out 0.9s infinite', pointerEvents: 'none' }} />
@@ -292,7 +293,7 @@ export default function OnboardingTour({ session, onDone }) {
         </div>
 
         {/* Navigation buttons */}
-        <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+        <div style={{ padding: '0 24px 16px', display: 'flex', gap: 10 }}>
           {step > 0 && (
             <button
               onClick={goBack}
@@ -307,6 +308,18 @@ export default function OnboardingTour({ session, onDone }) {
             onMouseEnter={e => { e.currentTarget.style.background = '#178A66'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(29,158,117,0.45)' }}
             onMouseLeave={e => { e.currentTarget.style.background = '#1D9E75'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(29,158,117,0.35)' }}
           >{isLast ? "Get started! 🚀" : "Next →"}</button>
+        </div>
+
+        {/* Don't show again */}
+        <div style={{ padding: '0 24px 20px', display: 'flex', justifyContent: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none', fontSize: 12, color: '#9ca3af' }}>
+            <input
+              type="checkbox"
+              onChange={e => { if (e.target.checked) finish() }}
+              style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#1D9E75', flexShrink: 0 }}
+            />
+            Don't show this again
+          </label>
         </div>
       </div>
     </div>

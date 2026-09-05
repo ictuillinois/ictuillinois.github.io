@@ -539,6 +539,7 @@ export default function Layout({ children }) {
   const [showAbout,   setShowAbout]   = useState(false)
   const [showContact, setShowContact] = useState(false)
   const [showTour,    setShowTour]    = useState(false)
+  const [tourDone,    setTourDone]    = useState(false)
   const [loginCount,  setLoginCount]  = useState(0)
   // Mobile: sidebar lives in a slide-in drawer opened by the header hamburger
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
@@ -598,8 +599,17 @@ export default function Layout({ children }) {
       .catch(() => { setTimeout(() => setShowTour(true), 600) })
   }, [session?.userId, session?.mustChangePassword])
 
+  // Sync tourDone from session (DB flag) + localStorage on login
+  useEffect(() => {
+    const uid = session?.userId
+    if (!uid) { setTourDone(false); return }
+    const localDone = localStorage.getItem(`ictlab_tour_done_${uid}`) === 'true'
+    setTourDone(session?.tourDone === true || localDone)
+  }, [session?.userId, session?.tourDone])
+
   async function handleTourDone() {
     setShowTour(false)
+    setTourDone(true)
     const uid = session?.userId
     if (!uid) return
     localStorage.setItem(`ictlab_tour_done_${uid}`, 'true')
@@ -659,6 +669,7 @@ export default function Layout({ children }) {
           {session?.userId && (
             <HelpTourButton
               loginCount={loginCount}
+              tourDone={tourDone}
               onOpen={() => setShowTour(true)}
               accentRgb="29,198,130"
             />
