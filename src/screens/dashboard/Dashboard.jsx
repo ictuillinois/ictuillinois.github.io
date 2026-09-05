@@ -934,7 +934,7 @@ export default function Dashboard() {
 
       <div style={{ flex: 1, minHeight: 0 }}>
         {isStudent && safetyComplete === false
-          ? <SafetyGate onGoToTraining={() => { setSidebarSubTab('safety'); setScreen('training') }} onRefresh={checkSafetyProgress} />
+          ? <SafetyGate onGoToTraining={() => { setScreen('training'); setSidebarSubTab('safety') }} onRefresh={checkSafetyProgress} />
           : <>
               {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
               {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
