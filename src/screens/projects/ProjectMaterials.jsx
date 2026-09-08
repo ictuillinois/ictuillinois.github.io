@@ -817,12 +817,13 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
 }
 
 // ── Material QR Label Tab ──────────────────────────────────────
-// Uses the SAME scan-URL schema and logo-embedded QR as MaterialStorage.jsx's
-// buildScanUrl()/QRCode — this used to be its own separate implementation
-// hardcoded to labhive.app with a plain (no-logo) QR encoding params
-// (?mat=&name=&proj=&date=) the app's scan handler doesn't even read (it
-// reads ?item=), so scanning it landed on the wrong site AND wouldn't have
-// routed correctly even on the right one. Fixed Sept 2026.
+// Mirrors MaterialStorage.jsx's PrintLabel exactly (same scan-URL schema,
+// same logo-embedded QR, same 4"x6" label layout) — this used to be its own
+// diverging implementation (hardcoded labhive.app, wrong ?mat= params the
+// app's scan handler doesn't read, no logo, 4"x4"), so a material printed
+// from inside a project looked and behaved differently than the same
+// material printed from the project-level Material Storage tab. Fixed
+// Sept 2026 to eliminate that duplication.
 function IctLabQRLogo({ size }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
@@ -832,41 +833,55 @@ function IctLabQRLogo({ size }) {
   )
 }
 
+const ICT_LOGO_SVG = `<svg width="__SIZE__" height="__SIZE__" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" stroke-width="28" stroke-linejoin="round"/>
+<text x="256" y="290" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#F5F0DC">ICT-Lab</text>
+</svg>`
+
 function MaterialQRTab({ material, project }) {
   const matName = material.name || typeLabel(material.material_type) || 'Material'
-  const qrPx    = 140
+  const barcodeId = material.barcode_id || matName
+  const qrPx = 160
+  // Keep the logo well under ECC-H's error-correction budget (see
+  // MaterialStorage.jsx QRCode) so cameras can still scan it reliably.
+  const logoPx = Math.round(qrPx * 0.22)
 
-  const params = new URLSearchParams({ item: matName, type: 'material', mtype: material.material_type || '', barcode: material.barcode_id || matName })
+  const params = new URLSearchParams({ item: matName, type: 'material', mtype: material.material_type || '', barcode: barcodeId })
   if (material.sampling_date) params.set('sampled', material.sampling_date)
   if (project?.name) params.set('project', project.name)
   const base = window.location.hostname === 'localhost' ? 'https://ictlab.labhive.app/' : window.location.origin + '/'
   const qrData = `${base}?${params.toString()}`
   const qrUrl  = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
-  const logoSvg = `<svg width="38" height="38" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-<polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" stroke-width="28" stroke-linejoin="round"/>
-<text x="256" y="290" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#F5F0DC">ICT-Lab</text>
-</svg>`
-
   function printLabel() {
-    const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
-    const html = `<!DOCTYPE html><html><head><title>Material Label</title>
-<style>body{margin:0;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;}
-.label{border:2px solid #000;border-radius:8px;padding:12px 16px;width:260px;display:flex;flex-direction:column;align-items:center;gap:6px;}
-.ln{font-size:14px;font-weight:700;text-align:center;} .lt{font-size:11px;color:#555;text-align:center;} .lr{font-size:11px;color:#333;text-align:center;}
-.qrwrap{position:relative;width:120px;height:120px;} .qrwrap img{display:block;} .logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:4px;padding:3px;line-height:0;}
+    const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
+    const logoSvg = ICT_LOGO_SVG.replace(/__SIZE__/g, String(logoPx))
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Material Label</title>
+<style>
+@page{size:4in 6in;margin:0}
+body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in;font-family:Arial,sans-serif;box-sizing:border-box}
+.label{width:4in;height:6in;background:#fff;border:1px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:10px;box-sizing:border-box}
+.hdr{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.1em;text-align:center}
+.qrwrap{position:relative;width:${qrPx}px;height:${qrPx}px} .qrwrap img{display:block}
+.logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:4px;padding:4px;line-height:0}
+.bc{font-size:13px;font-weight:700;font-family:monospace;letter-spacing:0.05em;color:#000}
+.info{width:100%;border-top:1px solid #ddd;padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.pn{font-size:13px;font-weight:700;color:#000;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt{font-size:12px;color:#333;text-align:center} .sd{font-size:11px;color:#666;text-align:center}
 </style></head><body>
 <div class="label">
-  <div class="qrwrap"><img src="${imgUrl}" width="120" height="120" alt="QR"/><div class="logo">${logoSvg}</div></div>
-  <div class="ln">${matName}</div>
-  ${typeLabel(material.material_type) ? `<div class="lt">${typeLabel(material.material_type)}</div>` : ''}
-  ${material.sampling_date ? `<div class="lr">Sampled: ${material.sampling_date}</div>` : ''}
-  ${material.storage_date  ? `<div class="lr">Stored: ${material.storage_date}</div>`   : ''}
-  <div class="lr">Project: ${project?.name || '—'}</div>
+  <div class="hdr">ICT-Lab &mdash; Material Storage</div>
+  <div class="qrwrap"><img src="${imgUrl}" width="${qrPx}" height="${qrPx}" alt="QR"/><div class="logo">${logoSvg}</div></div>
+  <div class="bc">${barcodeId}</div>
+  <div class="info">
+    <div class="pn">${project?.name || '—'}</div>
+    <div class="mt">${matName}${typeLabel(material.material_type) ? ` &middot; ${typeLabel(material.material_type)}` : ''}</div>
+    ${material.sampling_date ? `<div class="sd">Sampled: ${material.sampling_date}</div>` : ''}
+  </div>
 </div>
 <script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script>
 </body></html>`
-    const w = window.open('', '_blank', 'width=420,height=520')
+    const w = window.open('', '_blank', 'width=420,height=620')
     w.document.write(html)
     w.document.close()
   }
@@ -879,20 +894,19 @@ function MaterialQRTab({ material, project }) {
             <img src={qrUrl} width={qrPx} height={qrPx} style={{ display: 'block', border: '1px solid var(--border)', borderRadius: 8 }} alt="QR Code" />
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
               <div style={{ background: '#fff', borderRadius: 4, padding: 4, lineHeight: 0 }}>
-                <IctLabQRLogo size={Math.round(qrPx * 0.32)} />
+                <IctLabQRLogo size={logoPx} />
               </div>
             </div>
           </div>
-          <button className="btn btn-sm btn-purple" onClick={printLabel}>🖨 Print Label</button>
+          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>{barcodeId}</div>
+          <button className="btn btn-sm btn-purple" onClick={printLabel}>🖨 Print Label (4"×6")</button>
         </div>
         <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Label Preview</div>
           <div style={{ border: '2px solid var(--border)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{matName}</div>
-            {typeLabel(material.material_type) && <div style={{ fontSize: 12, color: 'var(--text2)' }}>{typeLabel(material.material_type)}</div>}
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{project?.name || '—'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{matName}{typeLabel(material.material_type) ? ` · ${typeLabel(material.material_type)}` : ''}</div>
             {material.sampling_date && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Sampled: {material.sampling_date}</div>}
-            {material.storage_date  && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Stored: {material.storage_date}</div>}
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Project: {project?.name || '—'}</div>
           </div>
         </div>
       </div>

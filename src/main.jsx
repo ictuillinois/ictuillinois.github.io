@@ -22,6 +22,27 @@ if (localStorage.getItem('ictlab_show_tooltips') === 'false') {
   document.body.classList.add('tooltips-off')
 }
 
+// Auto-recover from a cached-stale index.html. Every build stamps a unique
+// window.__BUILD_ID__ (see post-build.mjs) and writes the same value to
+// /version.json. If an intermediate cache (CDN, corporate proxy, browser)
+// serves an old index.html, a plain reload just re-fetches the SAME stale
+// HTML from cache — this instead fetches version.json with cache disabled,
+// and if it doesn't match, force-navigates with a cache-busting query param
+// so the browser can't reuse the stale response. sessionStorage guard limits
+// this to one attempt per tab so a persistently-stale proxy can't loop.
+;(async () => {
+  try {
+    if (sessionStorage.getItem('ictlab_update_reload')) return
+    const res = await fetch(`${import.meta.env.BASE_URL}version.json`, { cache: 'no-store' })
+    const { buildId } = await res.json()
+    if (buildId && window.__BUILD_ID__ && buildId !== window.__BUILD_ID__) {
+      sessionStorage.setItem('ictlab_update_reload', '1')
+      window.location.href = window.location.pathname + window.location.search +
+        (window.location.search ? '&' : '?') + '_v=' + buildId + window.location.hash
+    }
+  } catch {}
+})()
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

@@ -1,8 +1,22 @@
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'fs'
 
+// ─── Auto-update check: stamp every build with a unique id ──────────────────
+// Windows/Chrome users reported that even a hard refresh sometimes kept
+// showing the old build (intermediate CDN/proxy caching index.html). main.jsx
+// fetches /version.json (no-store) on load and compares it against
+// window.__BUILD_ID__ embedded in the currently-loaded HTML; a mismatch means
+// a newer deploy exists, so it force-reloads once with a cache-busting param.
+// Both values are written from this SAME buildId so a single deploy always
+// produces a matching pair.
+const buildId = Date.now().toString(36)
+writeFileSync('docs/version.json', JSON.stringify({ buildId }))
+console.log(`✓ docs/version.json written (buildId ${buildId})`)
+
 // Recreate docs/admin/index.html after every build.
 // Vite wipes docs/ on each build, so GitHub Pages loses the /admin SPA route.
-const src = readFileSync('docs/index.html', 'utf8')
+let src = readFileSync('docs/index.html', 'utf8')
+src = src.replace('<head>', `<head>\n    <script>window.__BUILD_ID__=${JSON.stringify(buildId)}</script>`)
+writeFileSync('docs/index.html', src)
 const admin = src.replace('<title>ICT-Lab — Intelligent Lab Platform</title>', '<title>ICT-Lab — Admin</title>')
 mkdirSync('docs/admin', { recursive: true })
 writeFileSync('docs/admin/index.html', admin)

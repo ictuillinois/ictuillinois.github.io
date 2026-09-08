@@ -13,7 +13,10 @@ function IctLabLogo({ size }) {
 
 function QRCode({ value, size = 180 }) {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size * 2}x${size * 2}&data=${encodeURIComponent(value)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
-  const logoSize = Math.round(size * 0.32)
+  // Keep the logo well under ECC-H's error-correction budget so cameras can
+  // still scan it reliably — 0.32 (32% of width) was too large for some
+  // phone cameras/print resolutions; 0.22 leaves real safety margin.
+  const logoSize = Math.round(size * 0.22)
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <img src={url} width={size} height={size} style={{ display: 'block', imageRendering: 'pixelated' }} alt="QR Code" />
@@ -63,7 +66,7 @@ function PrintLabel({ material, project, allMaterials }) {
   const scanUrl   = buildScanUrl(material, project, allMaterials)
   const name      = material.name || typeLabel(material.material_type)
   return (
-    <div id="print-label" style={{ width: '4in', height: '4in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
+    <div id="print-label" style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
       <QRCode value={scanUrl} size={160} />
       <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{barcodeId}</div>
@@ -204,8 +207,8 @@ export default function MaterialStorage({ project }) {
   function printLabel() {
     const printContents = document.getElementById('print-label')?.outerHTML
     if (!printContents) return
-    const css = '@page{size:4in 4in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:4in}*{box-sizing:border-box}'
-    const html = `<!DOCTYPE html><html><head><title>LabStock Label</title><style>${css}</style></head><body>${printContents}</body></html>`
+    const css = '@page{size:4in 6in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in}*{box-sizing:border-box}'
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>LabStock Label</title><style>${css}</style></head><body>${printContents}</body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const win = window.open(url, '_blank')
@@ -244,7 +247,7 @@ export default function MaterialStorage({ project }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: 12 }}>
-                    <QRCode value={buildScanUrl(selected, project, materials)} size={100} />
+                    <QRCode value={buildScanUrl(selected, project, materials)} size={160} />
                   </div>
                   <div>
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{selected.barcode_id}</div>
@@ -309,7 +312,7 @@ export default function MaterialStorage({ project }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 480, width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>Label Preview (4" × 4")</div>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>Label Preview (4" × 6")</div>
               <button className="btn btn-sm" onClick={() => setShowPrint(false)}>✕</button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, background: 'var(--surface2)', padding: 20, borderRadius: 'var(--radius)' }}>
@@ -374,8 +377,8 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
   function printLabel() {
     const el = document.getElementById('print-label-single')?.outerHTML
     if (!el) return
-    const css = '@page{size:4in 4in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:4in}*{box-sizing:border-box}'
-    const win = window.open(URL.createObjectURL(new Blob([`<!DOCTYPE html><html><head><style>${css}</style></head><body>${el}</body></html>`], { type: 'text/html' })), '_blank')
+    const css = '@page{size:4in 6in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in}*{box-sizing:border-box}'
+    const win = window.open(URL.createObjectURL(new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${el}</body></html>`], { type: 'text/html' })), '_blank')
     if (!win) return
     win.addEventListener('load', () => { win.focus(); win.print(); win.addEventListener('afterprint', () => win.close()) })
   }
@@ -388,7 +391,7 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: 12 }}>
-                <QRCode value={qrScanUrl} size={100} />
+                <QRCode value={qrScanUrl} size={160} />
               </div>
               <div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{material.barcode_id}</div>
@@ -444,11 +447,11 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 480, width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>Label Preview (4" × 4")</div>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>Label Preview (4" × 6")</div>
               <button className="btn btn-sm" onClick={() => setShowPrint(false)}>✕</button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, background: 'var(--surface2)', padding: 20, borderRadius: 'var(--radius)' }}>
-              <div id="print-label-single" style={{ width: '4in', height: '4in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
+              <div id="print-label-single" style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
                 <QRCode value={qrScanUrl} size={160} />
                 {material.barcode_id && <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{material.barcode_id}</div>}
