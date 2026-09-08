@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1126.0",
     "@supabase/supabase-js": "^2.45.0",
     "bcryptjs": "^3.0.3",
     "exceljs": "^4.4.0",

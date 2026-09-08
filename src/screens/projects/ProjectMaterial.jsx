@@ -2198,7 +2198,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
               + Add project
             </button>
             <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowMaterialModal(true)}>
-              + Add material
+              + Non-Project Material
             </button>
           </>
         )}
@@ -2248,7 +2248,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       {viewMode === 'materials' && (() => {
         const standaloneMats = allMaterials.filter(m => !m.project_id)
         return standaloneMats.length === 0 ? (
-          <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📦</div><div>No standalone materials yet. Use + Add material to create one.</div></div>
+          <div className="empty-state" style={{ padding: 24 }}><div className="empty-icon">📦</div><div>No standalone materials yet. Use + Non-Project Material to create one.</div></div>
         ) : (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>

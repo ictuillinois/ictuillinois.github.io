@@ -338,7 +338,8 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
   const params = new URLSearchParams({ item: matName, type: 'material', mtype: material.material_type || '', barcode: material.barcode_id || matName })
   if (material.sampling_date) params.set('sampled', material.sampling_date)
   if (material.projects?.name) params.set('project', material.projects.name)
-  const qrScanUrl = `https://labhive.app/?${params.toString()}`
+  const base = window.location.hostname === 'localhost' ? 'https://ictlab.labhive.app/' : window.location.origin + '/'
+  const qrScanUrl = `${base}?${params.toString()}`
 
   async function autoGenBarcode() {
     const abbr = typeAbbr(material.material_type)

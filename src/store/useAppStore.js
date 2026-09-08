@@ -35,7 +35,13 @@ export const useAppStore = create((set, get) => ({
     ])
     const settings = {}
     ;(cfg.data || []).forEach((x) => (settings[x.key] = x.value))
-    set({ rooms: r.data || [], supplies: s.data || [], settings })
+    // Natural alphanumeric sort so "Room 2" sorts before "Room 10" — every
+    // screen (Rooms tab, Supplies tab, Inspect grid, room dropdowns) reads
+    // rooms from this store, so sorting once here orders it everywhere.
+    const sortedRooms = [...(r.data || [])].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    )
+    set({ rooms: sortedRooms, supplies: s.data || [], settings })
   },
 
   // ── Toast ──
