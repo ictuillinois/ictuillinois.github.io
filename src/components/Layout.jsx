@@ -535,6 +535,11 @@ export default function Layout({ children }) {
   const accentColor = session?.loginMode === 'solo' ? '#534AB7' : '#1D9E75'
   const accentLight = session?.loginMode === 'solo' ? '#f0effe' : '#e6f7f2'
   const displayName = session?.role === 'admin' && !session?.userId ? '' : session?.username
+  const roleLabel = session?.role === 'admin' && session?.userId
+    ? 'Admin'
+    : session?.role === 'user'
+      ? 'Lab Manager'
+      : ''
 
   const showSidebar = !isMobile && !isProto && !!session
 
@@ -694,7 +699,12 @@ export default function Layout({ children }) {
                 }
               </div>
               {!isMobile && displayName && (
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--mono)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+                <span
+                  title={roleLabel ? `${displayName} (${roleLabel})` : displayName}
+                  style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--mono)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {displayName}{roleLabel && <span style={{ color: 'rgba(255,255,255,0.6)' }}> ({roleLabel})</span>}
+                </span>
               )}
             </button>
           )}
