@@ -31,35 +31,64 @@ SET search_path = public AS $$
   )
 $$;
 
+-- NOTE (Sept 2026): ICT-Lab's users.auth_id is TEXT, not UUID (LabHive's is
+-- UUID) — these two projects' schemas have diverged. auth.uid() always
+-- returns uuid, so every comparison here casts BOTH sides to ::text
+-- (matching this file's own documented convention above, which the original
+-- STEP 1 functions never actually followed). Without this cast,
+-- `auth_id = auth.uid()` throws "operator does not exist: text = uuid" and
+-- the entire script aborts at the first CREATE FUNCTION statement.
 CREATE OR REPLACE FUNCTION my_user_id()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT id FROM users WHERE auth_id = auth.uid() LIMIT 1
+  SELECT id FROM users WHERE auth_id::text = auth.uid()::text LIMIT 1
 $$;
 
 CREATE OR REPLACE FUNCTION my_org_id()
 RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT organization_id FROM users WHERE auth_id = auth.uid() LIMIT 1
+  SELECT organization_id FROM users WHERE auth_id::text = auth.uid()::text LIMIT 1
 $$;
 
+-- ICT-Lab has no solo_users table at all (team-only deployment) — a plain
+-- LANGUAGE sql function referencing a non-existent table fails at CREATE
+-- time, not just at call time, which would abort the whole script. plpgsql
+-- defers that check to runtime, so creation always succeeds; the exception
+-- handler makes every caller of my_solo_id()/my_solo_email() safely see NULL
+-- (i.e. "not a solo user") instead of erroring, so every `OR solo_owner_id =
+-- my_solo_id()` clause elsewhere in this file just evaluates false — correct
+-- behavior for a team-only project, and forward-compatible if solo_users is
+-- ever added later.
 CREATE OR REPLACE FUNCTION my_solo_id()
-RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
+RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT id FROM solo_users WHERE auth_id = auth.uid() LIMIT 1
+BEGIN
+  RETURN (SELECT id FROM solo_users WHERE auth_id::text = auth.uid()::text LIMIT 1);
+EXCEPTION WHEN undefined_table THEN
+  RETURN NULL;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION my_solo_email()
-RETURNS text LANGUAGE sql STABLE SECURITY DEFINER
+RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT email FROM solo_users WHERE auth_id = auth.uid() LIMIT 1
+BEGIN
+  RETURN (SELECT email FROM solo_users WHERE auth_id::text = auth.uid()::text LIMIT 1);
+EXCEPTION WHEN undefined_table THEN
+  RETURN NULL;
+END;
 $$;
 
 -- Applies a single policy to a table.
 --   • Skips tables that don't exist.
---   • Drops the common blanket policies (allow_all/anon_all) for THIS table
---     only — so tables we don't cover keep their existing open policy and are
---     never locked out.
+--   • Drops the common blanket policies (allow_all/anon_all/p) for THIS
+--     table only — so tables we don't cover keep their existing open policy
+--     and are never locked out. "p" was found Sept 2026: an older, separate
+--     RLS attempt on this project left several tables (projects, bookings,
+--     equipment, inspection_items, inspection_records, material_suppliers)
+--     with a wide-open ALL/public policy literally named "p" that this
+--     cleanup never knew to remove, silently coexisting with (or replacing,
+--     via failed creation, see below) our real policy.
 --   • If the policy body references a column/type that doesn't exist, it
 --     DISABLES RLS on the table (leaving it open, as it is today) and reports
 --     the problem via NOTICE instead of aborting the whole script.
@@ -73,6 +102,7 @@ BEGIN
   END IF;
   EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'allow_all', tbl);
   EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'anon_all', tbl);
+  EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', 'p', tbl);
   EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol, tbl);
   BEGIN
     EXECUTE format('CREATE POLICY %I ON public.%I %s', pol, tbl, body);
@@ -181,12 +211,10 @@ FOR ALL TO authenticated
 USING (
   is_super_admin()
   OR organization_id = my_org_id()
-  OR (login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
   OR organization_id = my_org_id()
-  OR (login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -207,12 +235,10 @@ FOR ALL TO authenticated
 USING (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -226,12 +252,10 @@ FOR ALL TO authenticated
 USING (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -281,19 +305,11 @@ BEGIN
       FOR ALL TO authenticated
       USING (
         is_super_admin()
-        OR equipment_id IN (
-          SELECT id FROM equipment_inventory WHERE organization_id = my_org_id()
-          UNION ALL
-          SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id()
-        )
+        OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
       )
       WITH CHECK (
         is_super_admin()
-        OR equipment_id IN (
-          SELECT id FROM equipment_inventory WHERE organization_id = my_org_id()
-          UNION ALL
-          SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id()
-        )
+        OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
       )
     $b$);
   END LOOP;
@@ -373,13 +389,19 @@ $b$);
 -- STEP 13: projects + child tables
 -- ────────────────────────────────────────────────────────────────
 
+-- No solo_workspace_members OR-clause here (unlike LabHive's version) —
+-- ICT-Lab has no solo_workspace_members table (team-only deployment), and a
+-- CREATE POLICY body referencing a nonexistent table fails at creation time.
+-- That failure was silently caught by _apply_rls()'s exception handler,
+-- which DISABLES RLS on the table as a fail-safe — meaning `projects` has
+-- been running with RLS OFF and only its old, unrelated wide-open `p` policy
+-- (ALL/public) in effect. Found + fixed Sept 2026.
 SELECT _apply_rls('projects', 'projects_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
   OR organization_id = my_org_id()
   OR solo_owner_id = my_solo_id()
-  OR solo_owner_id IN (SELECT owner_id FROM solo_workspace_members WHERE member_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
@@ -391,7 +413,7 @@ $b$);
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['project_materials','project_files','project_results','project_links']
+  FOREACH t IN ARRAY ARRAY['project_files','project_results','project_links']
   LOOP
     PERFORM _apply_rls(t, 'project_child_policy', $b$
       FOR ALL TO authenticated
@@ -406,6 +428,47 @@ BEGIN
     $b$);
   END LOOP;
 END $$;
+
+-- project_materials is NOT a simple project child: materials can exist
+-- "standalone" (project_id NULL, "None / standalone" in NewMaterialModal),
+-- and NewMaterialModal has always inserted solo_owner_id directly on this
+-- table for that case — but the column never existed here, so every solo
+-- user creating a standalone material has been silently rejected by RLS
+-- since this table's schema was created. Found Sept 2026 while porting the
+-- equivalent LabHive fix; independent pre-existing bug, not caused by any
+-- code change this session. organization_id and storage_date already exist
+-- and the project_id FK is already in place on this database.
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS solo_owner_id UUID;
+
+-- agg_sieve_sizes: on LabHive this column was typed `text` instead of
+-- `jsonb`, causing the app's array value to round-trip as a literal string
+-- and crash any code doing `.map()` on it. Applying the same defensive
+-- conversion here — safe no-op if this column is already jsonb.
+UPDATE project_materials SET agg_sieve_sizes = NULL
+WHERE agg_sieve_sizes IS NOT NULL AND agg_sieve_sizes::text !~ '^\s*\[.*\]\s*$';
+ALTER TABLE project_materials
+  ALTER COLUMN agg_sieve_sizes TYPE jsonb
+  USING CASE
+    WHEN agg_sieve_sizes IS NULL OR agg_sieve_sizes::text = '' THEN '[]'::jsonb
+    ELSE agg_sieve_sizes::jsonb
+  END;
+ALTER TABLE project_materials ALTER COLUMN agg_sieve_sizes SET DEFAULT '[]'::jsonb;
+
+SELECT _apply_rls('project_materials', 'project_materials_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+  OR (solo_owner_id IS NOT NULL AND solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+)
+WITH CHECK (
+  is_super_admin()
+  OR (organization_id IS NOT NULL AND organization_id = my_org_id())
+  OR (solo_owner_id IS NOT NULL AND solo_owner_id = my_solo_id())
+  OR project_id IN (SELECT id FROM projects WHERE organization_id = my_org_id() OR solo_owner_id = my_solo_id())
+)
+$b$);
 
 SELECT _apply_rls('project_record_files', 'project_record_files_policy', $b$
 FOR ALL TO authenticated
@@ -454,12 +517,10 @@ FOR ALL TO authenticated
 USING (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 WITH CHECK (
   is_super_admin()
   OR equipment_id IN (SELECT id FROM equipment_inventory WHERE organization_id = my_org_id())
-  OR equipment_id IN (SELECT id FROM equipment_inventory WHERE login_mode = 'solo' AND solo_owner_id = my_solo_id())
 )
 $b$);
 
@@ -854,6 +915,33 @@ $b$);
 
 
 -- ────────────────────────────────────────────────────────────────
+-- STEP 21b: Legacy unused tables — lock down, don't scope
+--
+-- bookings, equipment, inspection_items, inspection_records,
+-- material_suppliers are not referenced anywhere in the current app code —
+-- leftovers from before the schema was renamed to equipment_bookings/
+-- equipment_inventory/supplies/inspections. They previously carried a
+-- wide-open "p" (ALL, public) policy from an older RLS attempt. Rather than
+-- reverse-engineer per-org scoping for tables nothing reads, deny all access
+-- except super admin — neutralizes the exposure regardless of whether the
+-- data in them still matters. Found + fixed Sept 2026.
+-- ────────────────────────────────────────────────────────────────
+
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['bookings','equipment','inspection_items','inspection_records','material_suppliers']
+  LOOP
+    PERFORM _apply_rls(t, 'legacy_lockdown_policy', $b$
+      FOR ALL TO authenticated
+      USING (is_super_admin())
+      WITH CHECK (is_super_admin())
+    $b$);
+  END LOOP;
+END $$;
+
+
+-- ────────────────────────────────────────────────────────────────
 -- STEP 22: Remove leftover permissive policies from earlier RLS attempts.
 --
 -- Postgres OR-combines permissive policies, so a stray "auth only" (public,
@@ -875,7 +963,7 @@ DECLARE
     'equipment_booking_settings_policy','equipment_bookings_policy','booking_notifications_policy',
     'equipment_booking_blocks_policy','eq_hub_policy','equipment_sop_notes_policy','equipment_list_policy',
     'org_scope_policy','floor_plans_policy','storage_locations_policy','student_lockers_policy',
-    'projects_policy','project_child_policy','project_record_files_policy','project_supplies_policy',
+    'projects_policy','project_child_policy','project_materials_policy','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
@@ -887,7 +975,8 @@ DECLARE
     'support_messages_insert','support_messages_select',
     'account_deletion_policy','email_queue_insert','email_queue_select',
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',
-    'team_workspace_invites_policy','team_workspace_members_policy'
+    'team_workspace_invites_policy','team_workspace_members_policy',
+    'legacy_lockdown_policy'
   ];
 BEGIN
   FOR r IN
