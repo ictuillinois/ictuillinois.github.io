@@ -701,7 +701,7 @@ export default function Layout({ children }) {
               {!isMobile && displayName && (
                 <span
                   title={roleLabel ? `${displayName} (${roleLabel})` : displayName}
-                  style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--mono)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontFamily: 'var(--mono)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 >
                   {displayName}{roleLabel && <span style={{ color: 'rgba(255,255,255,0.6)' }}> ({roleLabel})</span>}
                 </span>
