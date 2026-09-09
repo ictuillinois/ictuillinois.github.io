@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { formatLocation } from '../../components/FloorPlanPicker'
 
 function IctLabLogo({ size }) {
   return (
@@ -74,6 +75,7 @@ function PrintLabel({ material, project, allMaterials }) {
         <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
         <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{name} · {typeLabel(material.material_type)}</div>
         {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
+        {material.pi_name && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>PI: {material.pi_name}</div>}
       </div>
     </div>
   )
@@ -287,7 +289,7 @@ export default function MaterialStorage({ project }) {
             {(selected.locations || []).length > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(selected.locations || []).map((loc, i) => (
-                  <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {loc.detail || loc.location_id || loc.location}</span>
+                  <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {formatLocation(loc) || loc.location_id}</span>
                 ))}
               </div>
             ) : (
@@ -428,7 +430,7 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
           <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Location</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {(material.locations || []).map((loc, i) => (
-              <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {loc.detail || loc.location_id || loc.location}</span>
+              <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>📍 {formatLocation(loc) || loc.location_id}</span>
             ))}
           </div>
         </div>
@@ -459,6 +461,7 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center' }}>{matName}</div>
                   {material.material_type && <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{typeLabel(material.material_type)}</div>}
                   {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
+                  {material.pi_name && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>PI: {material.pi_name}</div>}
                 </div>
               </div>
             </div>

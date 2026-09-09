@@ -364,6 +364,32 @@ USING    (is_super_admin() OR organization_id = my_org_id())
 WITH CHECK (is_super_admin() OR organization_id = my_org_id())
 $b$);
 
+-- storage_locations never existed on this database — _apply_rls() has been
+-- silently SKIPping this policy every run (table-not-found is a no-op by
+-- design), so the floor-plan "show zones occupied by other materials"
+-- cross-material tracking has never worked here. A material's OWN saved
+-- location still displays fine (that lives on project_materials.locations),
+-- only the shared occupancy table was missing. Schema mirrors LabHive's
+-- working table, inferred from FloorPlanPicker.jsx's own read/write columns.
+-- Found + fixed Sept 2026.
+CREATE TABLE IF NOT EXISTS storage_locations (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  location_id     TEXT NOT NULL,
+  location_label  TEXT,
+  facility        TEXT,
+  occupied        BOOLEAN DEFAULT FALSE,
+  project_id      UUID,
+  material_id     UUID,
+  project_name    TEXT,
+  material_type   TEXT,
+  occupied_at     TIMESTAMPTZ,
+  occupied_by     TEXT,
+  organization_id UUID,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS storage_locations_location_id_idx ON storage_locations(location_id);
+CREATE INDEX IF NOT EXISTS storage_locations_material_id_idx ON storage_locations(material_id);
+
 SELECT _apply_rls('storage_locations', 'storage_locations_policy', $b$
 FOR ALL TO authenticated
 USING (

@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import jsQR from 'jsqr'
 import ScrollTabs from '../../components/ScrollTabs'
+import { formatLocation } from '../../components/FloorPlanPicker'
 
 export const DEFAULT_TYPES = [
   { key: 'aggregate',      label: 'Aggregate' },
@@ -131,7 +132,7 @@ function MaterialCard({ material, scannedValue, onClose, typeLabels }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {material.locations.map((loc, i) => (
               <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 12px', fontSize: 12, fontWeight: 500 }}>
-                📍 {loc.detail || loc.location_id || loc.location}
+                📍 {formatLocation(loc) || loc.location_id}
               </span>
             ))}
           </div>

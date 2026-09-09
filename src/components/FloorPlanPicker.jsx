@@ -2,6 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
 
+export function formatLocation(loc) {
+  if (!loc) return ''
+  if (loc.location && loc.detail && loc.location !== loc.detail) return `${loc.location} — ${loc.detail}`
+  return loc.detail || loc.location || ''
+}
+
 // ── Color constants ───────────────────────────────────────────
 const C = {
   available_pallet: '#f0efe9',
@@ -903,6 +909,11 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       const zone = (plan.zones || []).find(z => z.id === id)
       if (zone) return { location: plan.name, detail: zone.label, facility: plan.name }
     }
+    // Manually-drawn ICT map zones ("Edit Zones") — must be checked before the
+    // raw-ID fallback below, otherwise a zone's real typed label is never
+    // looked up and its raw 'ICT-zone-<timestamp>' id renders verbatim.
+    const fixedZone = fixedZones.find(z => z.id === id)
+    if (fixedZone) return { location: 'ICT Building', detail: fixedZone.label, facility: 'ICT' }
     // ICT/MPF fallback
     return {
       location: id.startsWith('MPF') ? 'MPF' : 'ICT Building',

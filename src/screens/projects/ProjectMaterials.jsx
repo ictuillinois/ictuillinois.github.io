@@ -1,4 +1,4 @@
-import FloorPlanPicker from '../../components/FloorPlanPicker'
+import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -29,7 +29,8 @@ const IDOT_GRADATIONS = {
 }
 const PG_GRADES    = ['PG 52-28','PG 58-22','PG 58-28','PG 64-22','PG 64-28','PG 70-22','PG 70-28','PG 76-22','PG 76-28','PG 82-22','Other']
 const LOCATIONS    = ['ICT-High Bay A','ICT-High Bay C','Shed','MFF - Soil Hall','MFF - Aggregate Hall','MFF - Saw Room','Other']
-const CONTAINER_TYPES = ['Pallet','Metal Bucket','Plastic Bucket','Other']
+const CONTAINER_TYPES = ['Metal Bucket','Plastic Bucket','5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
+const PM_NMAS = ['N50','N70','N90','4.75mm','9.5mm','12.5mm','19.0mm','25.0mm','37.5mm']
 
 // ── Solo material types & sub-fields ──────────────────────────
 const SOLO_MATERIAL_TYPES = [
@@ -169,7 +170,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
       {form.material_type === 'aggregate' && (
         <div>
           <div className="field">
-            <label>IDOT Gradation Chart</label>
+            <label>IDOT Gradation Chart <span style={{ color: '#c84b2f' }}>*</span></label>
             <select value={form.idot_gradation_cat || ''} onChange={e => setForm(f => ({ ...f, idot_gradation_cat: e.target.value, idot_gradation_grade: '' }))}>
               <option value="">— Select category —</option>
               {IDOT_CATEGORY_LABELS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -177,7 +178,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
           </div>
           {form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat] && (
             <div className="field">
-              <label>Gradation Grade</label>
+              <label>Gradation Grade <span style={{ color: '#c84b2f' }}>*</span></label>
               <select value={form.idot_gradation_grade || ''} onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value }))}>
                 <option value="">— Select grade —</option>
                 {IDOT_GRADATIONS[form.idot_gradation_cat].map(g => <option key={g} value={g}>{g}</option>)}
@@ -185,11 +186,8 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
             </div>
           )}
           <div className="field">
-            <label>Sieve Sizes <span style={{ color: '#c84b2f' }}>*</span></label>
-            <CheckList options={SIEVE_SIZES} selected={form.agg_sieve_sizes || []} onChange={v => setForm(f => ({ ...f, agg_sieve_sizes: v }))} required />
-            {(!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) && (
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Select at least one sieve size</div>
-            )}
+            <label>Sieve Sizes</label>
+            <CheckList options={SIEVE_SIZES} selected={form.agg_sieve_sizes || []} onChange={v => setForm(f => ({ ...f, agg_sieve_sizes: v }))} />
           </div>
         </div>
       )}
@@ -248,6 +246,13 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
               <input style={{ marginTop: 8 }} value={form.pm_binder_pg || ''} onChange={e => setForm(f => ({ ...f, pm_binder_pg: e.target.value }))} placeholder="Enter custom PG grade…" />
             )}
           </div>
+          <div className="field">
+            <label>NMAS <span style={{ color: '#c84b2f' }}>*</span></label>
+            <select value={form.pm_nmas || ''} onChange={e => setForm(f => ({ ...f, pm_nmas: e.target.value }))}>
+              <option value="">— Select NMAS —</option>
+              {PM_NMAS.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
         </div>
       )}
 
@@ -277,6 +282,31 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
   )
 }
 
+// ── Project PI select ────────────────────────────────────────
+function PiSelect({ value, onChange }) {
+  const { session } = useAppStore()
+  const [supervisors, setSupervisors] = useState([])
+  useEffect(() => {
+    let q = sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name')
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    q.then(({ data }) => setSupervisors(data || []))
+  }, [session?.organizationId])
+  const isKnown = !value || supervisors.some(s => s.name === value)
+  return (
+    <div className="field">
+      <label>Project PI <span style={{ color: '#c84b2f' }}>*</span></label>
+      <select value={isKnown ? (value || '') : 'Other'} onChange={e => onChange(e.target.value === 'Other' ? '' : e.target.value)}>
+        <option value="">— Select PI —</option>
+        {supervisors.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        <option value="Other">Other…</option>
+      </select>
+      {!isKnown && (
+        <input style={{ marginTop: 8 }} value={value || ''} onChange={e => onChange(e.target.value)} placeholder="Enter PI name…" />
+      )}
+    </div>
+  )
+}
+
 // ── Source form ───────────────────────────────────────────────
 function SourceForm({ form, setForm }) {
   return (
@@ -284,7 +314,7 @@ function SourceForm({ form, setForm }) {
       <div className="field">
         <label>Source Type</label>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {['Quarry','State','Company','Mix Plant'].map(opt => (
+          {['Quarry','State','Company','Mix Plant','ICT'].map(opt => (
             <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, marginBottom: 0 }}>
               <input type="radio" name="source_type" checked={form.source_type === opt} onChange={() => setForm(f => ({ ...f, source_type: opt }))} style={{ width: 'auto' }} />
               {opt}
@@ -311,30 +341,11 @@ function QtyForm({ form, setForm }) {
   return (
     <Section title="3 · Material Quantity">
       <div className="field">
-        <label>Unit</label>
-        <select value={form.qty_unit || ''} onChange={e => setForm(f => ({ ...f, qty_unit: e.target.value }))}>
-          <option value="">— Select unit —</option>
-          <option value="kg">kg</option>
-          <option value="lbs">lbs</option>
-          <option value="tons">tons</option>
-          <option value="liters">liters</option>
-          <option value="gallons">gallons</option>
-          <option value="m³">m³</option>
-        </select>
-      </div>
-      <div className="field">
         <label>Container Type</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {CONTAINER_TYPES.map(opt => {
-            const on = form.container_type === opt
-            return (
-              <button key={opt} type="button" onClick={() => setForm(f => ({ ...f, container_type: opt }))}
-                style={{ padding: '4px 14px', borderRadius: 99, border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`, background: on ? 'var(--accent-light)' : 'var(--surface)', color: on ? 'var(--accent)' : 'var(--text2)', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.12s' }}>
-                {opt}
-              </button>
-            )
-          })}
-        </div>
+        <select value={form.container_type || ''} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
+          <option value="">— Select container type —</option>
+          {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
       </div>
       {form.container_type === 'Other' && (
         <div className="field">
@@ -392,7 +403,7 @@ function LocationForm({ form, setForm, projectId, projectName, materialId, mater
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {locations.map((loc, i) => (
             <span key={i} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 12px', fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              📍 {loc.detail || loc.location_id || loc.location}
+              📍 {formatLocation(loc) || loc.location_id}
               <button onClick={() => removeLocation(loc.location_id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
             </span>
           ))}
@@ -649,14 +660,14 @@ function typeBg(type) {
 // ── Blank form factory ────────────────────────────────────────
 function blankForm() {
   return {
-    name: '', material_type: '',
+    name: '', material_type: '', pi_name: '',
     agg_sieve_sizes: [], agg_raw_or_rap: '', idot_gradation_cat: '', idot_gradation_grade: '',
     ab_binder_pg: '', ab_mix_design: '', ab_has_polymer: false, ab_polymer_info: '', ab_other_additives: '',
-    pm_mix_design: '', pm_binder_pg: '',
+    pm_mix_design: '', pm_binder_pg: '', pm_nmas: '',
     other_info: '',
     soloSubfields: {},
     source_type: '', source_name: '', source_location: '',
-    qty_total: '', qty_unit: '', container_type: '', container_color: '', container_count: '', container_other: '',
+    qty_total: '', container_type: '', container_color: '', container_count: '', container_other: '',
     locations: [],
     sampling_date: '',
     photos: [],
@@ -666,13 +677,16 @@ function blankForm() {
 // ── Validate form ─────────────────────────────────────────────
 function validate(form, toast, isSolo) {
   if (!form.material_type?.trim()) { toast('Please select a material type.'); return false }
+  if (!form.pi_name?.trim()) { toast('Project PI is required.'); return false }
   if (isSolo) return true
   if (form.material_type === 'aggregate') {
-    if (!form.agg_sieve_sizes || form.agg_sieve_sizes.length === 0) { toast('At least one sieve size is required for aggregate.'); return false }
+    if (!form.idot_gradation_cat) { toast('IDOT Gradation category is required for aggregate.'); return false }
+    if (!form.idot_gradation_grade) { toast('Gradation grade is required for aggregate.'); return false }
   }
   if (form.material_type === 'asphalt_binder' && !form.ab_binder_pg) { toast('Binder PG grade is required.'); return false }
   if (form.material_type === 'plant_mix') {
     if (!form.pm_binder_pg) { toast('Binder PG grade is required for plant mix.'); return false }
+    if (!form.pm_nmas) { toast('NMAS is required for plant mix.'); return false }
   }
   if (form.material_type === 'other' && !form.other_info?.trim()) { toast('Please describe the material type.'); return false }
   return true
@@ -696,6 +710,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
   const [form, setForm] = useState(material ? {
     name: material.name || '',
     material_type: material.material_type || '',
+    pi_name: material.pi_name || '',
     agg_sieve_sizes: material.agg_sieve_sizes || [],
     agg_raw_or_rap: material.agg_raw_or_rap || '',
     idot_gradation_cat: material.idot_gradation_cat || '',
@@ -707,13 +722,13 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
     ab_other_additives: material.ab_other_additives || '',
     pm_mix_design: material.pm_mix_design || '',
     pm_binder_pg: material.pm_binder_pg || '',
+    pm_nmas: material.pm_nmas || '',
     other_info: material.other_info || '',
     soloSubfields: parseSoloSubfields(material.other_info),
     source_type: material.source_type || '',
     source_name: material.source_name || '',
     source_location: material.source_location || '',
     qty_total: material.qty_total || '',
-    qty_unit: material.qty_unit || '',
     container_type: material.container_type || '',
     container_color: material.container_color || '',
     container_count: material.container_count || '',
@@ -732,6 +747,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       organization_id: session?.organizationId || null,
       name: form.name.trim() || null,
       material_type: form.material_type,
+      pi_name: form.pi_name.trim(),
       agg_sieve_sizes: isSolo ? [] : form.agg_sieve_sizes,
       agg_raw_or_rap: isSolo ? null : (form.agg_raw_or_rap || null),
       idot_gradation_cat: form.idot_gradation_cat || null,
@@ -743,12 +759,12 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       ab_other_additives: isSolo ? null : (form.ab_other_additives || null),
       pm_mix_design: isSolo ? null : (form.pm_mix_design || null),
       pm_binder_pg: isSolo ? null : (form.pm_binder_pg || null),
+      pm_nmas: isSolo ? null : (form.pm_nmas || null),
       other_info: isSolo ? serializeSoloSubfields(form.soloSubfields) : (form.other_info || null),
       source_type: form.source_type || null,
       source_name: form.source_name || null,
       source_location: form.source_location || null,
       qty_total: form.qty_total ? parseFloat(form.qty_total) : null,
-      qty_unit: form.qty_unit || null,
       container_type: form.container_type || null,
       container_color: form.container_color || null,
       container_count: form.container_count ? parseInt(form.container_count) : null,
@@ -776,6 +792,7 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
         <label>Material Name / Label (optional)</label>
         <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
       </div>
+      <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} />
       {isSolo ? (
         <>
           <SoloMaterialTypeForm form={form} setForm={setForm} />
@@ -839,6 +856,7 @@ const ICT_LOGO_SVG = `<svg width="__SIZE__" height="__SIZE__" viewBox="0 0 512 5
 </svg>`
 
 function MaterialQRTab({ material, project }) {
+  const [showMap, setShowMap] = useState(false)
   const matName = material.name || typeLabel(material.material_type) || 'Material'
   const barcodeId = material.barcode_id || matName
   const qrPx = 160
@@ -877,6 +895,7 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
     <div class="pn">${project?.name || '—'}</div>
     <div class="mt">${matName}${typeLabel(material.material_type) ? ` &middot; ${typeLabel(material.material_type)}` : ''}</div>
     ${material.sampling_date ? `<div class="sd">Sampled: ${material.sampling_date}</div>` : ''}
+    ${material.pi_name ? `<div class="sd">PI: ${material.pi_name}</div>` : ''}
   </div>
 </div>
 <script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script>
@@ -907,9 +926,18 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
             <div style={{ fontWeight: 700, fontSize: 14 }}>{project?.name || '—'}</div>
             <div style={{ fontSize: 12, color: 'var(--text2)' }}>{matName}{typeLabel(material.material_type) ? ` · ${typeLabel(material.material_type)}` : ''}</div>
             {material.sampling_date && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Sampled: {material.sampling_date}</div>}
+            {material.pi_name && <div style={{ fontSize: 12, color: 'var(--text3)' }}>PI: {material.pi_name}</div>}
           </div>
         </div>
       </div>
+      {material.locations?.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <button className="btn btn-sm" onClick={() => setShowMap(v => !v)}>{showMap ? 'Hide floor map' : '🗺️ View on floor map'}</button>
+          {showMap && (
+            <FloorPlanPicker viewOnly currentLocations={material.locations} onConfirm={() => {}} onClose={() => setShowMap(false)} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -988,7 +1016,7 @@ export default function ProjectMaterials({ project }) {
                     {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
                     {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
                     {m.source_name && <span>📍 {m.source_name}</span>}
-                    {m.qty_unit && <span>⚖️ {m.qty_unit}</span>}
+                    {m.container_type && <span>⚖️ {m.container_type}</span>}
                     {m.sampling_date && <span>📅 {m.sampling_date}</span>}
                     {m.photos?.length > 0 && <span>📷 {m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
                   </div>
@@ -1027,6 +1055,7 @@ export default function ProjectMaterials({ project }) {
                   {matTab === 'info' && (
                     <div style={{ padding: '16px 16px' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: m.photos?.length ? 16 : 0 }}>
+                        {m.pi_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
                         {isSoloMat ? <>
                           {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
                             const def = subDefs.find(s => s.key === key)
@@ -1044,10 +1073,10 @@ export default function ProjectMaterials({ project }) {
                           })}
                           {(m.source_name || m.source_type) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
                           {m.source_location && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
-                          {m.qty_unit && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Unit</div><div style={{ fontWeight: 500 }}>{m.qty_unit}{m.container_type ? ` · ${m.container_count || ''} ${m.container_type}` : ''}</div></div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}</div></div>}
                         </> : <>
                           {m.material_type === 'aggregate' && <>
-                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Condition</div><div style={{ fontWeight: 500 }}>{m.agg_raw_or_rap || '—'}</div></div>
+                            <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>IDOT Gradation</div><div style={{ fontWeight: 500 }}>{m.idot_gradation_cat ? `${m.idot_gradation_cat}${m.idot_gradation_grade ? ' · ' + m.idot_gradation_grade : ''}` : '—'}</div></div>
                             <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
                           </>}
                           {m.material_type === 'asphalt_binder' && <>
@@ -1059,10 +1088,11 @@ export default function ProjectMaterials({ project }) {
                           {m.material_type === 'plant_mix' && <>
                             <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
                             {m.pm_mix_design && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
+                            {m.pm_nmas && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas}</div></div>}
                           </>}
                           {m.source_name && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
-                          {m.qty_unit && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Unit</div><div style={{ fontWeight: 500 }}>{m.qty_unit}{m.container_type ? ` · ${m.container_count || ''} ${m.container_type}${m.container_color ? ` (${m.container_color})` : ''}` : ''}</div></div>}
-                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{l.location}{l.detail ? ` · ${l.detail}` : ''}</span>)}</div></div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
+                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{formatLocation(l) || l.location_id}</span>)}</div></div>}
                         </>}
                       </div>
                       {m.photos?.length > 0 && (
