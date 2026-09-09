@@ -6,7 +6,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
-import ProjectMaterials, { MaterialModal } from './ProjectMaterials'
+import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -27,13 +27,13 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     name: project.name || '', project_id: project.project_id || '',
     cfop: project.cfop || '', status: project.status || 'active',
     project_group: project.project_group || '',
-    pi_user_id: project.pi_user_id || '', student_ids: project.student_ids || [],
+    pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', student_ids: project.student_ids || [],
     sampling_date: project.sampling_date || '', storage_date: project.storage_date || '',
     notes: project.notes || '',
   })
 
   useEffect(() => {
-    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', student_ids: project.student_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
+    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', student_ids: project.student_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
     setEditing(false)
   }, [project.id])
 
@@ -44,7 +44,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
   async function save() {
     if (!form.name.trim()) { toast('Project name is required.'); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
+    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
     const { error } = await sb.from('projects').update(payload).eq('id', project.id)
     if (error) { toast('Error saving project.'); return }
     toast('Project info saved.'); setEditing(false); onSaved()
@@ -73,6 +73,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
           </select>
         </div>
       </div>
+      {!isSolo && <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} required={false} />}
       <div className="grid-2">
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
@@ -96,6 +97,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
         <InfoCell label="Created" value={new Date(project.created_at).toLocaleDateString()} />
+        {!isSolo && <InfoCell label="Project PI" value={project.pi_name} />}
         <InfoCell label="Sampling Date" value={project.sampling_date} />
         <InfoCell label="Storage Date" value={project.storage_date} />
       </div>

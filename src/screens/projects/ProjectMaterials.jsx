@@ -283,7 +283,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
 }
 
 // ── Project PI select ────────────────────────────────────────
-function PiSelect({ value, onChange }) {
+export function PiSelect({ value, onChange, required = true }) {
   const { session } = useAppStore()
   const [supervisors, setSupervisors] = useState([])
   useEffect(() => {
@@ -294,7 +294,7 @@ function PiSelect({ value, onChange }) {
   const isKnown = !value || supervisors.includes(value)
   return (
     <div className="field">
-      <label>Project PI <span style={{ color: '#c84b2f' }}>*</span></label>
+      <label>Project PI {required && <span style={{ color: '#c84b2f' }}>*</span>}</label>
       <select value={isKnown ? (value || '') : 'Other'} onChange={e => onChange(e.target.value === 'Other' ? '' : e.target.value)}>
         <option value="">— Select PI —</option>
         {supervisors.map(s => <option key={s} value={s}>{s}</option>)}
