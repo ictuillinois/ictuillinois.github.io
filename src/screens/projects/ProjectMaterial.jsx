@@ -2515,7 +2515,7 @@ function ManageProjectsTab({ session }) {
         <Modal onClose={() => setEditingProject(null)}>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setEditingProject(null)} title="Close"
-              style={{ position: 'absolute', top: -14, right: -14, width: 28, height: 28, borderRadius: '50%', border: '1px solid #e24b4a', background: '#fff', color: '#e24b4a', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+              style={{ position: 'absolute', top: -14, left: -14, width: 28, height: 28, borderRadius: '50%', border: '1px solid #e24b4a', background: '#fff', color: '#e24b4a', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
               ✕
             </button>
             <ProjectInfo project={editingProject} users={[]} isSolo={false} onSaved={() => { setEditingProject(null); load() }} />
