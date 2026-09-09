@@ -2513,6 +2513,9 @@ function ManageProjectsTab({ session }) {
       )}
       {editingProject && (
         <Modal onClose={() => setEditingProject(null)}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button className="btn btn-sm" onClick={() => setEditingProject(null)}>✕ Close</button>
+          </div>
           <ProjectInfo project={editingProject} users={[]} isSolo={false} onSaved={() => { setEditingProject(null); load() }} />
         </Modal>
       )}
