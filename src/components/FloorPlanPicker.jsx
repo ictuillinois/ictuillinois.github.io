@@ -20,7 +20,7 @@ const C = {
   floor: '#b06050',
 }
 
-// ── ICT room list (shared between ICTMap and ShelfUnitEditor) ─
+// ── ICT room list (used to resolve a spot's room label outside the SVG) ─
 const ICT_ROOMS = [
   { id: 'ICT-134', label: '134' },
   { id: 'ICT-132', label: '132' },
@@ -50,303 +50,6 @@ const ICT_ROOMS = [
   { id: 'ICT-122', label: '122' },
 ]
 
-// default positions for shelf zones placed in their rooms
-const ROOM_DEFAULT_POS = {
-  'ICT-HighBayB': { x: 300, y: 10, w: 100, h: 50 },
-  'ICT-HighBayC': { x: 476, y: 56, w: 148, h: 42 },
-  'ICT-HighBayA': { x: 116, y: 10, w: 100, h: 50 },
-  'ICT-ServoRoom': { x: 320, y: 90, w: 100, h: 40 },
-  'ICT-134': { x: 8, y: 20, w: 46, h: 80 },
-  'default': { x: 0, y: 0, w: 60, h: 40 },
-}
-
-const DEFAULT_SHELF_UNITS = []
-
-const DEFAULT_FIXED_ZONES = [
-  { id: 'ICT-Cooler1', label: 'Cooler 1', x: 118, y: 10, w: 72, h: 40 },
-  { id: 'ICT-Cooler2', label: 'Cooler 2', x: 118, y: 54, w: 72, h: 40 },
-  { id: 'ICT-ShelfB',  label: 'Shelf',    x: 305, y: 12, w: 150, h: 54 },
-  { id: 'ICT-ShelfC',  label: 'Shelf',    x: 479, y: 58, w: 148, h: 38 },
-]
-
-// ── Shelf-slot sub-picker (HTML overlay, outside SVG) ─────────
-function ShelfUnitPicker({ unit, occupancy, selected, onToggle, onClose }) {
-  const unavail = unit.unavailable_shelves || []
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 480, width: '100%', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border)' }}>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📦 {unit.label}</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 20 }}>
-          {unit.shelf_label || 'Shelf'} 1 = top · tap a row to select or deselect
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {Array.from({ length: unit.shelves }, (_, s) => {
-            const shelfNum = s + 1
-            const shelfName = unit.shelf_names ? (unit.shelf_names[s] || `${unit.shelf_label || 'Shelf'} ${shelfNum}`) : `${unit.shelf_label || 'Shelf'} ${shelfNum}`
-            const isUnavail = unavail.includes(shelfName)
-            return (
-              <div key={shelfNum} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: isUnavail ? 0.45 : 1 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: isUnavail ? '#999' : 'var(--text2)', minWidth: 90, flexShrink: 0 }}>
-                  {shelfName}
-                  {isUnavail && <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 4, color: '#c84b2f' }}>(unavailable)</span>}
-                </span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {Array.from({ length: unit.rows }, (_, r) => {
-                    const rowNum = r + 1
-                    const slotId = `${unit.id}-S${shelfNum}-R${rowNum}`
-                    const isSel = selected.includes(slotId)
-                    const occ = occupancy[slotId]
-                    const isOcc = occ?.occupied && !isSel
-                    const disabled = isOcc || isUnavail
-                    return (
-                      <button key={rowNum}
-                        onClick={() => { if (!disabled) onToggle(slotId, `${unit.label} · ${shelfName} · Row ${rowNum}`) }}
-                        title={isUnavail ? 'Marked unavailable by lab manager' : isOcc ? `Occupied by ${occ.project_name || 'another project'}` : `Row ${rowNum}`}
-                        style={{ padding: '6px 14px', borderRadius: 6, border: `1.5px solid ${isSel ? C.selected_stroke : isUnavail ? '#bbb' : isOcc ? C.occupied_stroke : '#ccc'}`, background: isSel ? C.selected : isUnavail ? '#e8e8e8' : isOcc ? C.occupied : '#f8f7f4', color: isOcc ? '#fff' : isUnavail ? '#aaa' : '#333', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 500 }}>
-                        R{rowNum}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn btn-primary" onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const HIGH_BAY_ROOMS = [
-  { id: 'ICT-HighBayB', label: 'High Bay B' },
-  { id: 'ICT-HighBayC', label: 'High Bay C' },
-]
-
-const BIG_TEN_TEAMS = [
-  'Illinois','Indiana','Iowa','Maryland','Michigan','Mich. St.',
-  'Minnesota','Nebraska','Northwestern','Ohio St.','Oregon',
-  'Penn St.','Purdue','Rutgers','UCLA','USC','Washington','Wisconsin',
-]
-
-// ── Shelf-unit admin editor ───────────────────────────────────
-function ShelfUnitEditor({ shelfUnits, onSave, onClose }) {
-  const [units, setUnits] = useState(shelfUnits)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ room_id: '', label: '', shelf_label: 'Shelf', shelves: 5, rows: 3 })
-  const [selectedTeams, setSelectedTeams] = useState([])
-  const [editingUnavailId, setEditingUnavailId] = useState(null)
-  const [saving, setSaving] = useState(false)
-
-  const isHBC = form.room_id === 'ICT-HighBayC'
-  const isHBB = form.room_id === 'ICT-HighBayB'
-  const isHBA = form.room_id === 'ICT-HighBayA'
-
-  function handleRoomChange(room_id) {
-    if (room_id === 'ICT-HighBayC') {
-      setForm(f => ({ ...f, room_id, shelf_label: 'TOP 10 teams' }))
-      setSelectedTeams([])
-    } else if (room_id === 'ICT-HighBayB') {
-      setForm(f => ({ ...f, room_id, shelf_label: 'Shelf', shelves: 1 }))
-      setSelectedTeams([])
-    } else if (room_id === 'ICT-HighBayA') {
-      setForm(f => ({ ...f, room_id, shelf_label: 'Right cooler', shelves: 1, rows: 1 }))
-      setSelectedTeams([])
-    } else {
-      setForm(f => ({ ...f, room_id, shelf_label: 'Shelf', shelves: 5 }))
-      setSelectedTeams([])
-    }
-  }
-
-  function toggleTeam(team) {
-    setSelectedTeams(prev => prev.includes(team) ? prev.filter(t => t !== team) : [...prev, team])
-  }
-
-  function toggleUnavail(unitId, shelfName) {
-    setUnits(prev => prev.map(u => {
-      if (u.id !== unitId) return u
-      const unavail = u.unavailable_shelves || []
-      return {
-        ...u,
-        unavailable_shelves: unavail.includes(shelfName)
-          ? unavail.filter(n => n !== shelfName)
-          : [...unavail, shelfName],
-      }
-    }))
-  }
-
-  function addUnit() {
-    if (!form.room_id || !form.label.trim()) return
-    if (isHBC && selectedTeams.length === 0) return
-    const pos = ROOM_DEFAULT_POS[form.room_id] || ROOM_DEFAULT_POS['default']
-    const clampedRows = Math.min(4, Math.max(1, parseInt(form.rows) || 1))
-    const orderedTeams = BIG_TEN_TEAMS.filter(t => selectedTeams.includes(t))
-    const unit = {
-      id: `SU-${Date.now()}`,
-      room_id: form.room_id,
-      label: form.label.trim(),
-      shelf_label: isHBC ? 'TOP 10 teams' : (form.shelf_label.trim() || 'Shelf'),
-      shelves: isHBC ? orderedTeams.length : isHBA ? 1 : Math.max(1, parseInt(form.shelves) || 5),
-      shelf_names: isHBC ? orderedTeams : isHBA ? [form.shelf_label] : undefined,
-      rows: isHBA ? 1 : clampedRows,
-      ...pos,
-    }
-    setUnits(prev => [...prev, unit])
-    setForm({ room_id: '', label: '', shelf_label: 'Shelf', shelves: 5, rows: 3 })
-    setSelectedTeams([])
-    setShowForm(false)
-  }
-
-  async function save() {
-    setSaving(true)
-    await onSave(units)
-    setSaving(false)
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 520, width: '100%', border: '1px solid var(--border)', marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>✏️ Edit Shelf Units</div>
-          <button className="btn btn-sm" onClick={onClose}>✕ Close</button>
-        </div>
-
-        {/* existing units */}
-        {units.length === 0 && (
-          <div style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 16, padding: '12px', background: 'var(--surface2)', borderRadius: 8 }}>No shelf units yet. Click "+ Add shelf unit" to create one.</div>
-        )}
-        {units.map((u, idx) => {
-          const isHBCUnit = u.room_id === 'ICT-HighBayC'
-          const isHBAUnit = u.room_id === 'ICT-HighBayA'
-          const editingThis = editingUnavailId === u.id
-          const unavail = u.unavailable_shelves || []
-          return (
-            <div key={u.id} style={{ marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)', borderRadius: editingThis ? '8px 8px 0 0' : 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{u.label}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                    {HIGH_BAY_ROOMS.find(r => r.id === u.room_id)?.label || u.room_id}
-                    {isHBAUnit
-                      ? ` · ${u.shelf_names?.[0] || u.shelf_label || 'Cooler'}`
-                      : ` · ${u.shelf_label || 'Shelf'} · ${u.shelves} shelves · ${u.rows} row${u.rows > 1 ? 's' : ''}/shelf`}
-                    {unavail.length > 0 && <span style={{ color: '#c84b2f', marginLeft: 6 }}>({unavail.length} unavailable)</span>}
-                  </div>
-                </div>
-                {isHBCUnit && (
-                  <button className="btn btn-sm" style={{ fontSize: 11 }}
-                    onClick={() => setEditingUnavailId(editingThis ? null : u.id)}>
-                    {editingThis ? '▲ Done' : '⚙ Availability'}
-                  </button>
-                )}
-                <button className="btn btn-sm" style={{ color: '#c84b2f', borderColor: '#c84b2f' }} onClick={() => { setEditingUnavailId(null); setUnits(prev => prev.filter(x => x.id !== u.id)) }}>Remove</button>
-              </div>
-              {editingThis && isHBCUnit && (
-                <div style={{ padding: '12px 14px', background: 'var(--surface2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 8 }}>Mark shelves as unavailable (grayed out for lab users)</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
-                    {(u.shelf_names || []).map(name => (
-                      <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, padding: '2px 0', userSelect: 'none' }}>
-                        <input type="checkbox" checked={unavail.includes(name)} onChange={() => toggleUnavail(u.id, name)} style={{ width: 'auto', margin: 0 }} />
-                        <span style={{ color: unavail.includes(name) ? '#c84b2f' : 'inherit' }}>{name}</span>
-                        {unavail.includes(name) && <span style={{ fontSize: 11, color: '#c84b2f' }}>— unavailable</span>}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {/* add new — toggle form */}
-        <button className="btn btn-sm btn-primary" style={{ marginTop: 16, marginBottom: showForm ? 0 : 4 }}
-          onClick={() => setShowForm(v => !v)}>
-          {showForm ? '▲ Cancel' : '+ Add shelf unit'}
-        </button>
-
-        {showForm && (
-          <div style={{ marginTop: 14, padding: 16, background: 'var(--surface2)', borderRadius: 10, border: '1px solid var(--border)' }}>
-            <div className="field">
-              <label>Room <span style={{ color: '#c84b2f' }}>*</span></label>
-              <select value={form.room_id} onChange={e => handleRoomChange(e.target.value)}>
-                <option value="">— Select room —</option>
-                {HIGH_BAY_ROOMS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Label <span style={{ color: '#c84b2f' }}>*</span></label>
-              <input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. North Shelves" />
-            </div>
-            <div className="field">
-              <label>{isHBA ? 'Cooler' : 'Shelf label'}</label>
-              {isHBA ? (
-                <select value={form.shelf_label} onChange={e => setForm(f => ({ ...f, shelf_label: e.target.value }))}>
-                  <option value="Right cooler">Right cooler</option>
-                  <option value="Left cooler">Left cooler</option>
-                </select>
-              ) : isHBC ? (
-                <div style={{ padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, color: 'var(--text2)', fontWeight: 600 }}>TOP 10 teams</div>
-              ) : (
-                <input value={form.shelf_label} onChange={e => setForm(f => ({ ...f, shelf_label: e.target.value }))} placeholder="e.g. Shelf, Rack, Bay" />
-              )}
-            </div>
-            {isHBB && (
-              <div className="field">
-                <label>Number of shelves <span style={{ color: '#c84b2f' }}>*</span></label>
-                <select value={form.shelves} onChange={e => setForm(f => ({ ...f, shelves: parseInt(e.target.value) }))}>
-                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            )}
-            {isHBC ? (
-              <div className="field">
-                <label>Select shelves <span style={{ color: '#c84b2f' }}>*</span>
-                  <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400, marginLeft: 8 }}>
-                    {selectedTeams.length}/{BIG_TEN_TEAMS.length} selected
-                  </span>
-                </label>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
-                  <button type="button" className="btn btn-sm" style={{ fontSize: 11 }}
-                    onClick={() => setSelectedTeams([])}>Clear</button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'var(--surface)' }}>
-                  {BIG_TEN_TEAMS.map(team => (
-                    <label key={team} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, padding: '3px 0', userSelect: 'none' }}>
-                      <input type="checkbox" checked={selectedTeams.includes(team)} onChange={() => toggleTeam(team)} style={{ width: 'auto', margin: 0 }} />
-                      {team}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : !isHBB && !isHBA ? (
-              <div className="field">
-                <label>Number of shelves</label>
-                <input type="number" min={1} max={30} value={form.shelves} onChange={e => setForm(f => ({ ...f, shelves: e.target.value }))} />
-              </div>
-            ) : null}
-            {!isHBA && (
-              <div className="field">
-                <label>Rows in the selected shelf <span style={{ fontSize: 11, color: 'var(--text3)' }}>(bottom 1, top 4)</span></label>
-                <input type="number" min={1} max={4} value={form.rows}
-                  onChange={e => setForm(f => ({ ...f, rows: Math.min(4, Math.max(1, parseInt(e.target.value) || 1)) }))} />
-              </div>
-            )}
-            <button className="btn btn-sm btn-primary" onClick={addUnit} disabled={!form.room_id || !form.label.trim() || (isHBC && selectedTeams.length === 0)}>+ Add</button>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Tooltip ───────────────────────────────────────────────────
 function Tooltip({ x, y, info, onClose }) {
   if (!info) return null
@@ -363,12 +66,12 @@ function Tooltip({ x, y, info, onClose }) {
 // ══════════════════════════════════════════════════════════════
 // ICT BUILDING MAP
 // ══════════════════════════════════════════════════════════════
-function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShelfUnitClick,
-                  fixedZones = [], editZonesMode = false, onZoneAdded, onZoneDeleted }) {
+function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
+                  editingSpots = false, onSpotAdded, onSpotDeleted }) {
   const [tooltip, setTooltip] = useState(null)
-  const [drawing, setDrawing] = useState(null)   // { x0,y0,x1,y1 } while dragging
-  const [pending, setPending] = useState(null)   // { x,y,w,h } waiting for label
-  const [pendingLabel, setPendingLabel] = useState('')
+  const [newSpotRoom, setNewSpotRoom] = useState('')
+  const [draftSpot, setDraftSpot] = useState(null)   // { room_id, x, y, name, type, racks, shelvesPerRack }
+  const [draggingDraft, setDraggingDraft] = useState(false)
   const svgRef = useRef(null)
 
   function svgCoords(e) {
@@ -380,33 +83,40 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShe
       y: Math.round((e.clientY - rect.top)  * (260 / rect.height)),
     }
   }
-  function onSVGMouseDown(e) {
-    if (!editZonesMode) return
+  function startDraft() {
+    const room = rooms.find(r => r.id === newSpotRoom)
+    if (!room) return
+    setDraftSpot({ room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', racks: 1, shelvesPerRack: 1 })
+  }
+  function onDraftMouseDown(e) {
     e.preventDefault()
-    const p = svgCoords(e)
-    setDrawing({ x0: p.x, y0: p.y, x1: p.x, y1: p.y })
+    e.stopPropagation()
+    setDraggingDraft(true)
   }
   function onSVGMouseMove(e) {
-    if (!drawing) return
+    if (!draggingDraft) return
     const p = svgCoords(e)
-    setDrawing(d => ({ ...d, x1: p.x, y1: p.y }))
+    setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
   }
-  function onSVGMouseUp(e) {
-    if (!drawing) return
-    const x = Math.min(drawing.x0, drawing.x1)
-    const y = Math.min(drawing.y0, drawing.y1)
-    const w = Math.abs(drawing.x1 - drawing.x0)
-    const h = Math.abs(drawing.y1 - drawing.y0)
-    setDrawing(null)
-    if (w < 8 || h < 8) return
-    setPending({ x, y, w, h })
-    setPendingLabel('')
+  function onSVGMouseUp() {
+    setDraggingDraft(false)
   }
-  function confirmZone() {
-    if (!pending) return
-    const id = 'ICT-zone-' + Date.now()
-    onZoneAdded && onZoneAdded({ id, label: pendingLabel.trim() || 'Box', ...pending })
-    setPending(null)
+  function confirmDraft() {
+    if (!draftSpot || !draftSpot.name.trim()) return
+    const spot = {
+      id: 'spot_' + Date.now(),
+      name: draftSpot.name.trim(),
+      room_id: draftSpot.room_id,
+      x: draftSpot.x, y: draftSpot.y,
+      type: draftSpot.type,
+      ...(draftSpot.type === 'racks' ? {
+        racks: Math.max(1, parseInt(draftSpot.racks) || 1),
+        shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
+      } : {}),
+    }
+    onSpotAdded && onSpotAdded(spot)
+    setDraftSpot(null)
+    setNewSpotRoom('')
   }
 
   function getRoomFill(id) {
@@ -429,16 +139,6 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShe
     setTooltip(null)
     onToggle(id, label, 'ICT')
   }
-
-  const coolers = [
-    // High Bay A (130)
-    { id: 'ICT-Cooler1', label: 'Cooler 1', x: 118, y: 10, w: 72, h: 40 },
-    { id: 'ICT-Cooler2', label: 'Cooler 2', x: 118, y: 54, w: 72, h: 40 },
-    // High Bay B (129)
-    { id: 'ICT-ShelfB', label: 'Shelf', x: 305, y: 12, w: 150, h: 54 },
-    // High Bay C (128)
-    { id: 'ICT-ShelfC', label: 'Shelf', x: 479, y: 58, w: 148, h: 38 },
-  ]
 
   const rooms = [
     { id: 'ICT-134', label: '134', x: 6, y: 6, w: 52, h: 140, tx: 32, ty: 80 },
@@ -479,20 +179,57 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShe
     { id: 'ICT-122', label: '122', x: 782, y: 158, w: 34, h: 96, tx: 799, ty: 208 },
   ]
 
-  const drawRect = drawing ? {
-    x: Math.min(drawing.x0, drawing.x1), y: Math.min(drawing.y0, drawing.y1),
-    w: Math.abs(drawing.x1 - drawing.x0), h: Math.abs(drawing.y1 - drawing.y0),
-  } : null
-
   return (
     <>
+    {editingSpots && (
+      <div style={{ marginBottom: 10, padding: 12, background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        {!draftSpot ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={newSpotRoom} onChange={e => setNewSpotRoom(e.target.value)} style={{ flex: 1 }}>
+              <option value="">— Select room for new spot —</option>
+              {rooms.map(r => <option key={r.id} value={r.id}>{r.label.replace('\n', ' ')}</option>)}
+            </select>
+            <button className="btn btn-sm btn-primary" disabled={!newSpotRoom} onClick={startDraft}>+ Place spot</button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>Drag the purple marker on the map to position it.</div>
+            <div className="grid-2">
+              <div className="field"><label>Spot Name <span style={{ color: '#c84b2f' }}>*</span></label>
+                <input autoFocus value={draftSpot.name} onChange={e => setDraftSpot(d => ({ ...d, name: e.target.value }))} placeholder="e.g. North Rack" />
+              </div>
+              <div className="field"><label>Type</label>
+                <select value={draftSpot.type} onChange={e => setDraftSpot(d => ({ ...d, type: e.target.value }))}>
+                  <option value="pallet">Pallet</option>
+                  <option value="floor">Floor</option>
+                  <option value="racks">Racks</option>
+                </select>
+              </div>
+            </div>
+            {draftSpot.type === 'racks' && (
+              <div className="grid-2">
+                <div className="field"><label>Number of racks</label>
+                  <input type="number" min={1} value={draftSpot.racks} onChange={e => setDraftSpot(d => ({ ...d, racks: e.target.value }))} />
+                </div>
+                <div className="field"><label>Shelves per rack</label>
+                  <input type="number" min={1} value={draftSpot.shelvesPerRack} onChange={e => setDraftSpot(d => ({ ...d, shelvesPerRack: e.target.value }))} />
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-sm" onClick={() => { setDraftSpot(null); setNewSpotRoom('') }}>Cancel</button>
+              <button className="btn btn-sm btn-primary" disabled={!draftSpot.name.trim()} onClick={confirmDraft}>Add spot</button>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
     <svg ref={svgRef} viewBox="0 0 820 260" width="100%"
-      style={{ minWidth: 600, display: 'block', cursor: editZonesMode ? 'crosshair' : 'default' }}
+      style={{ minWidth: 600, display: 'block' }}
       onClick={e => { if (e.target === svgRef.current) setTooltip(null) }}
-      onMouseDown={onSVGMouseDown}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
-      onMouseLeave={() => setDrawing(null)}>
+      onMouseLeave={() => setDraggingDraft(false)}>
       <rect x="2" y="2" width="816" height="256" fill="#f5f4f0" stroke="#555" strokeWidth="2" rx="2"/>
       <rect x="6" y="148" width="810" height="8" fill="#ddd"/>
 
@@ -509,89 +246,36 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShe
         )
       })}
 
-      {/* ── Fixed zones (coolers, shelves — user-configurable) ── */}
-      {fixedZones.map(c => {
-        const sel = selected.includes(c.id)
-        const occ = occupancy[c.id]
-        const isOccupied = occ?.occupied && !sel
-        const fill = sel ? C.selected : isOccupied ? C.occupied : '#e0f2fe'
-        const stroke = editZonesMode ? '#7c3aed' : sel ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#0369a1'
-        const cx = c.x + c.w / 2
-        const cy = c.y + c.h / 2
+      {/* ── Spots ── */}
+      {spots.map(spot => {
+        const isRacks = spot.type === 'racks'
+        const anySelected = isRacks
+          ? selected.some(id => id.startsWith(spot.id + '-'))
+          : selected.includes(spot.id)
+        const isOccupied = !isRacks && occupancy[spot.id]?.occupied && !anySelected
+        const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
+        const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
         return (
-          <g key={c.id}
-            style={{ cursor: editZonesMode ? 'default' : isOccupied ? 'not-allowed' : 'pointer' }}
-            onClick={e => {
-              e.stopPropagation()
-              if (editZonesMode) return
-              if (isOccupied) { setTooltip({ id: c.id, x: cx, y: cy, ...occ }); return }
-              setTooltip(null)
-              onToggle(c.id, c.label, 'ICT')
-            }}>
-            <rect x={c.x} y={c.y} width={c.w} height={c.h} fill={fill}
-              stroke={stroke} strokeWidth={editZonesMode ? 1.5 : sel ? 2 : 1.2} rx="2"
-              strokeDasharray={editZonesMode ? '4,2' : 'none'}/>
-            <text x={cx} y={cy - 4} textAnchor="middle" fontSize={7} fontFamily="sans-serif"
-              fill={sel ? '#085041' : '#0369a1'} fontWeight="700" style={{ pointerEvents: 'none' }}>
-              {c.label.toLowerCase().includes('shelf') ? '▤' : '❄'}
+          <g key={spot.id}>
+            <circle cx={spot.x} cy={spot.y} r={6} fill={fill} stroke={stroke} strokeWidth={1.5} />
+            <text x={spot.x} y={spot.y - 9} textAnchor="middle" fontSize={6.5} fontFamily="sans-serif" fill="#555" fontWeight="600" style={{ pointerEvents: 'none' }}>
+              {spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name}
             </text>
-            <text x={cx} y={cy + 6} textAnchor="middle" fontSize={6.5} fontFamily="sans-serif"
-              fill={sel ? '#085041' : '#0369a1'} fontWeight="600" style={{ pointerEvents: 'none' }}>
-              {c.label}
-            </text>
-            {/* Delete button in edit mode */}
-            {editZonesMode && (
-              <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onZoneDeleted && onZoneDeleted(c.id) }}>
-                <circle cx={c.x + c.w - 5} cy={c.y + 5} r={5} fill="#c84b2f"/>
-                <text x={c.x + c.w - 5} y={c.y + 8.5} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+            {editingSpots && (
+              <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
+                <circle cx={spot.x + 9} cy={spot.y - 9} r={5} fill="#c84b2f"/>
+                <text x={spot.x + 9} y={spot.y - 5.5} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
               </g>
             )}
           </g>
         )
       })}
 
-      {/* Drawing preview */}
-      {drawRect && (
-        <rect x={drawRect.x} y={drawRect.y} width={drawRect.w} height={drawRect.h}
-          fill="rgba(124,58,237,0.12)" stroke="#7c3aed" strokeWidth="1.5" strokeDasharray="4,2"
-          style={{ pointerEvents: 'none' }}/>
+      {/* Draft spot being placed */}
+      {draftSpot && (
+        <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
+          onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
       )}
-
-      {/* ── Shelf unit zones (configurable large boxes — High Bay A excluded, coolers use fixed zones) ── */}
-      {shelfUnits.filter(unit => unit.room_id !== 'ICT-HighBayA').map(unit => {
-        // Build all slot IDs for this unit
-        const slots = []
-        for (let s = 1; s <= unit.shelves; s++)
-          for (let r = 1; r <= unit.rows; r++)
-            slots.push(`${unit.id}-S${s}-R${r}`)
-
-        const hasSelected = slots.some(id => selected.includes(id))
-        const hasOccupied = slots.some(id => occupancy[id]?.occupied && !selected.includes(id))
-        const fill = hasSelected ? C.selected : hasOccupied ? '#fde8e8' : '#fef9ec'
-        const stroke = hasSelected ? C.selected_stroke : hasOccupied ? C.occupied_stroke : '#c8a000'
-        const selectedCount = slots.filter(id => selected.includes(id)).length
-        const cx = unit.x + unit.w / 2
-        const cy = unit.y + unit.h / 2
-
-        return (
-          <g key={unit.id} style={{ cursor: 'pointer' }}
-            onClick={e => { e.stopPropagation(); onShelfUnitClick && onShelfUnitClick(unit) }}>
-            <rect x={unit.x} y={unit.y} width={unit.w} height={unit.h}
-              fill={fill} stroke={stroke} strokeWidth={hasSelected ? 2 : 1.5} rx="3" strokeDasharray={hasSelected ? 'none' : '4,2'}/>
-            {/* icon */}
-            <text x={cx} y={cy - 6} textAnchor="middle" fontSize={10} fontFamily="sans-serif">📦</text>
-            <text x={cx} y={cy + 6} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill={hasSelected ? '#085041' : '#6b4e00'} fontWeight="600">
-              {unit.label.length > 16 ? unit.label.slice(0, 14) + '…' : unit.label}
-            </text>
-            {selectedCount > 0 && (
-              <g>
-                <circle cx={unit.x + unit.w - 6} cy={unit.y + 6} r={6} fill={C.selected_stroke}/>
-                <text x={unit.x + unit.w - 6} y={unit.y + 10} textAnchor="middle" fontSize={6} fontFamily="sans-serif" fill="#fff" fontWeight="700">{selectedCount}</text>
-              </g>
-            )}
-          </g>
-        )
-      })}
 
       {/* Room labels — rendered last so they appear above cooler boxes */}
       {rooms.map(r => {
@@ -609,24 +293,6 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, shelfUnits = [], onShe
 
       {tooltip && <Tooltip x={tooltip.x} y={tooltip.y} info={tooltip} onClose={() => setTooltip(null)} />}
     </svg>
-
-    {/* Label dialog — shown after user finishes drawing a box */}
-    {pending && (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 12, padding: 24, width: 280, border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Name this box</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>Position saved — enter a label for the new box.</div>
-          <input autoFocus value={pendingLabel} onChange={e => setPendingLabel(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmZone(); if (e.key === 'Escape') setPending(null) }}
-            placeholder="e.g. Cooler, Shelf, Freezer…"
-            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, marginBottom: 14, boxSizing: 'border-box' }} />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn btn-sm" onClick={() => setPending(null)}>Cancel</button>
-            <button className="btn btn-sm btn-primary" onClick={confirmZone}>Add box</button>
-          </div>
-        </div>
-      </div>
-    )}
     </>
   )
 }
@@ -824,11 +490,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   )
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [shelfUnits, setShelfUnits] = useState(DEFAULT_SHELF_UNITS)
-  const [activeShelfUnit, setActiveShelfUnit] = useState(null)
-  const [showShelfEditor, setShowShelfEditor] = useState(false)
-  const [fixedZones, setFixedZones] = useState(DEFAULT_FIXED_ZONES)
-  const [editingZones, setEditingZones] = useState(false)
+  const [spots, setSpots] = useState([])
+  const [editingSpots, setEditingSpots] = useState(false)
+  const [showAddStorage, setShowAddStorage] = useState(false)
+  const [pickedSpotId, setPickedSpotId] = useState('')
+  const [pickedRack, setPickedRack] = useState('')
+  const [pickedShelf, setPickedShelf] = useState('')
   const canEdit = !!session
   const isSolo = session?.loginMode === 'solo'
   const isICTOrg = true  // ictlab is always the ICT org
@@ -851,13 +518,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       locQuery = locQuery.eq('organization_id', '00000000-0000-0000-0000-000000000000')
     }
 
-    const [{ data: locData }, { data: planData }, { data: shelfData }, { data: fzData }] = await Promise.all([
+    const [{ data: locData }, { data: planData }, { data: spotsData }] = await Promise.all([
       locQuery,
       orgId
         ? sb.from('floor_plans').select('*').eq('organization_id', orgId).order('created_at')
         : Promise.resolve({ data: [] }),
-      sb.from('ict_layout').select('value').eq('key', 'ict_shelf_units').single(),
-      sb.from('ict_layout').select('value').eq('key', 'ict_fixed_zones').single(),
+      sb.from('ict_layout').select('value').eq('key', 'ict_spots').single(),
     ])
 
     const map = {}
@@ -874,11 +540,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     const plans = planData || []
     setCustomPlans(plans)
 
-    if (shelfData?.value) {
-      try { setShelfUnits(JSON.parse(shelfData.value)) } catch {}
-    }
-    if (fzData?.value) {
-      try { setFixedZones(JSON.parse(fzData.value)) } catch {}
+    if (spotsData?.value) {
+      try { setSpots(JSON.parse(spotsData.value)) } catch {}
     }
 
     // Default tab: first custom plan if any, else ICT Building
@@ -896,24 +559,25 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   }
 
   function getLocationDetail(id) {
-    // Shelf-unit slot: e.g. ICT-HBB-S2-R1
-    const shelfMatch = id.match(/^(.+)-S(\d+)-R(\d+)$/)
-    if (shelfMatch) {
-      const unitId = shelfMatch[1]
-      const unit = shelfUnits.find(u => u.id === unitId)
-      const label = unit ? `${unit.label} · Shelf ${shelfMatch[2]} · Row ${shelfMatch[3]}` : id
-      return { location: 'ICT Building', detail: label, facility: 'ICT' }
+    // Spot rack/shelf slot: e.g. spot_1234567890-R2-S3
+    const rackMatch = id.match(/^(.+)-R(\d+)-S(\d+)$/)
+    if (rackMatch) {
+      const spot = spots.find(s => s.id === rackMatch[1])
+      const room = ICT_ROOMS.find(r => r.id === spot?.room_id)
+      const label = spot ? `${spot.name} · Rack ${rackMatch[2]} · Shelf ${rackMatch[3]}` : id
+      return { location: room?.label || 'ICT Building', detail: label, facility: 'ICT' }
+    }
+    // Spot itself (pallet/floor — single slot)
+    const spot = spots.find(s => s.id === id)
+    if (spot) {
+      const room = ICT_ROOMS.find(r => r.id === spot.room_id)
+      return { location: room?.label || 'ICT Building', detail: spot.name, facility: 'ICT' }
     }
     // Custom plan zones
     for (const plan of customPlans) {
       const zone = (plan.zones || []).find(z => z.id === id)
       if (zone) return { location: plan.name, detail: zone.label, facility: plan.name }
     }
-    // Manually-drawn ICT map zones ("Edit Zones") — must be checked before the
-    // raw-ID fallback below, otherwise a zone's real typed label is never
-    // looked up and its raw 'ICT-zone-<timestamp>' id renders verbatim.
-    const fixedZone = fixedZones.find(z => z.id === id)
-    if (fixedZone) return { location: 'ICT Building', detail: fixedZone.label, facility: 'ICT' }
     // ICT/MPF fallback
     return {
       location: id.startsWith('MPF') ? 'MPF' : 'ICT Building',
@@ -922,22 +586,39 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     }
   }
 
-  async function saveShelfUnits(units) {
-    setShelfUnits(units)
-    await sb.from('ict_layout').upsert({ key: 'ict_shelf_units', value: JSON.stringify(units) }, { onConflict: 'key' })
-    setShowShelfEditor(false)
-  }
-
-  async function saveFixedZones(zones) {
-    setFixedZones(zones)
+  async function saveSpots(next) {
+    setSpots(next)
     const { error } = await sb.from('ict_layout').upsert(
-      { key: 'ict_fixed_zones', value: JSON.stringify(zones) },
+      { key: 'ict_spots', value: JSON.stringify(next) },
       { onConflict: 'key' }
     )
     if (error) {
-      console.error('saveFixedZones failed:', error)
-      alert('Box layout could not be saved: ' + (error.message || error.code || 'unknown error'))
+      console.error('saveSpots failed:', error)
+      alert('Spots could not be saved: ' + (error.message || error.code || 'unknown error'))
     }
+  }
+
+  const pickedSpot = spots.find(s => s.id === pickedSpotId) || null
+  const canConfirmAddStorage = pickedSpot && (
+    pickedSpot.type === 'racks'
+      ? !!pickedRack && !!pickedShelf
+      : !occupancy[pickedSpot.id]?.occupied
+  )
+
+  function confirmAddStorage() {
+    if (!pickedSpot) return
+    let id, label
+    if (pickedSpot.type === 'racks') {
+      if (!pickedRack || !pickedShelf) return
+      id = `${pickedSpot.id}-R${pickedRack}-S${pickedShelf}`
+      label = `${pickedSpot.name} · Rack ${pickedRack} · Shelf ${pickedShelf}`
+    } else {
+      id = pickedSpot.id
+      label = pickedSpot.name
+    }
+    toggleLocation(id, label, 'ICT')
+    setShowAddStorage(false)
+    setPickedSpotId(''); setPickedRack(''); setPickedShelf('')
   }
 
   async function confirm() {
@@ -1006,8 +687,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   // Legend
   const legend = [
     { color: '#f0efe9', border: '#999', label: 'Available (pallet)' },
-    { color: '#d4a520', border: '#8b6914', label: 'Available (shelf row)' },
-    { color: '#fef9ec', border: '#c8a000', label: 'Shelf unit (tap to pick row)' },
+    { color: '#fef9ec', border: '#c8a000', label: 'Spot' },
     { color: '#9FE1CB', border: '#0F6E56', label: 'Selected' },
     { color: '#e24b4a', border: '#a32d2d', label: 'Occupied' },
   ]
@@ -1024,13 +704,13 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {canEditLayout && facility === 'ICT' && !editingZones && (
-              <button className="btn btn-sm" onClick={() => setShowShelfEditor(true)} style={{ fontSize: 13 }}>✏️ Edit shelves</button>
+            {!viewOnly && canEdit && facility === 'ICT' && !editingSpots && (
+              <button className="btn btn-sm" onClick={() => setShowAddStorage(true)} style={{ fontSize: 13 }}>📦 Add storage to spot</button>
             )}
             {canEditLayout && facility === 'ICT' && (
-              <button className="btn btn-sm" onClick={() => setEditingZones(v => !v)}
-                style={{ fontSize: 13, background: editingZones ? '#7c3aed' : undefined, color: editingZones ? '#fff' : undefined, borderColor: editingZones ? '#7c3aed' : undefined }}>
-                {editingZones ? '✓ Done' : '⊞ Edit boxes'}
+              <button className="btn btn-sm" onClick={() => setEditingSpots(v => !v)}
+                style={{ fontSize: 13, background: editingSpots ? '#7c3aed' : undefined, color: editingSpots ? '#fff' : undefined, borderColor: editingSpots ? '#7c3aed' : undefined }}>
+                {editingSpots ? '✓ Done' : '✏️ Edit Spots'}
               </button>
             )}
             <button className="btn btn-sm" onClick={onClose}>✕ Close</button>
@@ -1074,11 +754,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={!viewOnly && canEdit} /> : null
           })() : facility === 'ICT' ? (
             <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
-              shelfUnits={shelfUnits} onShelfUnitClick={!viewOnly ? setActiveShelfUnit : null}
-              fixedZones={fixedZones}
-              editZonesMode={editingZones}
-              onZoneAdded={zone => saveFixedZones([...fixedZones, zone])}
-              onZoneDeleted={id => saveFixedZones(fixedZones.filter(z => z.id !== id))} />
+              spots={spots}
+              editingSpots={editingSpots}
+              onSpotAdded={spot => saveSpots([...spots, spot])}
+              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
           ) : (
             <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit} />
           )}
@@ -1120,22 +799,60 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       </div>
     </div>
 
-    {activeShelfUnit && (
-      <ShelfUnitPicker
-        unit={activeShelfUnit}
-        occupancy={occupancy}
-        selected={selected}
-        onToggle={(slotId, label) => toggleLocation(slotId, label, 'ICT')}
-        onClose={() => setActiveShelfUnit(null)}
-      />
-    )}
-
-    {showShelfEditor && (
-      <ShelfUnitEditor
-        shelfUnits={shelfUnits}
-        onSave={saveShelfUnits}
-        onClose={() => setShowShelfEditor(false)}
-      />
+    {showAddStorage && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>📦 Add storage to spot</div>
+            <button className="btn btn-sm" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>✕ Close</button>
+          </div>
+          {spots.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text3)', padding: '10px 0' }}>No spots yet — ask your lab manager to create one via "Edit Spots".</div>
+          ) : (
+            <>
+              <div className="field">
+                <label>Spot</label>
+                <select value={pickedSpotId} onChange={e => { setPickedSpotId(e.target.value); setPickedRack(''); setPickedShelf('') }}>
+                  <option value="">— Select a spot —</option>
+                  {spots.map(s => {
+                    const room = ICT_ROOMS.find(r => r.id === s.room_id)
+                    return <option key={s.id} value={s.id}>{room?.label || s.room_id} — {s.name}</option>
+                  })}
+                </select>
+              </div>
+              {pickedSpot?.type === 'racks' && (
+                <div className="grid-2">
+                  <div className="field"><label>Rack</label>
+                    <select value={pickedRack} onChange={e => { setPickedRack(e.target.value); setPickedShelf('') }}>
+                      <option value="">— Select rack —</option>
+                      {Array.from({ length: pickedSpot.racks }, (_, i) => i + 1).map(n => <option key={n} value={n}>Rack {n}</option>)}
+                    </select>
+                  </div>
+                  <div className="field"><label>Shelf (1 = top)</label>
+                    <select value={pickedShelf} onChange={e => setPickedShelf(e.target.value)} disabled={!pickedRack}>
+                      <option value="">— Select shelf —</option>
+                      {pickedRack && Array.from({ length: pickedSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
+                        const slotId = `${pickedSpot.id}-R${pickedRack}-S${n}`
+                        const occ = occupancy[slotId]?.occupied
+                        return <option key={n} value={n} disabled={occ}>Shelf {n}{occ ? ' (occupied)' : ''}</option>
+                      })}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {pickedSpot && pickedSpot.type !== 'racks' && (
+                occupancy[pickedSpot.id]?.occupied
+                  ? <div style={{ fontSize: 13, color: '#c84b2f', padding: '8px 0' }}>This spot is already occupied.</div>
+                  : <div style={{ fontSize: 13, color: 'var(--text3)', padding: '8px 0' }}>This is a single-slot spot — no further selection needed.</div>
+              )}
+            </>
+          )}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>Cancel</button>
+            <button className="btn btn-primary" onClick={confirmAddStorage} disabled={!canConfirmAddStorage}>Confirm</button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   )
