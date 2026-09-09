@@ -110,7 +110,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 }
 
 // ── New Project Modal ──────────────────────────────────────────
-function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
+export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
   const { session, toast } = useAppStore()
   const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', student_ids: [], sampling_date: '', storage_date: '', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -184,7 +184,7 @@ function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
 }
 
 // ── New Material Modal ──────────────────────────────────────────
-function NewMaterialModal({ material, onClose, onCreated }) {
+function NewMaterialModal({ material, onClose, onCreated, requireProject = false }) {
   const isEdit = !!material
   const { session, toast } = useAppStore()
   const [form, setForm] = useState({
@@ -210,6 +210,7 @@ function NewMaterialModal({ material, onClose, onCreated }) {
   async function save() {
     setErrMsg('')
     if (!form.name.trim()) { setErrMsg('Material name is required.'); return }
+    if (requireProject && !form.project_id) { setErrMsg('Please select a project.'); return }
     setSaving(true)
     const payload = {
       name: form.name.trim(),
@@ -235,16 +236,16 @@ function NewMaterialModal({ material, onClose, onCreated }) {
 
   return (
     <Modal onClose={onClose}>
-      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>{isEdit ? 'Edit material' : 'Add material'}</div>
+      <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>{isEdit ? 'Edit material' : requireProject ? "Add project's material" : 'Add material'}</div>
       <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
       <div className="grid-2">
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value, storage_date: (!f.storage_date || f.storage_date === f.sampling_date) ? e.target.value : f.storage_date }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
       </div>
       <div className="field">
-        <label>Project related to this material</label>
+        <label>Project{requireProject && <span style={{ color: '#c84b2f' }}> *</span>}</label>
         <select value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
-          <option value="">— None / standalone —</option>
+          <option value="">{requireProject ? '— Select a project —' : '— None / standalone —'}</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.project_id ? ` · ${p.project_id}` : ''}</option>)}
         </select>
       </div>
@@ -2195,7 +2196,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         {!viewingShared && (
           <>
             <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowNewModal(true)}>
-              + Add project
+              + Add project's material
             </button>
             <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowMaterialModal(true)}>
               + Non-Project Material
@@ -2429,12 +2430,10 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       )}
 
       {showNewModal && (
-        <NewProjectModal
-          users={users}
-          isSolo={isSolo}
-          soloOwnerId={isSolo ? session?.userId : null}
+        <NewMaterialModal
+          requireProject
           onClose={() => setShowNewModal(false)}
-          onCreated={(id) => { setActiveProjectId(id); loadProjects(); onProjectCreated?.() }}
+          onCreated={(data) => { setShowNewModal(false); loadAllMaterials(); if (data?.project_id) setActiveProjectId(data.project_id) }}
         />
       )}
 
@@ -2459,9 +2458,72 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 }
 
 // ── Main Screen ────────────────────────────────────────────────
+// ── Manage Projects (admin/lab-manager only) ────────────────────
+function ManageProjectsTab({ session }) {
+  const { toast } = useAppStore()
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNewModal, setShowNewModal] = useState(false)
+  const [editingProject, setEditingProject] = useState(null)
+
+  function load() {
+    if (!session?.organizationId) return
+    setLoading(true)
+    sb.from('projects').select('*').eq('organization_id', session.organizationId).is('solo_owner_id', null).order('name')
+      .then(({ data }) => { setProjects(data || []); setLoading(false) })
+  }
+  useEffect(load, [session?.organizationId])
+
+  async function deleteProject(id) {
+    if (!confirm('Delete this project and all its data? This cannot be undone.')) return
+    await sb.from('projects').delete().eq('id', id)
+    toast('Project deleted.')
+    load()
+  }
+
+  const statusBadge = s => s === 'active' ? 'badge-active' : s === 'completed' ? 'badge-completed' : 'badge-hold'
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div className="section-title">Manage Projects</div>
+        <button className="btn btn-sm btn-primary" onClick={() => setShowNewModal(true)}>+ Add project</button>
+      </div>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+      ) : projects.length === 0 ? (
+        <div style={{ fontSize: 14, color: 'var(--text3)', padding: '20px 0' }}>No projects yet — add one to get started.</div>
+      ) : (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+          {projects.map((p, i) => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: i % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                {p.project_id && <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{p.project_id}</div>}
+              </div>
+              <span className={`badge ${statusBadge(p.status)}`} style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }}>{p.status}</span>
+              <button className="btn btn-sm" onClick={() => setEditingProject(p)}>Edit</button>
+              <button className="btn btn-sm" onClick={() => deleteProject(p.id)} style={{ color: '#c84b2f' }}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {showNewModal && (
+        <NewProjectModal isSolo={false} soloOwnerId={null} onClose={() => setShowNewModal(false)} onCreated={() => { setShowNewModal(false); load() }} />
+      )}
+      {editingProject && (
+        <Modal onClose={() => setEditingProject(null)}>
+          <ProjectInfo project={editingProject} users={[]} isSolo={false} onSaved={() => { setEditingProject(null); load() }} />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
 export default function ProjectMaterial() {
-  const { session } = useAppStore()
+  const { session, sidebarSubTab } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
+  const mainTab = sidebarSubTab || 'inventory'
 
   return (
     <div>
@@ -2469,7 +2531,12 @@ export default function ProjectMaterial() {
         <div className="section-title">Project & Material</div>
         <HelpPanel screen="projects" />
       </div>
-      <MaterialInventoryTab session={session} isSolo={isSolo} />
+      {mainTab === 'inventory' && (
+        <MaterialInventoryTab session={session} isSolo={isSolo} />
+      )}
+      {mainTab === 'manage_projects' && (
+        <ManageProjectsTab session={session} />
+      )}
     </div>
   )
 }

@@ -287,17 +287,17 @@ function PiSelect({ value, onChange }) {
   const { session } = useAppStore()
   const [supervisors, setSupervisors] = useState([])
   useEffect(() => {
-    let q = sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name')
-    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
-    q.then(({ data }) => setSupervisors(data || []))
+    if (!session?.organizationId) return
+    sb.from('organizations').select('supervisors').eq('id', session.organizationId).single()
+      .then(({ data }) => setSupervisors(data?.supervisors || []))
   }, [session?.organizationId])
-  const isKnown = !value || supervisors.some(s => s.name === value)
+  const isKnown = !value || supervisors.includes(value)
   return (
     <div className="field">
       <label>Project PI <span style={{ color: '#c84b2f' }}>*</span></label>
       <select value={isKnown ? (value || '') : 'Other'} onChange={e => onChange(e.target.value === 'Other' ? '' : e.target.value)}>
         <option value="">— Select PI —</option>
-        {supervisors.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+        {supervisors.map(s => <option key={s} value={s}>{s}</option>)}
         <option value="Other">Other…</option>
       </select>
       {!isKnown && (

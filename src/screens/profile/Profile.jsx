@@ -1638,6 +1638,82 @@ export function StudentsPanel({ toast, session }) {
   )
 }
 
+// ── Supervisor list (org-managed, JSONB array on organizations.supervisors) ──
+function SupervisorPicker({ session, value, onChange, manageable = false }) {
+  const [supervisors, setSupervisors] = useState([])
+  const [showManager, setShowManager] = useState(false)
+
+  function load() {
+    if (!session?.organizationId) return
+    sb.from('organizations').select('supervisors').eq('id', session.organizationId).single()
+      .then(({ data }) => setSupervisors(data?.supervisors || []))
+  }
+  useEffect(load, [session?.organizationId])
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <select style={{ flex: 1 }} value={value || ''} onChange={e => onChange(e.target.value)}>
+          <option value="">— Select supervisor —</option>
+          {value && !supervisors.includes(value) && <option value={value}>{value}</option>}
+          {supervisors.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {manageable && <button type="button" className="btn btn-sm" onClick={() => setShowManager(v => !v)}>{showManager ? 'Done' : '+ Manage'}</button>}
+      </div>
+      {manageable && showManager && (
+        <SupervisorManager session={session} supervisors={supervisors} onChanged={load} />
+      )}
+    </div>
+  )
+}
+
+function SupervisorManager({ session, supervisors, onChanged }) {
+  const { toast } = useAppStore()
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save(next) {
+    setSaving(true)
+    const { error } = await sb.from('organizations').update({ supervisors: next }).eq('id', session.organizationId)
+    setSaving(false)
+    if (error) { toast('Could not save: ' + error.message); return }
+    onChanged()
+  }
+
+  function addSupervisor() {
+    const name = newName.trim()
+    if (!name) return
+    if (supervisors.includes(name)) { toast('That supervisor is already in the list.'); return }
+    save([...supervisors, name])
+    setNewName('')
+  }
+
+  function removeSupervisor(name) {
+    if (!confirm(`Remove "${name}" from the supervisor list?`)) return
+    save(supervisors.filter(s => s !== name))
+  }
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 10 }}>
+      {supervisors.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>No supervisors yet.</div>
+      )}
+      {supervisors.map(s => (
+        <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+          <span>{s}</span>
+          <button type="button" onClick={() => removeSupervisor(s)} disabled={saving} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#c84b2f', fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <input value={newName} onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addSupervisor()}
+          placeholder="e.g. Prof. James Carter" style={{ flex: 1, fontSize: 13 }} />
+        <button type="button" className="btn btn-sm btn-primary" onClick={addSupervisor} disabled={!newName.trim() || saving}>Add</button>
+      </div>
+    </div>
+  )
+}
+
 function StudentModal({ student, session, onClose, onSave }) {
   const [form, setForm] = useState(student ? {
     firstName: sFirstName(student), lastName: sLastName(student), emailAddr: sEmail(student), supervisor: sSupervisor(student),
@@ -1648,14 +1724,15 @@ function StudentModal({ student, session, onClose, onSave }) {
   const [orgProjects, setOrgProjects] = useState([])
   const [showPw, setShowPw] = useState(false)
 
-  useEffect(() => {
+  function loadOrgProjects() {
     if (!session?.organizationId) return
     sb.from('projects').select('id, name, project_id')
       .eq('organization_id', session.organizationId)
       .is('solo_owner_id', null)
       .order('name')
       .then(({ data }) => setOrgProjects(data || []))
-  }, [session?.organizationId])
+  }
+  useEffect(loadOrgProjects, [session?.organizationId])
 
   function toggleProject(id) {
     setForm(f => ({
@@ -1684,7 +1761,10 @@ function StudentModal({ student, session, onClose, onSave }) {
           <PasswordStrengthHint password={form.password} />
         </div>
         <div className="grid-2">
-          <div className="field"><label>Supervisor</label><input value={form.supervisor} onChange={e=>setForm(f=>({...f,supervisor:e.target.value}))} placeholder="e.g. Prof. James Carter" /></div>
+          <div className="field">
+            <label>Supervisor</label>
+            <SupervisorPicker session={session} value={form.supervisor} onChange={v => setForm(f => ({ ...f, supervisor: v }))} manageable />
+          </div>
           {session?.organizationId === ICT_ORG_ID && (
             <div className="field"><label>Project Group</label>
               <select value={form.project_group} onChange={e=>setForm(f=>({...f,project_group:e.target.value}))}>
@@ -1693,23 +1773,27 @@ function StudentModal({ student, session, onClose, onSave }) {
             </div>
           )}
         </div>
-        {orgProjects.length > 0 && (
-          <div className="field">
-            <label>Assigned Projects <span style={{ color: '#c84b2f' }}>*</span></label>
-            <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'8px 12px', maxHeight:180, overflowY:'auto' }}>
-              {orgProjects.map(p => (
-                <div key={p.id} onClick={() => toggleProject(p.id)}
-                  style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer', userSelect:'none', padding:'4px 0' }}>
-                  <input type="checkbox" readOnly checked={form.selectedProjectIds.includes(p.id)} style={{ width:'auto', flexShrink:0, cursor:'pointer' }} />
-                  <span style={{ lineHeight:1.3 }}>{p.project_id ? `${p.project_id} – ${p.name}` : p.name}</span>
-                </div>
-              ))}
-            </div>
-            {form.selectedProjectIds.length > 0 && (
-              <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>{form.selectedProjectIds.length} project{form.selectedProjectIds.length !== 1 ? 's' : ''} selected</div>
-            )}
-          </div>
-        )}
+        <div className="field">
+          <label>Assigned Projects <span style={{ color: '#c84b2f' }}>*</span></label>
+          {orgProjects.length > 0 ? (
+            <>
+              <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'8px 12px', maxHeight:180, overflowY:'auto' }}>
+                {orgProjects.map(p => (
+                  <div key={p.id} onClick={() => toggleProject(p.id)}
+                    style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer', userSelect:'none', padding:'4px 0' }}>
+                    <input type="checkbox" readOnly checked={form.selectedProjectIds.includes(p.id)} style={{ width:'auto', flexShrink:0, cursor:'pointer' }} />
+                    <span style={{ lineHeight:1.3 }}>{p.project_id ? `${p.project_id} – ${p.name}` : p.name}</span>
+                  </div>
+                ))}
+              </div>
+              {form.selectedProjectIds.length > 0 && (
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>{form.selectedProjectIds.length} project{form.selectedProjectIds.length !== 1 ? 's' : ''} selected</div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize:13, color:'var(--text3)', padding:'10px 0' }}>No projects yet — add one.</div>
+          )}
+        </div>
         <div style={{ display:'flex', gap:10, marginTop:8 }}>
           <button type="button" className="btn btn-primary" onClick={()=>onSave(form, student?.id)}>Save</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
@@ -1908,22 +1992,6 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
         </div>
       </form>
     </div>
-  )
-}
-
-function SupervisorSelect({ value, onChange }) {
-  const { session } = useAppStore()
-  const [supervisors, setSupervisors] = useState([])
-  useEffect(() => {
-    let q = sb.from('users').select('id, name').eq('role', 'user').eq('is_active', true).order('name')
-    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
-    q.then(({ data }) => setSupervisors(data || []))
-  }, [session?.organizationId])
-  return (
-    <select value={value||''} onChange={e => onChange(e.target.value)}>
-      <option value="">— Select supervisor —</option>
-      {supervisors.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-    </select>
   )
 }
 
@@ -2332,9 +2400,7 @@ function UserProfileForm({ session, toast }) {
         </div>
         <div className="grid-2">
           <div className="field"><label>Supervisor</label>
-            {isStudent
-              ? <input value={form.supervisor || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
-              : <SupervisorSelect value={form.supervisor} onChange={v => setForm(f => ({ ...f, supervisor: v }))} />}
+            <input value={form.supervisor || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
           </div>
           {session?.organizationId === ICT_ORG_ID && (
             <div className="field"><label>Project Group</label>
