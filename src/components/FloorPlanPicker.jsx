@@ -292,17 +292,21 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         const isOccupied = !isRacks && occupancy[spot.id]?.occupied && !anySelected
         const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
         const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
+        const label = spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name
+        const pillWidth = Math.max(16, label.length * 3.6 + 8)
         return (
           <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
             onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
-            <circle cx={spot.x} cy={spot.y} r={6} fill={fill} stroke={stroke} strokeWidth={1.5} />
-            <text x={spot.x} y={spot.y - 9} textAnchor="middle" fontSize={6.5} fontFamily="sans-serif" fill="#555" fontWeight="600" style={{ pointerEvents: 'none' }}>
-              {spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name}
+            <rect x={spot.x - pillWidth / 2} y={spot.y - 5} width={pillWidth} height={10} rx={5}
+              fill={fill} stroke={stroke} strokeWidth={1.2} />
+            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={6} fontFamily="sans-serif"
+              fill={isOccupied ? '#fff' : '#3d2a00'} fontWeight="700" style={{ pointerEvents: 'none' }}>
+              {label}
             </text>
             {editingSpots && (
               <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
-                <circle cx={spot.x + 9} cy={spot.y - 9} r={5} fill="#c84b2f"/>
-                <text x={spot.x + 9} y={spot.y - 5.5} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+                <circle cx={spot.x + pillWidth / 2 + 4} cy={spot.y - 5} r={5} fill="#c84b2f"/>
+                <text x={spot.x + pillWidth / 2 + 4} y={spot.y - 1.5} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
               </g>
             )}
           </g>
@@ -518,7 +522,7 @@ function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
 // ══════════════════════════════════════════════════════════════
 // MAIN FLOOR PLAN PICKER
 // ══════════════════════════════════════════════════════════════
-export default function FloorPlanPicker({ projectId, projectName, materialId, materialType, currentLocations = [], onConfirm, onClose, viewOnly = false }) {
+export default function FloorPlanPicker({ projectId, projectName, materialId, materialType, currentLocations = [], onConfirm, onClose, viewOnly = false, allowLayoutEdit = false }) {
   const { session } = useAppStore()
   const [customPlans, setCustomPlans] = useState([])
   const [facility, setFacility] = useState(null)
@@ -529,7 +533,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [spots, setSpots] = useState([])
-  const [editingSpots, setEditingSpots] = useState(false)
+  const [editingSpots, setEditingSpots] = useState(!!allowLayoutEdit)
   const [showAddStorage, setShowAddStorage] = useState(false)
   const [pickedSpotId, setPickedSpotId] = useState('')
   const [pickedRack, setPickedRack] = useState('')
@@ -537,8 +541,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const canEdit = !!session
   const isSolo = session?.loginMode === 'solo'
   const isICTOrg = true  // ictlab is always the ICT org
-  // ictlab: both org admin and lab manager can edit shelf unit layout
-  const canEditLayout = !viewOnly && (session?.role === 'admin' || session?.role === 'user')
+  // Spot layout (Edit Spots) is admin-only, and only reachable from the
+  // dedicated Admin → Floor Plan entry point (allowLayoutEdit) — never from
+  // the regular material storage picker, regardless of role.
+  const canEditLayout = allowLayoutEdit && !viewOnly && session?.role === 'admin'
 
   useEffect(() => { loadAll() }, [])
 
@@ -582,8 +588,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       try { setSpots(JSON.parse(spotsData.value)) } catch {}
     }
 
-    // Default tab: first custom plan if any, else ICT Building
-    if (plans.length > 0) setFacility(`custom_${plans[0].id}`)
+    // Default tab: first custom plan if any, else ICT Building.
+    // Layout-edit mode always lands on ICT Building — that's the only facility with spots.
+    if (allowLayoutEdit) setFacility('ICT')
+    else if (plans.length > 0) setFacility(`custom_${plans[0].id}`)
     else setFacility('ICT')
 
     setLoading(false)
@@ -739,11 +747,11 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)', gap: 10 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{allowLayoutEdit ? '🗺️ Manage ICT Building Floor Plan' : viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{allowLayoutEdit ? 'Create and reposition spots for lab managers and lab users to reserve' : viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {!viewOnly && canEdit && facility === 'ICT' && !editingSpots && (
+            {!allowLayoutEdit && !viewOnly && canEdit && facility === 'ICT' && !editingSpots && (
               <button className="btn btn-sm" onClick={() => setShowAddStorage(true)} style={{ fontSize: 13 }}>📦 Add storage to spot</button>
             )}
             {canEditLayout && facility === 'ICT' && (
@@ -803,8 +811,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           )}
         </div>
 
-        {/* Selected chips (hidden in view-only mode and while editing spots) */}
-        {!viewOnly && !editingSpots && (
+        {/* Selected chips (hidden in view-only mode, layout-edit mode, and while editing spots) */}
+        {!viewOnly && !allowLayoutEdit && !editingSpots && (
           <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {selected.length === 0
               ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
@@ -821,8 +829,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           </div>
         )}
 
-        {/* Footer (hidden while editing spots — that mode manages its own map, not a location selection) */}
-        {!editingSpots && (
+        {/* Footer — layout-edit mode gets a plain Close; normal picking is hidden while actively editing spots */}
+        {allowLayoutEdit ? (
+          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-primary" onClick={onClose}>Close</button>
+          </div>
+        ) : !editingSpots && (
           <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             {viewOnly ? (
               <button className="btn btn-primary" onClick={onClose}>Close</button>

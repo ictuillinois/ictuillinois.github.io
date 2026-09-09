@@ -5,6 +5,7 @@ import Modal from '../../components/Modal'
 import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
+import FloorPlanPicker from '../../components/FloorPlanPicker'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 
 async function createAuthUser(email, password) {
@@ -197,6 +198,33 @@ function ModuleImagesPanel({ orgId }) {
 
 // Super admin: session.userId === null (logged in via /admin password)
 // Org admin:   session.userId !== null && session.role === 'admin'
+
+// ── ICT Building spots (Edit Spots) — admin-only entry point ──
+// This is the ONLY place "Edit Spots" is reachable from; the storage
+// picker opened from Project & Materials never grants layout-edit access,
+// regardless of role.
+function ICTSpotsAdminPanel() {
+  const [showEditor, setShowEditor] = useState(false)
+  return (
+    <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>ICT Building Spots</div>
+      <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
+        Create and reposition the storage spots (racks, pallets, floor
+        locations) lab managers and lab users can reserve on the ICT
+        Building map.
+      </div>
+      <button className="btn btn-sm btn-primary" onClick={() => setShowEditor(true)}>🗺️ Edit ICT Building Spots</button>
+      {showEditor && (
+        <FloorPlanPicker
+          allowLayoutEdit
+          currentLocations={[]}
+          onConfirm={() => {}}
+          onClose={() => setShowEditor(false)}
+        />
+      )}
+    </div>
+  )
+}
 
 // ── Org Settings panel (org admin only) ──────────────────────
 function OrgSettingsPanel({ session }) {
@@ -1706,7 +1734,12 @@ export default function Admin() {
       {tab === 'images' && <ModuleImagesPanel orgId={myOrgId} />}
 
       {/* ── FLOOR PLAN (org admin only) ── */}
-      {!isSuperAdmin && tab === 'floorplan' && <FloorPlanEditor />}
+      {!isSuperAdmin && tab === 'floorplan' && (
+        <div>
+          <FloorPlanEditor />
+          <ICTSpotsAdminPanel />
+        </div>
+      )}
 
       {/* ── ORG SETTINGS (org admin only) ── */}
       {!isSuperAdmin && tab === 'orgsettings' && <OrgSettingsPanel session={session} />}
