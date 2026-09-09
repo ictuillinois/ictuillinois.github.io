@@ -86,7 +86,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   function startDraft() {
     const room = rooms.find(r => r.id === newSpotRoom)
     if (!room) return
-    setDraftSpot({ room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', racks: 1, shelvesPerRack: 1 })
+    setDraftSpot({ room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
   }
   function onDraftMouseDown(e) {
     e.preventDefault()
@@ -101,6 +101,20 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   function onSVGMouseUp() {
     setDraggingDraft(false)
   }
+  function setRackCount(n) {
+    const count = Math.max(1, parseInt(n) || 1)
+    setDraftSpot(d => {
+      const names = d.rackNames || []
+      return { ...d, rackNames: Array.from({ length: count }, (_, i) => names[i] || `Rack ${i + 1}`) }
+    })
+  }
+  function renameRack(i, value) {
+    setDraftSpot(d => {
+      const next = [...(d.rackNames || [])]
+      next[i] = value
+      return { ...d, rackNames: next }
+    })
+  }
   function confirmDraft() {
     if (!draftSpot || !draftSpot.name.trim()) return
     const spot = {
@@ -110,7 +124,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       x: draftSpot.x, y: draftSpot.y,
       type: draftSpot.type,
       ...(draftSpot.type === 'racks' ? {
-        racks: Math.max(1, parseInt(draftSpot.racks) || 1),
+        rackNames: (draftSpot.rackNames?.length ? draftSpot.rackNames : ['Rack 1']).map((n, i) => n.trim() || `Rack ${i + 1}`),
         shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
       } : {}),
     }
@@ -207,14 +221,24 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
               </div>
             </div>
             {draftSpot.type === 'racks' && (
-              <div className="grid-2">
-                <div className="field"><label>Number of racks</label>
-                  <input type="number" min={1} value={draftSpot.racks} onChange={e => setDraftSpot(d => ({ ...d, racks: e.target.value }))} />
+              <>
+                <div className="grid-2">
+                  <div className="field"><label>Number of racks</label>
+                    <input type="number" min={1} value={draftSpot.rackNames?.length || 1} onChange={e => setRackCount(e.target.value)} />
+                  </div>
+                  <div className="field"><label>Shelves per rack</label>
+                    <input type="number" min={1} value={draftSpot.shelvesPerRack} onChange={e => setDraftSpot(d => ({ ...d, shelvesPerRack: e.target.value }))} />
+                  </div>
                 </div>
-                <div className="field"><label>Shelves per rack</label>
-                  <input type="number" min={1} value={draftSpot.shelvesPerRack} onChange={e => setDraftSpot(d => ({ ...d, shelvesPerRack: e.target.value }))} />
+                <div className="field">
+                  <label>Rack names</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(draftSpot.rackNames || []).map((name, i) => (
+                      <input key={i} value={name} onChange={e => renameRack(i, e.target.value)} placeholder={`Rack ${i + 1}`} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-sm" onClick={() => { setDraftSpot(null); setNewSpotRoom('') }}>Cancel</button>
@@ -564,7 +588,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     if (rackMatch) {
       const spot = spots.find(s => s.id === rackMatch[1])
       const room = ICT_ROOMS.find(r => r.id === spot?.room_id)
-      const label = spot ? `${spot.name} · Rack ${rackMatch[2]} · Shelf ${rackMatch[3]}` : id
+      const rackName = spot?.rackNames?.[parseInt(rackMatch[2]) - 1] || `Rack ${rackMatch[2]}`
+      const label = spot ? `${spot.name} · ${rackName} · Shelf ${rackMatch[3]}` : id
       return { location: room?.label || 'ICT Building', detail: label, facility: 'ICT' }
     }
     // Spot itself (pallet/floor — single slot)
@@ -825,7 +850,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                   <div className="field"><label>Rack</label>
                     <select value={pickedRack} onChange={e => { setPickedRack(e.target.value); setPickedShelf('') }}>
                       <option value="">— Select rack —</option>
-                      {Array.from({ length: pickedSpot.racks }, (_, i) => i + 1).map(n => <option key={n} value={n}>Rack {n}</option>)}
+                      {(pickedSpot.rackNames || []).map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
                     </select>
                   </div>
                   <div className="field"><label>Shelf (1 = top)</label>
