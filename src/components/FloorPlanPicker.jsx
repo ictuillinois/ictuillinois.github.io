@@ -67,10 +67,10 @@ function Tooltip({ x, y, info, onClose }) {
 // ICT BUILDING MAP
 // ══════════════════════════════════════════════════════════════
 function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
-                  editingSpots = false, onSpotAdded, onSpotDeleted }) {
+                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted }) {
   const [tooltip, setTooltip] = useState(null)
   const [newSpotRoom, setNewSpotRoom] = useState('')
-  const [draftSpot, setDraftSpot] = useState(null)   // { room_id, x, y, name, type, racks, shelvesPerRack }
+  const [draftSpot, setDraftSpot] = useState(null)   // { id?, room_id, x, y, name, type, rackNames, shelvesPerRack } — id present = editing an existing spot
   const [draggingDraft, setDraggingDraft] = useState(false)
   const svgRef = useRef(null)
 
@@ -86,7 +86,11 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   function startDraft() {
     const room = rooms.find(r => r.id === newSpotRoom)
     if (!room) return
-    setDraftSpot({ room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setDraftSpot({ id: null, room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+  }
+  function editSpot(spot) {
+    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'] })
+    setNewSpotRoom(spot.room_id)
   }
   function onDraftMouseDown(e) {
     e.preventDefault()
@@ -118,7 +122,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   function confirmDraft() {
     if (!draftSpot || !draftSpot.name.trim()) return
     const spot = {
-      id: 'spot_' + Date.now(),
+      id: draftSpot.id || ('spot_' + Date.now()),
       name: draftSpot.name.trim(),
       room_id: draftSpot.room_id,
       x: draftSpot.x, y: draftSpot.y,
@@ -128,7 +132,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
       } : {}),
     }
-    onSpotAdded && onSpotAdded(spot)
+    if (draftSpot.id) { onSpotUpdated && onSpotUpdated(spot) }
+    else { onSpotAdded && onSpotAdded(spot) }
     setDraftSpot(null)
     setNewSpotRoom('')
   }
@@ -207,7 +212,9 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
           </div>
         ) : (
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>Drag the purple marker on the map to position it.</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+              {draftSpot.id ? 'Drag the purple marker to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
+            </div>
             <div className="grid-2">
               <div className="field"><label>Spot Name <span style={{ color: '#c84b2f' }}>*</span></label>
                 <input autoFocus value={draftSpot.name} onChange={e => setDraftSpot(d => ({ ...d, name: e.target.value }))} placeholder="e.g. North Rack" />
@@ -240,9 +247,15 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
                 </div>
               </>
             )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-sm" onClick={() => { setDraftSpot(null); setNewSpotRoom('') }}>Cancel</button>
-              <button className="btn btn-sm btn-primary" disabled={!draftSpot.name.trim()} onClick={confirmDraft}>Add spot</button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+              {draftSpot.id ? (
+                <button className="btn btn-sm" style={{ color: '#c84b2f' }}
+                  onClick={() => { onSpotDeleted && onSpotDeleted(draftSpot.id); setDraftSpot(null); setNewSpotRoom('') }}>🗑 Delete spot</button>
+              ) : <span />}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm" onClick={() => { setDraftSpot(null); setNewSpotRoom('') }}>Cancel</button>
+                <button className="btn btn-sm btn-primary" disabled={!draftSpot.name.trim()} onClick={confirmDraft}>{draftSpot.id ? 'Save changes' : 'Add spot'}</button>
+              </div>
             </div>
           </div>
         )}
@@ -265,13 +278,13 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         return (
           <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h}
             fill={getRoomFill(r.id)} stroke={getRoomStroke(r.id)} strokeWidth={selected.includes(r.id) ? 2 : 1.2} rx="1"
-            style={{ cursor: occ?.occupied && !selected.includes(r.id) ? 'not-allowed' : 'pointer' }}
-            onClick={() => handleClick(r.id, r.label.replace('\n', ' '), cx, cy)}/>
+            style={{ cursor: editingSpots ? 'default' : occ?.occupied && !selected.includes(r.id) ? 'not-allowed' : 'pointer' }}
+            onClick={() => { if (!editingSpots) handleClick(r.id, r.label.replace('\n', ' '), cx, cy) }}/>
         )
       })}
 
       {/* ── Spots ── */}
-      {spots.map(spot => {
+      {spots.filter(spot => spot.id !== draftSpot?.id).map(spot => {
         const isRacks = spot.type === 'racks'
         const anySelected = isRacks
           ? selected.some(id => id.startsWith(spot.id + '-'))
@@ -280,7 +293,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
         const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
         return (
-          <g key={spot.id}>
+          <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
+            onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
             <circle cx={spot.x} cy={spot.y} r={6} fill={fill} stroke={stroke} strokeWidth={1.5} />
             <text x={spot.x} y={spot.y - 9} textAnchor="middle" fontSize={6.5} fontFamily="sans-serif" fill="#555" fontWeight="600" style={{ pointerEvents: 'none' }}>
               {spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name}
@@ -782,14 +796,15 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               spots={spots}
               editingSpots={editingSpots}
               onSpotAdded={spot => saveSpots([...spots, spot])}
+              onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
               onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
           ) : (
             <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit} />
           )}
         </div>
 
-        {/* Selected chips (hidden in view-only mode) */}
-        {!viewOnly && (
+        {/* Selected chips (hidden in view-only mode and while editing spots) */}
+        {!viewOnly && !editingSpots && (
           <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {selected.length === 0
               ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
@@ -806,21 +821,23 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           </div>
         )}
 
-        {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          {viewOnly ? (
-            <button className="btn btn-primary" onClick={onClose}>Close</button>
-          ) : (
-            <>
-              <button className="btn" onClick={onClose}>Cancel</button>
-              {canEdit && (
-                <button className="btn btn-primary" onClick={confirm} disabled={saving || selected.length === 0}>
-                  {saving ? 'Saving…' : `Confirm ${selected.length} location${selected.length !== 1 ? 's' : ''}`}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        {/* Footer (hidden while editing spots — that mode manages its own map, not a location selection) */}
+        {!editingSpots && (
+          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            {viewOnly ? (
+              <button className="btn btn-primary" onClick={onClose}>Close</button>
+            ) : (
+              <>
+                <button className="btn" onClick={onClose}>Cancel</button>
+                {canEdit && (
+                  <button className="btn btn-primary" onClick={confirm} disabled={saving || selected.length === 0}>
+                    {saving ? 'Saving…' : `Confirm ${selected.length} location${selected.length !== 1 ? 's' : ''}`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
 
