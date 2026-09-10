@@ -72,6 +72,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   const [newSpotRoom, setNewSpotRoom] = useState('')
   const [draftSpot, setDraftSpot] = useState(null)   // { id?, room_id, x, y, name, type, rackNames, shelvesPerRack } — id present = editing an existing spot
   const [draggingDraft, setDraggingDraft] = useState(false)
+  const [pickMode, setPickMode] = useState(false)
+  const [pendingRoomConfirm, setPendingRoomConfirm] = useState(null)   // { x, y, room_id, room_label }
   const svgRef = useRef(null)
 
   function svgCoords(e) {
@@ -82,6 +84,22 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       x: Math.round((e.clientX - rect.left) * (820 / rect.width)),
       y: Math.round((e.clientY - rect.top)  * (260 / rect.height)),
     }
+  }
+  function findRoomAt(x, y) {
+    return rooms.find(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+  }
+  function onMapClickForPick(e) {
+    if (!pickMode) return
+    const p = svgCoords(e)
+    const room = findRoomAt(p.x, p.y)
+    if (!room) { alert('Please click inside a room.'); return }
+    setPendingRoomConfirm({ x: p.x, y: p.y, room_id: room.id, room_label: room.label.replace('\n', ' ') })
+  }
+  function confirmRoomPick() {
+    if (!pendingRoomConfirm) return
+    setDraftSpot({ id: null, room_id: pendingRoomConfirm.room_id, x: pendingRoomConfirm.x, y: pendingRoomConfirm.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setPendingRoomConfirm(null)
+    setPickMode(false)
   }
   function startDraft() {
     const room = rooms.find(r => r.id === newSpotRoom)
@@ -124,6 +142,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
     const spot = {
       id: draftSpot.id || ('spot_' + Date.now()),
       name: draftSpot.name.trim(),
+      facility: 'ICT',
       room_id: draftSpot.room_id,
       x: draftSpot.x, y: draftSpot.y,
       type: draftSpot.type,
@@ -202,13 +221,27 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
     <>
     {editingSpots && (
       <div style={{ marginBottom: 10, padding: 12, background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
-        {!draftSpot ? (
+        {pendingRoomConfirm ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select value={newSpotRoom} onChange={e => setNewSpotRoom(e.target.value)} style={{ flex: 1 }}>
-              <option value="">— Select room for new spot —</option>
-              {rooms.map(r => <option key={r.id} value={r.id}>{r.label.replace('\n', ' ')}</option>)}
-            </select>
-            <button className="btn btn-sm btn-primary" disabled={!newSpotRoom} onClick={startDraft}>+ Place spot</button>
+            <div style={{ flex: 1, fontSize: 13 }}>This location is in <strong>{pendingRoomConfirm.room_label}</strong> — place the spot here?</div>
+            <button className="btn btn-sm" onClick={() => { setPendingRoomConfirm(null); setPickMode(false) }}>Cancel</button>
+            <button className="btn btn-sm btn-primary" onClick={confirmRoomPick}>Confirm</button>
+          </div>
+        ) : !draftSpot ? (
+          <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={newSpotRoom} onChange={e => setNewSpotRoom(e.target.value)} style={{ flex: 1 }}>
+                <option value="">— Select room for new spot —</option>
+                {rooms.map(r => <option key={r.id} value={r.id}>{r.label.replace('\n', ' ')}</option>)}
+              </select>
+              <button className="btn btn-sm btn-primary" disabled={!newSpotRoom} onClick={startDraft}>+ Place spot</button>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-sm" onClick={() => setPickMode(v => !v)}
+                style={{ background: pickMode ? '#7c3aed' : undefined, color: pickMode ? '#fff' : undefined, borderColor: pickMode ? '#7c3aed' : undefined }}>
+                {pickMode ? '✕ Cancel — tap a room on the map' : '📍 Or tap a location on the map'}
+              </button>
+            </div>
           </div>
         ) : (
           <div>
@@ -262,8 +295,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       </div>
     )}
     <svg ref={svgRef} viewBox="0 0 820 260" width="100%"
-      style={{ minWidth: 600, display: 'block' }}
-      onClick={e => { if (e.target === svgRef.current) setTooltip(null) }}
+      style={{ minWidth: 600, display: 'block', cursor: pickMode ? 'crosshair' : undefined }}
+      onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target === svgRef.current) setTooltip(null) }}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
       onMouseLeave={() => setDraggingDraft(false)}>
@@ -293,25 +326,30 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
         const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
         const label = spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name
-        const pillWidth = Math.max(16, label.length * 3.6 + 8)
+        const pillWidth = Math.max(30, label.length * 7.6 + 14)
         return (
           <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
             onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
-            <rect x={spot.x - pillWidth / 2} y={spot.y - 5} width={pillWidth} height={10} rx={5}
-              fill={fill} stroke={stroke} strokeWidth={1.2} />
-            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={6} fontFamily="sans-serif"
+            <rect x={spot.x - pillWidth / 2} y={spot.y - 10} width={pillWidth} height={20} rx={10}
+              fill={fill} stroke={stroke} strokeWidth={1.5} />
+            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
               fill={isOccupied ? '#fff' : '#3d2a00'} fontWeight="700" style={{ pointerEvents: 'none' }}>
               {label}
             </text>
             {editingSpots && (
               <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
-                <circle cx={spot.x + pillWidth / 2 + 4} cy={spot.y - 5} r={5} fill="#c84b2f"/>
-                <text x={spot.x + pillWidth / 2 + 4} y={spot.y - 1.5} textAnchor="middle" fontSize={7} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+                <circle cx={spot.x + pillWidth / 2 + 6} cy={spot.y - 10} r={7} fill="#c84b2f"/>
+                <text x={spot.x + pillWidth / 2 + 6} y={spot.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
               </g>
             )}
           </g>
         )
       })}
+
+      {/* Pending click-to-place marker, awaiting room confirmation */}
+      {pendingRoomConfirm && (
+        <circle cx={pendingRoomConfirm.x} cy={pendingRoomConfirm.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5} opacity={0.7} />
+      )}
 
       {/* Draft spot being placed */}
       {draftSpot && (
@@ -342,8 +380,76 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
 // ══════════════════════════════════════════════════════════════
 // MPF MAP
 // ══════════════════════════════════════════════════════════════
-function MPFMap({ occupancy, selected, onToggle, canEdit }) {
+function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
+                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted, disableRoomSelect = false }) {
   const [tooltip, setTooltip] = useState(null)
+  const [draftSpot, setDraftSpot] = useState(null)   // { id?, x, y, name, type, rackNames, shelvesPerRack }
+  const [draggingDraft, setDraggingDraft] = useState(false)
+  const [pickMode, setPickMode] = useState(false)
+  const svgRef = useRef(null)
+
+  function svgCoords(e) {
+    const el = svgRef.current
+    if (!el) return { x: 0, y: 0 }
+    const rect = el.getBoundingClientRect()
+    return {
+      x: Math.round((e.clientX - rect.left) * (540 / rect.width)),
+      y: Math.round((e.clientY - rect.top)  * (500 / rect.height)),
+    }
+  }
+  function onMapClickForPick(e) {
+    if (!pickMode) return
+    const p = svgCoords(e)
+    setDraftSpot({ id: null, x: p.x, y: p.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setPickMode(false)
+  }
+  function editSpot(spot) {
+    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'] })
+  }
+  function onDraftMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDraggingDraft(true)
+  }
+  function onSVGMouseMove(e) {
+    if (!draggingDraft) return
+    const p = svgCoords(e)
+    setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
+  }
+  function onSVGMouseUp() {
+    setDraggingDraft(false)
+  }
+  function setRackCount(n) {
+    const count = Math.max(1, parseInt(n) || 1)
+    setDraftSpot(d => {
+      const names = d.rackNames || []
+      return { ...d, rackNames: Array.from({ length: count }, (_, i) => names[i] || `Rack ${i + 1}`) }
+    })
+  }
+  function renameRack(i, value) {
+    setDraftSpot(d => {
+      const next = [...(d.rackNames || [])]
+      next[i] = value
+      return { ...d, rackNames: next }
+    })
+  }
+  function confirmDraft() {
+    if (!draftSpot || !draftSpot.name.trim()) return
+    const spot = {
+      id: draftSpot.id || ('spot_' + Date.now()),
+      name: draftSpot.name.trim(),
+      facility: 'MPF',
+      x: draftSpot.x, y: draftSpot.y,
+      type: draftSpot.type,
+      ...(draftSpot.type === 'racks' ? {
+        rackNames: (draftSpot.rackNames?.length ? draftSpot.rackNames : ['Rack 1']).map((n, i) => n.trim() || `Rack ${i + 1}`),
+        shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
+      } : {}),
+    }
+    if (draftSpot.id) { onSpotUpdated && onSpotUpdated(spot) }
+    else { onSpotAdded && onSpotAdded(spot) }
+    setDraftSpot(null)
+  }
 
   function getFill(id, isShelf) {
     if (selected.includes(id)) return C.selected
@@ -409,8 +515,73 @@ function MPFMap({ occupancy, selected, onToggle, canEdit }) {
   ].flat()
 
   return (
-    <svg viewBox="0 0 540 500" width="100%" style={{ minWidth: 340, maxWidth: 520, display: 'block', margin: '0 auto' }}
-      onClick={e => { if (e.target.tagName === 'svg') setTooltip(null) }}>
+    <>
+    {editingSpots && (
+      <div style={{ marginBottom: 10, padding: 12, background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        {!draftSpot ? (
+          <div>
+            <button className="btn btn-sm" onClick={() => setPickMode(v => !v)}
+              style={{ background: pickMode ? '#7c3aed' : undefined, color: pickMode ? '#fff' : undefined, borderColor: pickMode ? '#7c3aed' : undefined }}>
+              {pickMode ? '✕ Cancel — tap the map to place' : '📍 Tap a location on the map to add a spot'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+              {draftSpot.id ? 'Drag the purple marker to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
+            </div>
+            <div className="grid-2">
+              <div className="field"><label>Spot Name <span style={{ color: '#c84b2f' }}>*</span></label>
+                <input autoFocus value={draftSpot.name} onChange={e => setDraftSpot(d => ({ ...d, name: e.target.value }))} placeholder="e.g. North Rack" />
+              </div>
+              <div className="field"><label>Type</label>
+                <select value={draftSpot.type} onChange={e => setDraftSpot(d => ({ ...d, type: e.target.value }))}>
+                  <option value="pallet">Pallet</option>
+                  <option value="floor">Floor</option>
+                  <option value="racks">Racks</option>
+                </select>
+              </div>
+            </div>
+            {draftSpot.type === 'racks' && (
+              <>
+                <div className="grid-2">
+                  <div className="field"><label>Number of racks</label>
+                    <input type="number" min={1} value={draftSpot.rackNames?.length || 1} onChange={e => setRackCount(e.target.value)} />
+                  </div>
+                  <div className="field"><label>Shelves per rack</label>
+                    <input type="number" min={1} value={draftSpot.shelvesPerRack} onChange={e => setDraftSpot(d => ({ ...d, shelvesPerRack: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Rack names</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(draftSpot.rackNames || []).map((name, i) => (
+                      <input key={i} value={name} onChange={e => renameRack(i, e.target.value)} placeholder={`Rack ${i + 1}`} />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+              {draftSpot.id ? (
+                <button className="btn btn-sm" style={{ color: '#c84b2f' }}
+                  onClick={() => { onSpotDeleted && onSpotDeleted(draftSpot.id); setDraftSpot(null) }}>🗑 Delete spot</button>
+              ) : <span />}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm" onClick={() => setDraftSpot(null)}>Cancel</button>
+                <button className="btn btn-sm btn-primary" disabled={!draftSpot.name.trim()} onClick={confirmDraft}>{draftSpot.id ? 'Save changes' : 'Add spot'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+    <svg ref={svgRef} viewBox="0 0 540 500" width="100%"
+      style={{ minWidth: 340, maxWidth: 520, display: 'block', margin: '0 auto', cursor: pickMode ? 'crosshair' : undefined }}
+      onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target.tagName === 'svg') setTooltip(null) }}
+      onMouseMove={onSVGMouseMove}
+      onMouseUp={onSVGMouseUp}
+      onMouseLeave={() => setDraggingDraft(false)}>
       <rect x="2" y="2" width="536" height="496" fill={C.floor} stroke="#555" strokeWidth="2" rx="2"/>
 
       {/* Shelves */}
@@ -423,8 +594,8 @@ function MPFMap({ occupancy, selected, onToggle, canEdit }) {
             const cx = row.x + row.w / 2
             const cy = row.y + row.h / 2
             return (
-              <g key={row.id} style={{ cursor: occ?.occupied && !selected.includes(row.id) ? 'not-allowed' : 'pointer' }}
-                onClick={() => handleClick(row.id, row.label, cx, cy)}>
+              <g key={row.id} style={{ cursor: (editingSpots || disableRoomSelect) ? 'default' : occ?.occupied && !selected.includes(row.id) ? 'not-allowed' : 'pointer' }}
+                onClick={() => { if (!editingSpots && !disableRoomSelect) handleClick(row.id, row.label, cx, cy) }}>
                 <rect x={row.x} y={row.y} width={row.w} height={row.h} rx="2"
                   fill={getFill(row.id, true)} stroke={getStroke(row.id, true)} strokeWidth={selected.includes(row.id) ? 2 : 1}/>
                 <text x={cx} y={cy + 4} textAnchor="middle" fontSize={9} fontFamily="sans-serif"
@@ -443,8 +614,8 @@ function MPFMap({ occupancy, selected, onToggle, canEdit }) {
         const cx = p.x + p.w / 2
         const cy = p.y + p.h / 2
         return (
-          <g key={p.id} style={{ cursor: occ?.occupied && !selected.includes(p.id) ? 'not-allowed' : 'pointer' }}
-            onClick={() => handleClick(p.id, p.label, cx, cy)}>
+          <g key={p.id} style={{ cursor: (editingSpots || disableRoomSelect) ? 'default' : occ?.occupied && !selected.includes(p.id) ? 'not-allowed' : 'pointer' }}
+            onClick={() => { if (!editingSpots && !disableRoomSelect) handleClick(p.id, p.label, cx, cy) }}>
             <rect x={p.x} y={p.y} width={p.w} height={p.h} rx="2"
               fill={getFill(p.id, false)} stroke={getStroke(p.id, false)} strokeWidth={selected.includes(p.id) ? 2 : 1}/>
             <text x={cx} y={cy + 4} textAnchor="middle" fontSize={9} fontFamily="sans-serif"
@@ -462,8 +633,45 @@ function MPFMap({ occupancy, selected, onToggle, canEdit }) {
       <rect x="155" y="490" width="60" height="6" fill="#777" rx="1"/>
       <rect x="290" y="490" width="60" height="6" fill="#777" rx="1"/>
 
+      {/* ── Spots ── */}
+      {spots.filter(spot => spot.id !== draftSpot?.id).map(spot => {
+        const isRacks = spot.type === 'racks'
+        const anySelected = isRacks
+          ? selected.some(id => id.startsWith(spot.id + '-'))
+          : selected.includes(spot.id)
+        const isOccupied = !isRacks && occupancy[spot.id]?.occupied && !anySelected
+        const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
+        const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
+        const label = spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name
+        const pillWidth = Math.max(30, label.length * 7.6 + 14)
+        return (
+          <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
+            onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
+            <rect x={spot.x - pillWidth / 2} y={spot.y - 10} width={pillWidth} height={20} rx={10}
+              fill={fill} stroke={stroke} strokeWidth={1.5} />
+            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
+              fill={isOccupied ? '#fff' : '#3d2a00'} fontWeight="700" style={{ pointerEvents: 'none' }}>
+              {label}
+            </text>
+            {editingSpots && (
+              <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
+                <circle cx={spot.x + pillWidth / 2 + 6} cy={spot.y - 10} r={7} fill="#c84b2f"/>
+                <text x={spot.x + pillWidth / 2 + 6} y={spot.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+              </g>
+            )}
+          </g>
+        )
+      })}
+
+      {/* Draft spot being placed */}
+      {draftSpot && (
+        <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
+          onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
+      )}
+
       {tooltip && <Tooltip x={tooltip.x} y={tooltip.y} info={tooltip} onClose={() => setTooltip(null)} />}
     </svg>
+    </>
   )
 }
 
@@ -609,16 +817,18 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     const rackMatch = id.match(/^(.+)-R(\d+)-S(\d+)$/)
     if (rackMatch) {
       const spot = spots.find(s => s.id === rackMatch[1])
-      const room = ICT_ROOMS.find(r => r.id === spot?.room_id)
+      const fac = spot?.facility || 'ICT'
+      const room = fac === 'ICT' ? ICT_ROOMS.find(r => r.id === spot?.room_id) : null
       const rackName = spot?.rackNames?.[parseInt(rackMatch[2]) - 1] || `Rack ${rackMatch[2]}`
       const label = spot ? `${spot.name} · ${rackName} · Shelf ${rackMatch[3]}` : id
-      return { location: room?.label || 'ICT Building', detail: label, facility: 'ICT' }
+      return { location: fac === 'ICT' ? (room?.label || 'ICT Building') : 'MPF', detail: label, facility: fac }
     }
     // Spot itself (pallet/floor — single slot)
     const spot = spots.find(s => s.id === id)
     if (spot) {
-      const room = ICT_ROOMS.find(r => r.id === spot.room_id)
-      return { location: room?.label || 'ICT Building', detail: spot.name, facility: 'ICT' }
+      const fac = spot.facility || 'ICT'
+      const room = fac === 'ICT' ? ICT_ROOMS.find(r => r.id === spot.room_id) : null
+      return { location: fac === 'ICT' ? (room?.label || 'ICT Building') : 'MPF', detail: spot.name, facility: fac }
     }
     // Custom plan zones
     for (const plan of customPlans) {
@@ -645,11 +855,15 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     }
   }
 
+  // Lab managers/admins can override an already-occupied slot (e.g. to fix a
+  // stale reservation); regular lab users are blocked from touching one.
+  const isManagerOrAdmin = session?.role === 'admin' || session?.role === 'user'
+  const spotsForFacility = spots.filter(s => (s.facility || 'ICT') === (facility === 'MPF' ? 'MPF' : 'ICT'))
   const pickedSpot = spots.find(s => s.id === pickedSpotId) || null
   const canConfirmAddStorage = pickedSpot && (
     pickedSpot.type === 'racks'
       ? !!pickedRack && !!pickedShelf
-      : !occupancy[pickedSpot.id]?.occupied
+      : (isManagerOrAdmin || !occupancy[pickedSpot.id]?.occupied)
   )
 
   function confirmAddStorage() {
@@ -747,14 +961,14 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)', gap: 10 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{allowLayoutEdit ? '🗺️ Manage ICT Building Floor Plan' : viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{allowLayoutEdit ? '🗺️ Manage Floor Plan Spots' : viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{allowLayoutEdit ? 'Create and reposition spots for lab managers and lab users to reserve' : viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {!allowLayoutEdit && !viewOnly && canEdit && facility === 'ICT' && !editingSpots && (
+            {!allowLayoutEdit && !viewOnly && canEdit && (facility === 'ICT' || facility === 'MPF') && !editingSpots && (
               <button className="btn btn-sm" onClick={() => setShowAddStorage(true)} style={{ fontSize: 13 }}>📦 Add storage to spot</button>
             )}
-            {canEditLayout && facility === 'ICT' && (
+            {canEditLayout && (facility === 'ICT' || facility === 'MPF') && (
               <button className="btn btn-sm" onClick={() => setEditingSpots(v => !v)}
                 style={{ fontSize: 13, background: editingSpots ? '#7c3aed' : undefined, color: editingSpots ? '#fff' : undefined, borderColor: editingSpots ? '#7c3aed' : undefined }}>
                 {editingSpots ? '✓ Done' : '✏️ Edit Spots'}
@@ -808,7 +1022,13 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
               onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
           ) : (
-            <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit} />
+            <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
+              spots={spots}
+              editingSpots={editingSpots}
+              disableRoomSelect={allowLayoutEdit}
+              onSpotAdded={spot => saveSpots([...spots, spot])}
+              onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
+              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
           )}
         </div>
 
@@ -830,12 +1050,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           </div>
         )}
 
-        {/* Footer — layout-edit mode gets a plain Close; normal picking is hidden while actively editing spots */}
-        {allowLayoutEdit ? (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" onClick={onClose}>Close</button>
-          </div>
-        ) : !editingSpots && (
+        {/* Footer — omitted entirely in layout-edit mode (the header's own ✕ Close covers it); normal picking is hidden while actively editing spots */}
+        {!allowLayoutEdit && !editingSpots && (
           <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             {viewOnly ? (
               <button className="btn btn-primary" onClick={onClose}>Close</button>
@@ -861,7 +1077,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <div style={{ fontWeight: 700, fontSize: 16 }}>📦 Add storage to spot</div>
             <button className="btn btn-sm" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>✕ Close</button>
           </div>
-          {spots.length === 0 ? (
+          {spotsForFacility.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--text3)', padding: '10px 0' }}>No spots yet — ask your lab manager to create one via "Edit Spots".</div>
           ) : (
             <>
@@ -869,9 +1085,9 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                 <label>Spot</label>
                 <select value={pickedSpotId} onChange={e => { setPickedSpotId(e.target.value); setPickedRack(''); setPickedShelf('') }}>
                   <option value="">— Select a spot —</option>
-                  {spots.map(s => {
-                    const room = ICT_ROOMS.find(r => r.id === s.room_id)
-                    return <option key={s.id} value={s.id}>{room?.label || s.room_id} — {s.name}</option>
+                  {spotsForFacility.map(s => {
+                    const room = (s.facility || 'ICT') === 'ICT' ? ICT_ROOMS.find(r => r.id === s.room_id) : null
+                    return <option key={s.id} value={s.id}>{(s.facility || 'ICT') === 'ICT' ? (room?.label || s.room_id) : 'MPF'} — {s.name}</option>
                   })}
                 </select>
               </div>
@@ -889,7 +1105,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                       {pickedRack && Array.from({ length: pickedSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
                         const slotId = `${pickedSpot.id}-R${pickedRack}-S${n}`
                         const occ = occupancy[slotId]?.occupied
-                        return <option key={n} value={n} disabled={occ}>Shelf {n}{occ ? ' (occupied)' : ''}</option>
+                        return <option key={n} value={n} disabled={occ && !isManagerOrAdmin}>Shelf {n}{occ ? ' (occupied)' : ''}</option>
                       })}
                     </select>
                   </div>
@@ -897,7 +1113,9 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               )}
               {pickedSpot && pickedSpot.type !== 'racks' && (
                 occupancy[pickedSpot.id]?.occupied
-                  ? <div style={{ fontSize: 13, color: '#c84b2f', padding: '8px 0' }}>This spot is already occupied.</div>
+                  ? <div style={{ fontSize: 13, color: '#c84b2f', padding: '8px 0' }}>
+                      This spot is already occupied.{isManagerOrAdmin ? ' As a lab manager/admin you can still reassign it.' : ''}
+                    </div>
                   : <div style={{ fontSize: 13, color: 'var(--text3)', padding: '8px 0' }}>This is a single-slot spot — no further selection needed.</div>
               )}
             </>
