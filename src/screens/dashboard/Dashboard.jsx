@@ -34,7 +34,6 @@ function getAllModulesForStudent() {
   return [
     { key: 'projects',   screen: 'projects',   label: 'Project & Material', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
     { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'barcode',    screen: 'barcode',    label: 'QR Scan',           sub: 'Scan & look up lab materials',     icon: '📷', bg: '#e0f7fa', color: '#00796b' },
     { key: 'training',   screen: 'training',   label: 'Training Records',  sub: 'Safety steps & certifications',    icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
     { key: 'mileage',    screen: null,         label: 'Mileage Form',      sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
     { key: 'barcodeqr',  screen: 'barcodeqr',  label: 'QR Labels',         sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },

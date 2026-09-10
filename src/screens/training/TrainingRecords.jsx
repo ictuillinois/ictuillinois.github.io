@@ -3,7 +3,7 @@ import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import React from 'react'
 import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './TrainingSchedule'
-import SafetyTab from '../labsafety/LabSafety'
+import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -12,18 +12,30 @@ import { buildEmailHtml } from '../../lib/emailTemplate'
 
 async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
   if (!orgId) return
-  const { data: managers } = await sb.from('users').select('id')
+  const { data: managers } = await sb.from('users').select('id, email, phone')
     .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
   if (!managers?.length) return
-  const { error } = await sb.from('notifications').insert(managers.map(m => ({
-    user_id: m.id,
-    type: 'training_submitted',
-    title: `${uploaderName} uploaded a new certificate`,
-    body: 'Review and approve it in Training Records.',
-    read: false,
-  })))
-  if (error) console.error('[notif] manager cert-submitted notify FAILED:', error.message, error.code)
-  else console.log('[notif] cert-submitted notifs sent to', managers.length, 'managers')
+  const title = `${uploaderName} uploaded a new certificate`
+  const body  = 'Review and approve it in Training Records.'
+  for (const m of managers) {
+    try {
+      const { data: prefs } = await sb.from('notification_prefs')
+        .select('training_submitted, email_training_submitted').eq('user_id', m.id).maybeSingle()
+      if (!prefs || prefs.training_submitted !== false) {
+        const { error } = await sb.from('notifications').insert({ user_id: m.id, type: 'training_submitted', title, body, read: false })
+        if (error) console.error('[notif] cert-submitted insert failed for', m.id, error.message, error.code)
+      }
+      if (prefs?.email_training_submitted === true) {
+        const toEmail = m.phone || m.email
+        if (toEmail) {
+          const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile' })
+          const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: m.id, type: 'training_submitted' })
+          if (!emailErr) fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+          else console.warn('[notif] email queue insert failed:', emailErr.message)
+        }
+      }
+    } catch (e) { console.error('[notif] manager notify failed for', m.id, e) }
+  }
 }
 
 async function sendTrainingApprovedNotif(userId, approverName) {
@@ -430,7 +442,14 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
                 <tbody>
                   {userRecs.map(certRec => (
                     <tr key={certRec.id}>
-                      <td style={{ fontWeight: 500 }}>{certRec.certificate_name || 'Certificate'}</td>
+                      <td style={{ fontWeight: 500 }}>
+                        {certRec.certificate_name || 'Certificate'}
+                        {SAFETY_DOC_NAMES.has(certRec.certificate_name) && (
+                          <div style={{ fontWeight: 400, fontSize: 11, color: '#c84b2f', marginTop: 2, maxWidth: 220, whiteSpace: 'normal' }}>
+                            ⚠️ Approving here doesn't grant access — final approval happens in the Safety tab.
+                          </div>
+                        )}
+                      </td>
                       <td>
                         {certRec.certificate_url
                           ? <a href={certRec.certificate_url} target="_blank" rel="noopener" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>📄 View</a>

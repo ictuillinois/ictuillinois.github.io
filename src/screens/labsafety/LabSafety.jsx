@@ -4,8 +4,44 @@ import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { jsPDF } from 'jspdf'
+import { buildEmailHtml } from '../../lib/emailTemplate'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
+
+// Notify every lab manager/admin in the org that a Safety step needs review —
+// in-app (respecting notification_prefs) and by email when opted in. Every
+// Safety-step submission path (Steps 1-4) must call this; before this fix
+// only Step 4 notified managers at all, so uploads from Steps 1-3 (the
+// certificates managers actually need to approve) never surfaced anywhere.
+async function notifyManagersOfSafetySubmission(orgId, uploaderName, stepLabel) {
+  if (!orgId) return
+  try {
+    const { data: managers } = await sb.from('users').select('id, email, phone')
+      .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
+    if (!managers?.length) return
+    const title = `${uploaderName} submitted ${stepLabel}`
+    const body  = 'Review and approve it in the Safety tab. Approving the document in Training Records does not grant home page access — the Safety tab approval is what unlocks it.'
+    for (const m of managers) {
+      try {
+        const { data: prefs } = await sb.from('notification_prefs')
+          .select('training_submitted, email_training_submitted').eq('user_id', m.id).maybeSingle()
+        if (!prefs || prefs.training_submitted !== false) {
+          const { error } = await sb.from('notifications').insert({ user_id: m.id, type: 'safety_step_submitted', title, body, read: false })
+          if (error) console.error('[notif] safety-submitted insert failed for', m.id, error.message)
+        }
+        if (prefs?.email_training_submitted === true) {
+          const toEmail = m.phone || m.email
+          if (toEmail) {
+            const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'Go to Safety tab →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile' })
+            const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: m.id, type: 'safety_step_submitted' })
+            if (!emailErr) fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+            else console.warn('[notif] email queue insert failed:', emailErr.message)
+          }
+        }
+      } catch (e) { console.error('[notif] manager notify failed for', m.id, e) }
+    }
+  } catch (e) { console.error('[notif] notifyManagersOfSafetySubmission failed:', e) }
+}
 
 async function autoSaveToDocumentsTab(userId, certUrl, certName, approved = false) {
   if (!userId || !certUrl) return
@@ -28,6 +64,11 @@ const STEP_DOC_NAMES = {
   2: ['ICT Health and Safety Program Part II — Lab Users'],
   3: ['ICT Safety Rules — Compliance Form (Appendix D)', 'DRS Online Training — Part 1 Certificate', 'DRS Online Training — Part 2 Certificate'],
 }
+
+// Documents auto-saved from the Safety tab (Steps 1-3) — approving these in
+// Training Records only flags the file, it does NOT grant home page access.
+// Final approval only happens via the Safety tab's own "Approve Step N".
+export const SAFETY_DOC_NAMES = new Set(Object.values(STEP_DOC_NAMES).flat())
 
 async function setDocApproval(userId, stepNumber, approved) {
   const names = STEP_DOC_NAMES[stepNumber]
@@ -505,6 +546,7 @@ function PDFSafetyContent({
       }, { onConflict: 'user_id,step_number' })
 
       await autoSaveToDocumentsTab(user.id, certUrl, certTitle)
+      if (!autoUpdate) notifyManagersOfSafetySubmission(session.organizationId, fullName, `ICT Safety ${partLabel}`)
 
       if (!autoUpdate) doc.save(`ICT-Safety-${partLabel.replace(/\s+/g, '-')}-${fullName.replace(/\s+/g, '-')}.pdf`)
       if (autoUpdate) localStorage.setItem(certV2Key, '1')
@@ -576,6 +618,11 @@ function PDFSafetyContent({
             {stepRow?.submitted_at && (
               <div style={{ fontSize: 12, color: '#085041' }}>
                 Submitted: {new Date(stepRow.submitted_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
+            )}
+            {!isApproved && (
+              <div style={{ fontSize: 12, color: '#085041', marginTop: 4 }}>
+                Already sent to your lab manager — no need to submit it again.
               </div>
             )}
           </div>
@@ -950,6 +997,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
   async function saveProgress(updates) {
     const urls = { form: formUrl, ext1: ext1Url, ext2: ext2Url, ...updates }
     const allDone = !!urls.form && !!urls.ext1 && !!urls.ext2
+    const wasAllDoneBefore = !!savedUrls.form && !!savedUrls.ext1 && !!savedUrls.ext2
     const submittedAt = allDone ? (stepRow?.submitted_at || new Date().toISOString()) : (stepRow?.submitted_at || null)
     const payload = {
       user_id: user.id,
@@ -960,6 +1008,10 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       submitted_at: submittedAt,
     }
     await sb.from('lab_safety_progress').upsert(payload, { onConflict: 'user_id,step_number' })
+    if (allDone && !wasAllDoneBefore) {
+      const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
+      notifyManagersOfSafetySubmission(session.organizationId, fullName, 'ICT Safety Compliance Documents')
+    }
     onCertGenerated({ certificate_url: JSON.stringify(urls), submitted_at: submittedAt })
   }
 
@@ -1158,7 +1210,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       {isSubmitted && (
         <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
           <span style={{ fontWeight: 700 }}>✓ All Step 3 documents submitted — awaiting lab manager approval.</span><br />
-          All certificates have been saved to your <strong>Training Records → Documents tab</strong>.
+          All certificates have been saved to your <strong>Training Records → Documents tab</strong>. Already sent to your lab manager — no need to submit them again.
         </div>
       )}
 
@@ -1401,21 +1453,9 @@ function Step4VideoContent({ user, isManager }) {
       return
     }
     setConfirmed(true)
-    if (orgId && userId) {
-      try {
-        const { data: managers } = await sb.from('users').select('id')
-          .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true).neq('id', userId)
-        if (managers?.length) {
-          const name = user?.username || 'A lab user'
-          await sb.from('notifications').insert(managers.map(m => ({
-            user_id: m.id,
-            title: `${name} submitted safety training`,
-            body: `${name} confirmed watching the ICT safety video (Step 4). Please review and approve.`,
-            type: 'safety_step_submitted',
-            read: false,
-          })))
-        }
-      } catch (e) { /* notification failure doesn't block step completion */ }
+    if (orgId) {
+      const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
+      notifyManagersOfSafetySubmission(orgId, fullName, 'ICT Safety Training Video confirmation (Step 4)')
     }
     setSaving(false)
   }
