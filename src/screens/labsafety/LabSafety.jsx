@@ -412,14 +412,14 @@ function PDFSafetyContent({
       }
 
       // Border (orange frame)
-      doc.setDrawColor(204, 102, 0)
+      doc.setDrawColor(255, 140, 0)
       doc.setLineWidth(3)
       doc.rect(8, 8, W - 16, H - 16)
       doc.setLineWidth(0.8)
       doc.rect(12, 12, W - 24, H - 24)
 
       // Corner circles
-      doc.setFillColor(204, 102, 0)
+      doc.setFillColor(255, 140, 0)
       ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 4, 'F'))
 
       // Header band
@@ -441,11 +441,11 @@ function PDFSafetyContent({
 
       doc.setFont('times', 'bold')
       doc.setFontSize(30)
-      doc.setTextColor(204, 102, 0)
+      doc.setTextColor(255, 140, 0)
       doc.text(fullName, W / 2, 82, { align: 'center' })
 
       const nameW = doc.getTextWidth(fullName)
-      doc.setDrawColor(204, 102, 0)
+      doc.setDrawColor(255, 140, 0)
       doc.setLineWidth(0.6)
       doc.line(W / 2 - nameW / 2 - 8, 86, W / 2 + nameW / 2 + 8, 86)
 
@@ -475,7 +475,7 @@ function PDFSafetyContent({
       doc.text('Note: we will remind you for the recertificate next fall semester.', W / 2, 156, { align: 'center' })
 
       // Footer band
-      doc.setFillColor(204, 102, 0)
+      doc.setFillColor(255, 140, 0)
       doc.rect(8, H - 22, W - 16, 14, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFont('times', 'normal')
