@@ -67,7 +67,7 @@ function Tooltip({ x, y, info, onClose }) {
 // ICT BUILDING MAP
 // ══════════════════════════════════════════════════════════════
 function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
-                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted, disableRoomSelect = false }) {
+                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted, onSpotView, disableRoomSelect = false }) {
   const [tooltip, setTooltip] = useState(null)
   const [newSpotRoom, setNewSpotRoom] = useState('')
   const [draftSpot, setDraftSpot] = useState(null)   // { id?, room_id, x, y, name, type, rackNames, shelvesPerRack } — id present = editing an existing spot
@@ -79,6 +79,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   const dragSpotIdRef = useRef(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragMovedRef = useRef(false)
+  const rotatingRef = useRef(false)
 
   function svgCoords(e) {
     const el = svgRef.current
@@ -88,6 +89,11 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       x: Math.round((e.clientX - rect.left) * (820 / rect.width)),
       y: Math.round((e.clientY - rect.top)  * (260 / rect.height)),
     }
+  }
+  function onRotationHandleMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    rotatingRef.current = true
   }
   function findRoomAt(x, y) {
     return rooms.find(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
@@ -129,12 +135,23 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
     setLiveDragPos({ id: spot.id, x: spot.x, y: spot.y })
   }
   function onSpotClick(e, spot) {
-    if (!editingSpots) return
     e.stopPropagation()
-    if (!dragMovedRef.current) editSpot(spot)
-    dragMovedRef.current = false
+    if (editingSpots) {
+      if (!dragMovedRef.current) editSpot(spot)
+      dragMovedRef.current = false
+      return
+    }
+    // Everyone can see what's stored where and who's in charge — just can't edit/move the spot.
+    onSpotView && onSpotView(spot.id)
   }
   function onSVGMouseMove(e) {
+    if (rotatingRef.current && draftSpot) {
+      const p = svgCoords(e)
+      const dx = p.x - draftSpot.x, dy = p.y - draftSpot.y
+      const angle = Math.round((((Math.atan2(dx, -dy) * 180 / Math.PI) % 360) + 360) % 360)
+      setDraftSpot(d => d && ({ ...d, rotation: angle }))
+      return
+    }
     if (draggingDraft) {
       const p = svgCoords(e)
       setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
@@ -147,6 +164,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
     }
   }
   function onSVGMouseUp() {
+    rotatingRef.current = false
     setDraggingDraft(false)
     if (dragSpotIdRef.current) {
       const id = dragSpotIdRef.current
@@ -302,10 +320,9 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
             <div className="field">
               <label>Label rotation</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) - 15 + 360) % 360 }))}>⟲ -15°</button>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>↻ Drag the purple handle above the spot on the map to rotate its label</span>
                 <input type="number" value={draftSpot.rotation || 0} onChange={e => setDraftSpot(d => ({ ...d, rotation: e.target.value }))}
-                  style={{ width: 70, textAlign: 'center' }} />
-                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) + 15) % 360 }))}>⟳ +15°</button>
+                  style={{ width: 60, textAlign: 'center', marginLeft: 'auto' }} />
               </div>
             </div>
             {draftSpot.type === 'racks' && (
@@ -347,7 +364,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target === svgRef.current) setTooltip(null) }}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
-      onMouseLeave={() => { setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
+      onMouseLeave={() => { rotatingRef.current = false; setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
       <rect x="2" y="2" width="816" height="256" fill="#f5f4f0" stroke="#555" strokeWidth="2" rx="2"/>
       <rect x="6" y="148" width="810" height="8" fill="#ddd"/>
 
@@ -381,7 +398,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         return (
           <g key={spot.id}
             transform={rotation ? `rotate(${rotation} ${pos.x} ${pos.y})` : undefined}
-            style={{ cursor: editingSpots ? 'grab' : 'default' }}
+            style={{ cursor: editingSpots ? 'grab' : 'pointer' }}
             onMouseDown={e => onSpotMouseDown(e, spot)}
             onClick={e => onSpotClick(e, spot)}>
             <rect x={pos.x - pillWidth / 2} y={pos.y - 10} width={pillWidth} height={20} rx={10}
@@ -410,6 +427,22 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
           onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
       )}
+
+      {/* Rotation handle — drag in a circle around the spot to set its label angle */}
+      {draftSpot && (() => {
+        const rot = draftSpot.rotation || 0
+        const dist = 24
+        const hx = draftSpot.x + dist * Math.sin(rot * Math.PI / 180)
+        const hy = draftSpot.y - dist * Math.cos(rot * Math.PI / 180)
+        return (
+          <g>
+            <line x1={draftSpot.x} y1={draftSpot.y} x2={hx} y2={hy} stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="2,2" style={{ pointerEvents: 'none' }} />
+            <circle cx={hx} cy={hy} r={8} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
+              onMouseDown={onRotationHandleMouseDown} style={{ cursor: 'grab' }} />
+            <text x={hx} y={hy + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>↻</text>
+          </g>
+        )
+      })()}
 
       {/* Room labels — rendered last so they appear above cooler boxes */}
       {rooms.map(r => {
@@ -445,6 +478,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
   const dragSpotIdRef = useRef(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragMovedRef = useRef(false)
+  const rotatingRef = useRef(false)
 
   function svgCoords(e) {
     const el = svgRef.current
@@ -454,6 +488,11 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
       x: Math.round((e.clientX - rect.left) * (540 / rect.width)),
       y: Math.round((e.clientY - rect.top)  * (500 / rect.height)),
     }
+  }
+  function onRotationHandleMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    rotatingRef.current = true
   }
   function onMapClickForPick(e) {
     if (!pickMode) return
@@ -479,12 +518,23 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
     setLiveDragPos({ id: spot.id, x: spot.x, y: spot.y })
   }
   function onSpotClick(e, spot) {
-    if (!editingSpots) return
     e.stopPropagation()
-    if (!dragMovedRef.current) editSpot(spot)
-    dragMovedRef.current = false
+    if (editingSpots) {
+      if (!dragMovedRef.current) editSpot(spot)
+      dragMovedRef.current = false
+      return
+    }
+    // Everyone can see what's stored where and who's in charge — just can't edit/move the spot.
+    onSpotView && onSpotView(spot.id)
   }
   function onSVGMouseMove(e) {
+    if (rotatingRef.current && draftSpot) {
+      const p = svgCoords(e)
+      const dx = p.x - draftSpot.x, dy = p.y - draftSpot.y
+      const angle = Math.round((((Math.atan2(dx, -dy) * 180 / Math.PI) % 360) + 360) % 360)
+      setDraftSpot(d => d && ({ ...d, rotation: angle }))
+      return
+    }
     if (draggingDraft) {
       const p = svgCoords(e)
       setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
@@ -497,6 +547,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
     }
   }
   function onSVGMouseUp() {
+    rotatingRef.current = false
     setDraggingDraft(false)
     if (dragSpotIdRef.current) {
       const id = dragSpotIdRef.current
@@ -638,10 +689,9 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
             <div className="field">
               <label>Label rotation</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) - 15 + 360) % 360 }))}>⟲ -15°</button>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>↻ Drag the purple handle above the spot on the map to rotate its label</span>
                 <input type="number" value={draftSpot.rotation || 0} onChange={e => setDraftSpot(d => ({ ...d, rotation: e.target.value }))}
-                  style={{ width: 70, textAlign: 'center' }} />
-                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) + 15) % 360 }))}>⟳ +15°</button>
+                  style={{ width: 60, textAlign: 'center', marginLeft: 'auto' }} />
               </div>
             </div>
             {draftSpot.type === 'racks' && (
@@ -683,7 +733,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
       onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target.tagName === 'svg') setTooltip(null) }}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
-      onMouseLeave={() => { setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
+      onMouseLeave={() => { rotatingRef.current = false; setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
       <rect x="2" y="2" width="536" height="496" fill={C.floor} stroke="#555" strokeWidth="2" rx="2"/>
 
       {/* Shelves */}
@@ -752,7 +802,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
         return (
           <g key={spot.id}
             transform={rotation ? `rotate(${rotation} ${pos.x} ${pos.y})` : undefined}
-            style={{ cursor: editingSpots ? 'grab' : 'default' }}
+            style={{ cursor: editingSpots ? 'grab' : 'pointer' }}
             onMouseDown={e => onSpotMouseDown(e, spot)}
             onClick={e => onSpotClick(e, spot)}>
             <rect x={pos.x - pillWidth / 2} y={pos.y - 10} width={pillWidth} height={20} rx={10}
@@ -776,6 +826,22 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
         <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
           onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
       )}
+
+      {/* Rotation handle — drag in a circle around the spot to set its label angle */}
+      {draftSpot && (() => {
+        const rot = draftSpot.rotation || 0
+        const dist = 24
+        const hx = draftSpot.x + dist * Math.sin(rot * Math.PI / 180)
+        const hy = draftSpot.y - dist * Math.cos(rot * Math.PI / 180)
+        return (
+          <g>
+            <line x1={draftSpot.x} y1={draftSpot.y} x2={hx} y2={hy} stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="2,2" style={{ pointerEvents: 'none' }} />
+            <circle cx={hx} cy={hy} r={8} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
+              onMouseDown={onRotationHandleMouseDown} style={{ cursor: 'grab' }} />
+            <text x={hx} y={hy + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>↻</text>
+          </g>
+        )
+      })()}
 
       {tooltip && <Tooltip x={tooltip.x} y={tooltip.y} info={tooltip} onClose={() => setTooltip(null)} />}
     </svg>
@@ -851,6 +917,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [spots, setSpots] = useState([])
   const [editingSpots, setEditingSpots] = useState(!!allowLayoutEdit)
   const [showAddStorage, setShowAddStorage] = useState(false)
+  const [viewSpotId, setViewSpotId] = useState('')
   const [pickedSpotId, setPickedSpotId] = useState('')
   const [pickedRack, setPickedRack] = useState('')
   const [pickedShelf, setPickedShelf] = useState('')
@@ -892,6 +959,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         occupied: loc.occupied,
         project_name: loc.project_name,
         material_type: loc.material_type,
+        occupied_by: loc.occupied_by,
         db_id: loc.id,
       }
     })
@@ -913,11 +981,11 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     setLoading(false)
   }
 
-  function toggleLocation(id, label, fac) {
+  // Picking a location now saves and closes immediately — single slot,
+  // no separate staging + "Confirm N locations" step.
+  function pickLocation(id) {
     if (!canEdit) return
-    setSelected(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    )
+    saveLocations([id])
   }
 
   function getLocationDetail(id) {
@@ -968,6 +1036,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const isManagerOrAdmin = session?.role === 'admin' || session?.role === 'user'
   const spotsForFacility = spots.filter(s => (s.facility || 'ICT') === (facility === 'MPF' ? 'MPF' : 'ICT'))
   const pickedSpot = spots.find(s => s.id === pickedSpotId) || null
+  const viewSpot = spots.find(s => s.id === viewSpotId) || null
   const canConfirmAddStorage = pickedSpot && (
     pickedSpot.type === 'racks'
       ? !!pickedRack && !!pickedShelf
@@ -1053,9 +1122,6 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     setSaving(false)
   }
 
-  async function confirm() {
-    await saveLocations(selected)
-  }
 
   // Legend
   const legend = [
@@ -1124,63 +1190,27 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text3)', fontSize: 14 }}>No floor plans available. Ask your admin to add a floor plan.</div>
           ) : facility.startsWith('custom_') ? (() => {
             const plan = customPlans.find(p => `custom_${p.id}` === facility)
-            return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={toggleLocation} occupancy={occupancy} canEdit={!viewOnly && canEdit} /> : null
+            return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={pickLocation} occupancy={occupancy} canEdit={!viewOnly && canEdit} /> : null
           })() : facility === 'ICT' ? (
-            <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
+            <ICTMap occupancy={occupancy} selected={selected} onToggle={pickLocation} canEdit={!viewOnly && canEdit}
               spots={spots}
               editingSpots={editingSpots}
               disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
-              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
+              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))}
+              onSpotView={id => setViewSpotId(id)} />
           ) : (
-            <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
+            <MPFMap occupancy={occupancy} selected={selected} onToggle={pickLocation} canEdit={!viewOnly && canEdit}
               spots={spots}
               editingSpots={editingSpots}
               disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
-              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
+              onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))}
+              onSpotView={id => setViewSpotId(id)} />
           )}
         </div>
-
-        {/* Selected chips (hidden in view-only mode, layout-edit mode, while editing spots,
-            and on the ICT/MPF tabs — those facilities are spot-only now: "Add storage to
-            spot" saves immediately, there is nothing left here to confirm) */}
-        {!viewOnly && !allowLayoutEdit && !editingSpots && facility !== 'ICT' && facility !== 'MPF' && (
-          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {selected.length === 0
-              ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
-              : selected.map(id => {
-                  const det = getLocationDetail(id)
-                  return (
-                    <span key={id} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '4px 10px 4px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      📍 {det.detail !== id ? det.detail : id.replace('ICT-', '').replace('MPF-', 'MPF ')}
-                      {canEdit && <button onClick={() => toggleLocation(id, '', '')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>}
-                    </span>
-                  )
-                })
-            }
-          </div>
-        )}
-
-        {/* Footer — omitted entirely in layout-edit mode (the header's own ✕ Close covers it); normal picking is hidden while actively editing spots */}
-        {!allowLayoutEdit && !editingSpots && (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            {viewOnly ? (
-              <button className="btn btn-primary" onClick={onClose}>Close</button>
-            ) : (
-              <>
-                <button className="btn" onClick={onClose}>Cancel</button>
-                {canEdit && (
-                  <button className="btn btn-primary" onClick={confirm} disabled={saving || selected.length === 0}>
-                    {saving ? 'Saving…' : `Confirm ${selected.length} location${selected.length !== 1 ? 's' : ''}`}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
 
@@ -1238,6 +1268,57 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <button className="btn" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>Cancel</button>
             <button className="btn btn-primary" onClick={confirmAddStorage} disabled={!canConfirmAddStorage}>Confirm</button>
           </div>
+        </div>
+      </div>
+    )}
+
+    {viewSpot && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>ℹ️ {viewSpot.name}</div>
+            <button className="btn btn-sm" onClick={() => setViewSpotId('')}>✕ Close</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+            {(viewSpot.facility || 'ICT') === 'ICT' ? (ICT_ROOMS.find(r => r.id === viewSpot.room_id)?.label || 'ICT Building') : 'MPF'}
+          </div>
+          {viewSpot.type === 'racks' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+              {(viewSpot.rackNames || []).map((rackName, ri) => (
+                <div key={ri}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 6 }}>{rackName}</div>
+                  {Array.from({ length: viewSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
+                    const slotId = `${viewSpot.id}-R${ri + 1}-S${n}`
+                    const occ = occupancy[slotId]
+                    return (
+                      <div key={n} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '5px 8px', borderRadius: 6, background: occ?.occupied ? '#fdecea' : 'var(--row-a)', marginTop: 3 }}>
+                        <span style={{ color: 'var(--text2)' }}>Shelf {n}</span>
+                        {occ?.occupied ? (
+                          <span style={{ textAlign: 'right' }}>
+                            <span style={{ color: '#a32d2d', fontWeight: 600 }}>{occ.project_name || 'Occupied'}</span>
+                            {occ.material_type && <span style={{ color: 'var(--text3)' }}> · {occ.material_type}</span>}
+                            {occ.occupied_by && <span style={{ display: 'block', color: 'var(--text3)' }}>In charge: {occ.occupied_by}</span>}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text3)' }}>Available</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          ) : (
+            occupancy[viewSpot.id]?.occupied ? (
+              <div style={{ fontSize: 13, padding: '8px 0' }}>
+                <div><strong style={{ color: '#a32d2d' }}>{occupancy[viewSpot.id].project_name || 'Occupied'}</strong></div>
+                {occupancy[viewSpot.id].material_type && <div style={{ color: 'var(--text3)' }}>{occupancy[viewSpot.id].material_type}</div>}
+                {occupancy[viewSpot.id].occupied_by && <div style={{ color: 'var(--text3)' }}>In charge: {occupancy[viewSpot.id].occupied_by}</div>}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text3)', padding: '8px 0' }}>Available — nothing stored here right now.</div>
+            )
+          )}
         </div>
       </div>
     )}
