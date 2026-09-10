@@ -647,6 +647,7 @@ function DashboardIconsPanel({ session }) {
       <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>No icons assigned yet</div>
       <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>Your lab manager hasn't assigned dashboard icons for you yet.</div>
+      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 10, fontFamily: 'var(--mono)' }}>user_id: {session?.userId}</div>
     </div>
   )
 

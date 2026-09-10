@@ -86,6 +86,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Dashboard icons for {name}</div>
               <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Select which icons this lab user is allowed to choose from on their dashboard.</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--mono)' }}>user_id: {student.id}</div>
             </div>
             <button onClick={() => onClose(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: '4px 8px' }}>✕</button>
           </div>
