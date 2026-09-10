@@ -373,8 +373,9 @@ function PDFSafetyContent({
       const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
       const dateStr   = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-      // ICT logo as faint watermark
+      // ICT logo as a faint full-page background
       let logoDataUrl = null
+      let logoW = 0, logoH = 0
       try {
         const logoRes = await fetch('/ict-logo.png')
         if (logoRes.ok) {
@@ -394,6 +395,8 @@ function PDFSafetyContent({
             ctx.globalAlpha = 0.07
             ctx.drawImage(img, 0, 0)
             logoDataUrl = cvs.toDataURL('image/png')
+            logoW = img.naturalWidth
+            logoH = img.naturalHeight
           }
           URL.revokeObjectURL(logoObjUrl)
         }
@@ -406,20 +409,21 @@ function PDFSafetyContent({
       doc.setFillColor(255, 255, 255)
       doc.rect(0, 0, W, H, 'F')
 
-      if (logoDataUrl) {
-        const lSize = 90
-        doc.addImage(logoDataUrl, 'PNG', W / 2 - lSize / 2, H / 2 - lSize / 2 + 8, lSize, lSize)
+      if (logoDataUrl && logoW && logoH) {
+        const scale = Math.max(W / logoW, H / logoH)
+        const drawW = logoW * scale, drawH = logoH * scale
+        doc.addImage(logoDataUrl, 'PNG', (W - drawW) / 2, (H - drawH) / 2, drawW, drawH)
       }
 
-      // Border
-      doc.setDrawColor(29, 158, 117)
+      // Border (gray frame)
+      doc.setDrawColor(110, 110, 110)
       doc.setLineWidth(3)
       doc.rect(8, 8, W - 16, H - 16)
       doc.setLineWidth(0.8)
       doc.rect(12, 12, W - 24, H - 24)
 
       // Corner circles
-      doc.setFillColor(29, 158, 117)
+      doc.setFillColor(110, 110, 110)
       ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 4, 'F'))
 
       // Header band
@@ -427,53 +431,58 @@ function PDFSafetyContent({
       doc.rect(8, 8, W - 16, 32, 'F')
 
       doc.setTextColor(255, 255, 255)
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('times', 'bold')
       doc.setFontSize(22)
       doc.text('CERTIFICATE OF COMPLETION', W / 2, 22, { align: 'center' })
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('times', 'normal')
       doc.setFontSize(11)
       doc.text(certSemester, W / 2, 32, { align: 'center' })
 
       doc.setTextColor(80, 80, 80)
-      doc.setFont('helvetica', 'italic')
+      doc.setFont('times', 'italic')
       doc.setFontSize(13)
       doc.text('This certifies that', W / 2, 60, { align: 'center' })
 
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('times', 'bold')
       doc.setFontSize(30)
-      doc.setTextColor(29, 158, 117)
+      doc.setTextColor(90, 90, 90)
       doc.text(fullName, W / 2, 82, { align: 'center' })
 
       const nameW = doc.getTextWidth(fullName)
-      doc.setDrawColor(29, 158, 117)
+      doc.setDrawColor(90, 90, 90)
       doc.setLineWidth(0.6)
       doc.line(W / 2 - nameW / 2 - 8, 86, W / 2 + nameW / 2 + 8, 86)
 
-      doc.setFont('helvetica', 'italic')
+      doc.setFont('times', 'italic')
       doc.setFontSize(13)
       doc.setTextColor(80, 80, 80)
       doc.text('has successfully completed', W / 2, 98, { align: 'center' })
 
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('times', 'bold')
       doc.setFontSize(16)
       doc.setTextColor(20, 20, 20)
       doc.text(certTitle, W / 2, 110, { align: 'center' })
 
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('times', 'normal')
       doc.setFontSize(11)
       doc.setTextColor(100, 100, 100)
       doc.text(certSubtitle, W / 2, 119, { align: 'center' })
 
       doc.setFontSize(13)
-      doc.setFont('helvetica', 'bold')
+      doc.setFont('times', 'bold')
       doc.setTextColor(60, 60, 60)
       doc.text(`Date of Completion:  ${dateStr}`, W / 2, 142, { align: 'center' })
 
+      doc.setFont('times', 'italic')
+      doc.setFontSize(10)
+      doc.setTextColor(120, 120, 120)
+      doc.text('Note: we will remind you for the recertificate next fall semester.', W / 2, 156, { align: 'center' })
+
       // Footer band
-      doc.setFillColor(29, 158, 117)
+      doc.setFillColor(110, 110, 110)
       doc.rect(8, H - 22, W - 16, 14, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFont('helvetica', 'normal')
+      doc.setFont('times', 'normal')
       doc.setFontSize(9)
       doc.text('ICT Laboratory · College of Engineering · University of Missouri', W / 2, H - 13, { align: 'center' })
 
