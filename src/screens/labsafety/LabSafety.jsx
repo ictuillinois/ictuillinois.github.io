@@ -1445,6 +1445,9 @@ function Step4VideoContent({ user, isManager }) {
               style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: videoWatched ? 'pointer' : 'not-allowed' }} />
             {saving ? 'Saving…' : 'I confirm I have watched the ICT Building Safety Video in full'}
           </label>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8, paddingLeft: 26 }}>
+            Once a lab manager approves your uploaded files, you will have access to the home page and icons.
+          </div>
         </div>
       )}
     </div>
