@@ -725,6 +725,11 @@ export default function Dashboard() {
         const row = prefsRes.data?.[0]
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
+        // studentLocked modules (e.g. QR Labels) bypass the org-wide pool entirely — a lab
+        // manager grants them per-student via StudentIconManager (user_dashboard_prefs.allowed_modules).
+        // The org-wide pool filtering below must not strip these back out for a granted student.
+        const studentLockedKeys = new Set(ALL_MODULES_META.filter(m => m.studentLocked).map(m => m.key))
+        const perStudentGrants = new Set(row?.allowed_modules || [])
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
@@ -738,20 +743,35 @@ export default function Dashboard() {
           const effectivePool = orgPool ?? appPool
           if (effectivePool !== null) {
             if (mods?.length) {
-              // Remove modules no longer in the pool; always keep profile, staff-pinned, and staffOnly for staff
+              // Remove modules no longer in the pool; always keep profile, staff-pinned, staffOnly for
+              // staff, and studentLocked modules individually granted to this lab user
               const isStaffUser = session?.role === 'admin' || session?.role === 'user'
               const staffOnlyKeys = new Set(ALL_MODULES_META.filter(m => m.staffOnly).map(m => m.key))
-              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)) || (isStaffUser && staffOnlyKeys.has(k)))
+              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)) || (isStaffUser && staffOnlyKeys.has(k)) || (session?.role === 'lab_user' && studentLockedKeys.has(k) && perStudentGrants.has(k)))
               if (userHasConfigured) {
                 mods = filtered
+                // Still auto-append newly-granted studentLocked modules even for a configured dashboard —
+                // the student never had a chance to pick something that didn't exist for them before
+                if (session?.role === 'lab_user') {
+                  const newlyGranted = [...perStudentGrants].filter(k => studentLockedKeys.has(k) && !mods.includes(k))
+                  if (newlyGranted.length) mods = [...mods, ...newlyGranted]
+                }
               } else {
                 // User never configured — append newly-added pool modules so they appear automatically
                 const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !(isStaffUser && STAFF_PINNED_MODULES.includes(k)))
                 mods = [...filtered, ...missing]
+                if (session?.role === 'lab_user') {
+                  const newlyGranted = [...perStudentGrants].filter(k => studentLockedKeys.has(k) && !mods.includes(k))
+                  if (newlyGranted.length) mods = [...mods, ...newlyGranted]
+                }
               }
             } else if (session?.role !== 'lab_user') {
               // No saved prefs — pool defines what's visible (not for students: they see nothing until admin assigns)
               mods = effectivePool
+            } else if (perStudentGrants.size) {
+              // Lab user with no saved active_modules yet, but the manager already granted
+              // studentLocked modules — surface those immediately instead of showing nothing
+              mods = [...perStudentGrants].filter(k => studentLockedKeys.has(k))
             }
           }
           // For staff with no saved mods OR only default profile (not user-configured), default labmanagement to first position
