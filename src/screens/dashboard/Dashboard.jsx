@@ -723,9 +723,14 @@ export default function Dashboard() {
           orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
         }
         // user_dashboard_prefs has no created_at column and can have duplicate rows for a
-        // user — prefer whichever row actually has data populated rather than trusting order
+        // user, each with only some fields populated — merge across all rows per-field
+        // instead of picking a single row.
         const prefRows = prefsRes.data || []
-        const row = prefRows.find(r => r.has_set_dashboard || r.active_modules?.length || r.allowed_modules?.length) || prefRows[0]
+        const row = prefRows.length ? {
+          active_modules: prefRows.find(r => r.active_modules?.length)?.active_modules ?? null,
+          allowed_modules: prefRows.find(r => r.allowed_modules?.length)?.allowed_modules ?? null,
+          has_set_dashboard: prefRows.some(r => r.has_set_dashboard),
+        } : null
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
         // studentLocked modules (e.g. QR Labels) bypass the org-wide pool entirely — a lab
@@ -874,11 +879,21 @@ export default function Dashboard() {
       if (loginMode === 'solo' && session?.userId) {
         await sb.from('solo_users').update({ active_modules: keys, has_set_dashboard: true }).eq('id', session.userId)
       } else if (session?.userId) {
-        const { data: updated } = await sb.from('user_dashboard_prefs')
-          .update({ active_modules: keys, has_set_dashboard: true })
-          .eq('user_id', session.userId).select('id')
-        if (!updated?.length)
+        // Consolidate any duplicate rows for this user instead of updating them all in
+        // place — merge whichever row has allowed_modules populated into the one we keep.
+        const { data: existingRows } = await sb.from('user_dashboard_prefs')
+          .select('id, allowed_modules').eq('user_id', session.userId)
+        const rows = existingRows || []
+        const preservedAllowed = rows.find(r => r.allowed_modules?.length)?.allowed_modules
+        if (rows.length) {
+          const [keepId, ...extraIds] = rows.map(r => r.id)
+          const payload = { active_modules: keys, has_set_dashboard: true }
+          if (preservedAllowed) payload.allowed_modules = preservedAllowed
+          await sb.from('user_dashboard_prefs').update(payload).eq('id', keepId)
+          if (extraIds.length) await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
+        } else {
           await sb.from('user_dashboard_prefs').insert({ user_id: session.userId, active_modules: keys, has_set_dashboard: true })
+        }
       } else {
         localStorage.setItem('ictlab_admin_modules', JSON.stringify(keys))
       }

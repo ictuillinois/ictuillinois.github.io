@@ -567,9 +567,14 @@ function DashboardIconsPanel({ session }) {
           orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
         }
         // user_dashboard_prefs has no created_at column and can have duplicate rows for a
-        // user — prefer whichever row actually has data populated rather than trusting order
+        // user, each with only some fields populated — merge across all rows per-field
+        // instead of picking a single row, or one field can look empty even when it's
+        // really just sitting on a different duplicate row.
         const prefRows = prefsRes.data || []
-        const data = prefRows.find(r => r.active_modules?.length || r.allowed_modules?.length) || prefRows[0] || null
+        const data = prefRows.length ? {
+          active_modules: prefRows.find(r => r.active_modules?.length)?.active_modules ?? null,
+          allowed_modules: prefRows.find(r => r.allowed_modules?.length)?.allowed_modules ?? null,
+        } : null
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
         // Role-specific org pool: lab users use labusers pool, staff use labmanagers pool, org admin uses outer pool
@@ -626,11 +631,21 @@ function DashboardIconsPanel({ session }) {
       } else if (isSolo) {
         await sb.from('solo_users').update({ active_modules: modules, has_set_dashboard: true }).eq('id', session.userId)
       } else {
-        const { data: updated } = await sb.from('user_dashboard_prefs')
-          .update({ active_modules: modules, has_set_dashboard: true })
-          .eq('user_id', session.userId)
-          .select('id')
-        if (!updated?.length) {
+        // Consolidate any duplicate rows for this user (a pre-existing issue with this
+        // table) instead of just updating all of them in place — merge whichever row has
+        // allowed_modules populated into the one we keep, so a manager's per-student icon
+        // grant never gets orphaned on a row this update doesn't otherwise touch.
+        const { data: existingRows } = await sb.from('user_dashboard_prefs')
+          .select('id, allowed_modules').eq('user_id', session.userId)
+        const rows = existingRows || []
+        const preservedAllowed = rows.find(r => r.allowed_modules?.length)?.allowed_modules
+        if (rows.length) {
+          const [keepId, ...extraIds] = rows.map(r => r.id)
+          const payload = { active_modules: modules, has_set_dashboard: true }
+          if (preservedAllowed) payload.allowed_modules = preservedAllowed
+          await sb.from('user_dashboard_prefs').update(payload).eq('id', keepId)
+          if (extraIds.length) await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
+        } else {
           await sb.from('user_dashboard_prefs')
             .insert({ user_id: session.userId, active_modules: modules, has_set_dashboard: true })
         }

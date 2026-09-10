@@ -161,8 +161,13 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         const appRes = results[results.length - 1]
 
         // user_dashboard_prefs has no created_at column and can have duplicate rows for a
-        // user — prefer whichever row actually has data populated rather than trusting order
-        const prefRow = (prefsRes.data || []).find(r => r.active_modules?.length || r.allowed_modules?.length) || prefsRes.data?.[0]
+        // user, each with only some fields populated — merge across all rows per-field
+        // instead of picking a single row.
+        const prefRowsAll = prefsRes.data || []
+        const prefRow = prefRowsAll.length ? {
+          active_modules: prefRowsAll.find(r => r.active_modules?.length)?.active_modules ?? null,
+          allowed_modules: prefRowsAll.find(r => r.allowed_modules?.length)?.allowed_modules ?? null,
+        } : null
         savedModules = prefRow?.active_modules
 
         // Global app pool (super admin master list)
@@ -250,11 +255,19 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
       if (loginMode === 'solo' && session?.userId) {
         await sb.from('solo_users').update({ active_modules: modules, has_set_dashboard: true }).eq('id', session.userId)
       } else if (session?.userId) {
-        const { data: updated } = await sb.from('user_dashboard_prefs')
-          .update({ active_modules: modules, has_set_dashboard: true })
-          .eq('user_id', session.userId)
-          .select('id')
-        if (!updated?.length) {
+        // Consolidate any duplicate rows for this user instead of updating them all in
+        // place — merge whichever row has allowed_modules populated into the one we keep.
+        const { data: existingRows } = await sb.from('user_dashboard_prefs')
+          .select('id, allowed_modules').eq('user_id', session.userId)
+        const rows = existingRows || []
+        const preservedAllowed = rows.find(r => r.allowed_modules?.length)?.allowed_modules
+        if (rows.length) {
+          const [keepId, ...extraIds] = rows.map(r => r.id)
+          const payload = { active_modules: modules, has_set_dashboard: true }
+          if (preservedAllowed) payload.allowed_modules = preservedAllowed
+          await sb.from('user_dashboard_prefs').update(payload).eq('id', keepId)
+          if (extraIds.length) await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
+        } else {
           await sb.from('user_dashboard_prefs')
             .insert({ user_id: session.userId, active_modules: modules, has_set_dashboard: true })
         }
