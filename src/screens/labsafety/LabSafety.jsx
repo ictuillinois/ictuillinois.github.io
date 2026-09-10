@@ -373,9 +373,8 @@ function PDFSafetyContent({
       const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
       const dateStr   = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-      // ICT logo as a faint full-page background
+      // ICT logo as a faint watermark
       let logoDataUrl = null
-      let logoW = 0, logoH = 0
       try {
         const logoRes = await fetch('/ict-logo.png')
         if (logoRes.ok) {
@@ -395,8 +394,6 @@ function PDFSafetyContent({
             ctx.globalAlpha = 0.07
             ctx.drawImage(img, 0, 0)
             logoDataUrl = cvs.toDataURL('image/png')
-            logoW = img.naturalWidth
-            logoH = img.naturalHeight
           }
           URL.revokeObjectURL(logoObjUrl)
         }
@@ -409,10 +406,9 @@ function PDFSafetyContent({
       doc.setFillColor(255, 255, 255)
       doc.rect(0, 0, W, H, 'F')
 
-      if (logoDataUrl && logoW && logoH) {
-        const scale = Math.max(W / logoW, H / logoH)
-        const drawW = logoW * scale, drawH = logoH * scale
-        doc.addImage(logoDataUrl, 'PNG', (W - drawW) / 2, (H - drawH) / 2, drawW, drawH)
+      if (logoDataUrl) {
+        const lSize = 360
+        doc.addImage(logoDataUrl, 'PNG', W / 2 - lSize / 2, H / 2 - lSize / 2 + 8, lSize, lSize)
       }
 
       // Border (gray frame)
@@ -1717,7 +1713,10 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
           }
         })
         setProgress({ [session.userId]: progMap })
-        setSelectedUser({ id: session.userId, name: session.username, nick_name: session.username })
+        const { data: me } = await sb.from('users')
+          .select('id, name, last_name, nick_name, photo_url, avatar, email')
+          .eq('id', session.userId).maybeSingle()
+        setSelectedUser(me || { id: session.userId, name: session.username, nick_name: session.username })
         // One-time backfill: sync existing certs to Documents tab for users who completed steps before auto-save was added
         const syncKey = `ictlab_docs_synced_${session.userId}`
         if (!localStorage.getItem(syncKey)) {
