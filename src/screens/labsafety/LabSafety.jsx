@@ -1355,12 +1355,14 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 
 function Step4VideoContent({ user, isManager }) {
+  const { session }  = useAppStore()
   const userId     = user?.id
   const watchedKey = `ictlab_safety4_watched_${userId}`
   const confirmKey = `ictlab_safety4_confirmed_${userId}`
   const [videoWatched, setVideoWatched] = useState(() => !!localStorage.getItem(watchedKey))
   const [confirmed, setConfirmed]       = useState(false)
   const [saving, setSaving]             = useState(false)
+  const [confirmError, setConfirmError] = useState(null)
 
   useEffect(() => {
     if (!userId) return
@@ -1381,17 +1383,24 @@ function Step4VideoContent({ user, isManager }) {
   async function handleConfirm(e) {
     if (saving) return
     const checked = e.target.checked
-    setConfirmed(checked)
-    if (!checked) return
+    setConfirmError(null)
+    if (!checked) { setConfirmed(false); return }
     setSaving(true)
-    const orgId = user?.organizationId || null
-    await sb.from('lab_safety_progress').upsert({
+    const orgId = session?.organizationId || null
+    const { error } = await sb.from('lab_safety_progress').upsert({
       user_id: userId,
       step_number: 4,
       completed: true,
       submitted_at: new Date().toISOString(),
       organization_id: orgId,
     }, { onConflict: 'user_id,step_number' })
+    if (error) {
+      console.error('Step 4 confirm error:', error)
+      setConfirmError('Failed to save your confirmation. Please try again.')
+      setSaving(false)
+      return
+    }
+    setConfirmed(true)
     if (orgId && userId) {
       try {
         const { data: managers } = await sb.from('users').select('id')
@@ -1448,6 +1457,9 @@ function Step4VideoContent({ user, isManager }) {
           <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8, paddingLeft: 26 }}>
             Once a lab manager approves your uploaded files, you will have access to the home page and icons.
           </div>
+          {confirmError && (
+            <div style={{ fontSize: 12, color: '#c84b2f', marginTop: 8, paddingLeft: 26 }}>{confirmError}</div>
+          )}
         </div>
       )}
     </div>

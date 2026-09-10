@@ -655,6 +655,18 @@ export default function Dashboard() {
 
   useEffect(() => { checkSafetyProgress() }, [session?.userId, isStudent, screen])
 
+  // Re-check live when a manager approves a step or the student submits one, so the
+  // dashboard unlocks without requiring a manual reload/navigation (mirrors Layout.jsx's
+  // sidebar lock, which already subscribes to this table).
+  useEffect(() => {
+    if (!isStudent || !session?.userId) return
+    const uid = session.userId
+    const sub = sb.channel(`safety_dashboard_${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_safety_progress', filter: `user_id=eq.${uid}` }, checkSafetyProgress)
+      .subscribe()
+    return () => { sb.removeChannel(sub) }
+  }, [session?.userId, isStudent])
+
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
