@@ -2052,11 +2052,16 @@ function IconSetupModal({ userId, displayName, organizationId, userRole = 'lab_u
     if (!selected || saving) return
     setSaving(true)
     const modules = ['profile', ...Array.from(selected).filter(k => k !== 'profile')]
-    const { data: existing } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId).maybeSingle()
-    if (existing) {
-      await sb.from('user_dashboard_prefs').update({ allowed_modules: modules }).eq('user_id', userId)
+    // .maybeSingle() errors out (rather than picking one) if duplicate rows already exist
+    // for this user — fetch all rows instead and consolidate to one.
+    const { data: existingRows } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId)
+    const rows = existingRows || []
+    if (rows.length) {
+      const [keepId, ...extraIds] = rows.map(r => r.id)
+      await sb.from('user_dashboard_prefs').update({ allowed_modules: modules }).eq('id', keepId)
+      if (extraIds.length) await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
     } else {
-      await sb.from('user_dashboard_prefs').insert({ user_id: userId, allowed_modules: modules })
+      await sb.from('user_dashboard_prefs').insert({ user_id: userId, organization_id: organizationId || null, allowed_modules: modules })
     }
     setSaving(false)
     onDone()

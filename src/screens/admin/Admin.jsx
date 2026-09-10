@@ -500,10 +500,12 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   // Load icons: org defaults for new student, existing prefs for edit
   useEffect(() => {
     if (user?.id && user?.role === 'lab_user') {
-      sb.from('user_dashboard_prefs').select('active_modules').eq('user_id', user.id).maybeSingle()
+      // .maybeSingle() errors out (rather than picking one) if duplicate rows already
+      // exist for this user — fetch all rows and prefer whichever has data populated.
+      sb.from('user_dashboard_prefs').select('active_modules').eq('user_id', user.id)
         .then(({ data }) => {
-          const mods = data?.active_modules?.length ? data.active_modules : []
-          setSelectedIcons(new Set([...mods, 'profile']))
+          const row = (data || []).find(r => r.active_modules?.length)
+          setSelectedIcons(new Set([...(row?.active_modules || []), 'profile']))
         })
     } else if (!user && role === 'lab_user' && effectiveOrgId) {
       sb.from('organizations').select('student_default_modules').eq('id', effectiveOrgId).maybeSingle()
@@ -530,9 +532,18 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
   async function saveIconPrefs(userId) {
     const modules = ['profile', ...STUDENT_ICON_OPTIONS.filter(m => selectedIcons.has(m.key)).map(m => m.key)]
-    const { data: existing } = await sb.from('user_dashboard_prefs').select('id').eq('user_id', userId).maybeSingle()
-    if (existing) {
-      await sb.from('user_dashboard_prefs').update({ active_modules: modules, has_set_dashboard: true }).eq('user_id', userId)
+    // .maybeSingle() errors out (rather than picking one) if duplicate rows already exist
+    // for this user — fetch all rows instead, consolidate to one, and preserve whatever
+    // allowed_modules a lab manager may have separately granted via StudentIconManager.
+    const { data: existingRows } = await sb.from('user_dashboard_prefs').select('id, allowed_modules').eq('user_id', userId)
+    const rows = existingRows || []
+    const preservedAllowed = rows.find(r => r.allowed_modules?.length)?.allowed_modules
+    if (rows.length) {
+      const [keepId, ...extraIds] = rows.map(r => r.id)
+      const payload = { active_modules: modules, has_set_dashboard: true }
+      if (preservedAllowed) payload.allowed_modules = preservedAllowed
+      await sb.from('user_dashboard_prefs').update(payload).eq('id', keepId)
+      if (extraIds.length) await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
     } else {
       await sb.from('user_dashboard_prefs').insert({ user_id: userId, active_modules: modules, has_set_dashboard: true })
     }
