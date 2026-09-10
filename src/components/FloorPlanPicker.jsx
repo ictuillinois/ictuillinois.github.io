@@ -74,7 +74,11 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   const [draggingDraft, setDraggingDraft] = useState(false)
   const [pickMode, setPickMode] = useState(false)
   const [pendingRoomConfirm, setPendingRoomConfirm] = useState(null)   // { x, y, room_id, room_label }
+  const [liveDragPos, setLiveDragPos] = useState(null)   // { id, x, y } — live position of a saved spot being dragged
   const svgRef = useRef(null)
+  const dragSpotIdRef = useRef(null)
+  const dragStartRef = useRef({ x: 0, y: 0 })
+  const dragMovedRef = useRef(false)
 
   function svgCoords(e) {
     const el = svgRef.current
@@ -97,17 +101,17 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
   }
   function confirmRoomPick() {
     if (!pendingRoomConfirm) return
-    setDraftSpot({ id: null, room_id: pendingRoomConfirm.room_id, x: pendingRoomConfirm.x, y: pendingRoomConfirm.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setDraftSpot({ id: null, room_id: pendingRoomConfirm.room_id, x: pendingRoomConfirm.x, y: pendingRoomConfirm.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1, rotation: 0 })
     setPendingRoomConfirm(null)
     setPickMode(false)
   }
   function startDraft() {
     const room = rooms.find(r => r.id === newSpotRoom)
     if (!room) return
-    setDraftSpot({ id: null, room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setDraftSpot({ id: null, room_id: room.id, x: room.x + room.w / 2, y: room.y + room.h / 2, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1, rotation: 0 })
   }
   function editSpot(spot) {
-    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'] })
+    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'], rotation: spot.rotation || 0 })
     setNewSpotRoom(spot.room_id)
   }
   function onDraftMouseDown(e) {
@@ -115,13 +119,47 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
     e.stopPropagation()
     setDraggingDraft(true)
   }
+  function onSpotMouseDown(e, spot) {
+    if (!editingSpots) return
+    e.preventDefault()
+    e.stopPropagation()
+    dragSpotIdRef.current = spot.id
+    dragMovedRef.current = false
+    dragStartRef.current = svgCoords(e)
+    setLiveDragPos({ id: spot.id, x: spot.x, y: spot.y })
+  }
+  function onSpotClick(e, spot) {
+    if (!editingSpots) return
+    e.stopPropagation()
+    if (!dragMovedRef.current) editSpot(spot)
+    dragMovedRef.current = false
+  }
   function onSVGMouseMove(e) {
-    if (!draggingDraft) return
-    const p = svgCoords(e)
-    setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
+    if (draggingDraft) {
+      const p = svgCoords(e)
+      setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
+      return
+    }
+    if (dragSpotIdRef.current) {
+      const p = svgCoords(e)
+      if (Math.abs(p.x - dragStartRef.current.x) > 2 || Math.abs(p.y - dragStartRef.current.y) > 2) dragMovedRef.current = true
+      setLiveDragPos({ id: dragSpotIdRef.current, x: p.x, y: p.y })
+    }
   }
   function onSVGMouseUp() {
     setDraggingDraft(false)
+    if (dragSpotIdRef.current) {
+      const id = dragSpotIdRef.current
+      if (dragMovedRef.current && liveDragPos) {
+        const spot = spots.find(s => s.id === id)
+        if (spot) {
+          onSpotUpdated && onSpotUpdated({ ...spot, x: liveDragPos.x, y: liveDragPos.y })
+          setDraftSpot(d => (d && d.id === id) ? { ...d, x: liveDragPos.x, y: liveDragPos.y } : d)
+        }
+      }
+      dragSpotIdRef.current = null
+      setLiveDragPos(null)
+    }
   }
   function setRackCount(n) {
     const count = Math.max(1, parseInt(n) || 1)
@@ -146,6 +184,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       room_id: draftSpot.room_id,
       x: draftSpot.x, y: draftSpot.y,
       type: draftSpot.type,
+      rotation: parseInt(draftSpot.rotation) || 0,
       ...(draftSpot.type === 'racks' ? {
         rackNames: (draftSpot.rackNames?.length ? draftSpot.rackNames : ['Rack 1']).map((n, i) => n.trim() || `Rack ${i + 1}`),
         shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
@@ -246,7 +285,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         ) : (
           <div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
-              {draftSpot.id ? 'Drag the purple marker to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
+              {draftSpot.id ? 'Drag the marker directly on the map to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
             </div>
             <div className="grid-2">
               <div className="field"><label>Spot Name <span style={{ color: '#c84b2f' }}>*</span></label>
@@ -258,6 +297,15 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
                   <option value="floor">Floor</option>
                   <option value="racks">Racks</option>
                 </select>
+              </div>
+            </div>
+            <div className="field">
+              <label>Label rotation</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) - 15 + 360) % 360 }))}>⟲ -15°</button>
+                <input type="number" value={draftSpot.rotation || 0} onChange={e => setDraftSpot(d => ({ ...d, rotation: e.target.value }))}
+                  style={{ width: 70, textAlign: 'center' }} />
+                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) + 15) % 360 }))}>⟳ +15°</button>
               </div>
             </div>
             {draftSpot.type === 'racks' && (
@@ -299,7 +347,7 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target === svgRef.current) setTooltip(null) }}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
-      onMouseLeave={() => setDraggingDraft(false)}>
+      onMouseLeave={() => { setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
       <rect x="2" y="2" width="816" height="256" fill="#f5f4f0" stroke="#555" strokeWidth="2" rx="2"/>
       <rect x="6" y="148" width="810" height="8" fill="#ddd"/>
 
@@ -317,29 +365,35 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
       })}
 
       {/* ── Spots ── */}
-      {spots.filter(spot => spot.id !== draftSpot?.id).map(spot => {
+      {spots.map(spot => {
         const isRacks = spot.type === 'racks'
         const anySelected = isRacks
           ? selected.some(id => id.startsWith(spot.id + '-'))
           : selected.includes(spot.id)
         const isOccupied = !isRacks && occupancy[spot.id]?.occupied && !anySelected
+        const isEditing = draftSpot?.id === spot.id
+        const pos = liveDragPos?.id === spot.id ? liveDragPos : spot
         const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
-        const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
-        const label = spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name
+        const stroke = isEditing ? '#7c3aed' : anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
+        const label = spot.name
         const pillWidth = Math.max(30, label.length * 7.6 + 14)
+        const rotation = spot.rotation || 0
         return (
-          <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
-            onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
-            <rect x={spot.x - pillWidth / 2} y={spot.y - 10} width={pillWidth} height={20} rx={10}
-              fill={fill} stroke={stroke} strokeWidth={1.5} />
-            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
+          <g key={spot.id}
+            transform={rotation ? `rotate(${rotation} ${pos.x} ${pos.y})` : undefined}
+            style={{ cursor: editingSpots ? 'grab' : 'default' }}
+            onMouseDown={e => onSpotMouseDown(e, spot)}
+            onClick={e => onSpotClick(e, spot)}>
+            <rect x={pos.x - pillWidth / 2} y={pos.y - 10} width={pillWidth} height={20} rx={10}
+              fill={fill} stroke={stroke} strokeWidth={isEditing ? 2.5 : 1.5} />
+            <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
               fill={isOccupied ? '#fff' : '#3d2a00'} fontWeight="700" style={{ pointerEvents: 'none' }}>
               {label}
             </text>
             {editingSpots && (
-              <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
-                <circle cx={spot.x + pillWidth / 2 + 6} cy={spot.y - 10} r={7} fill="#c84b2f"/>
-                <text x={spot.x + pillWidth / 2 + 6} y={spot.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+              <g style={{ cursor: 'pointer' }} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
+                <circle cx={pos.x + pillWidth / 2 + 6} cy={pos.y - 10} r={7} fill="#c84b2f"/>
+                <text x={pos.x + pillWidth / 2 + 6} y={pos.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
               </g>
             )}
           </g>
@@ -351,8 +405,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         <circle cx={pendingRoomConfirm.x} cy={pendingRoomConfirm.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5} opacity={0.7} />
       )}
 
-      {/* Draft spot being placed */}
-      {draftSpot && (
+      {/* Draft marker for a brand-new, not-yet-saved spot */}
+      {draftSpot && draftSpot.id === null && (
         <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
           onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
       )}
@@ -386,7 +440,11 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
   const [draftSpot, setDraftSpot] = useState(null)   // { id?, x, y, name, type, rackNames, shelvesPerRack }
   const [draggingDraft, setDraggingDraft] = useState(false)
   const [pickMode, setPickMode] = useState(false)
+  const [liveDragPos, setLiveDragPos] = useState(null)   // { id, x, y } — live position of a saved spot being dragged
   const svgRef = useRef(null)
+  const dragSpotIdRef = useRef(null)
+  const dragStartRef = useRef({ x: 0, y: 0 })
+  const dragMovedRef = useRef(false)
 
   function svgCoords(e) {
     const el = svgRef.current
@@ -400,24 +458,58 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
   function onMapClickForPick(e) {
     if (!pickMode) return
     const p = svgCoords(e)
-    setDraftSpot({ id: null, x: p.x, y: p.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1 })
+    setDraftSpot({ id: null, x: p.x, y: p.y, name: '', type: 'pallet', rackNames: ['Rack 1'], shelvesPerRack: 1, rotation: 0 })
     setPickMode(false)
   }
   function editSpot(spot) {
-    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'] })
+    setDraftSpot({ ...spot, rackNames: spot.rackNames ? [...spot.rackNames] : ['Rack 1'], rotation: spot.rotation || 0 })
   }
   function onDraftMouseDown(e) {
     e.preventDefault()
     e.stopPropagation()
     setDraggingDraft(true)
   }
+  function onSpotMouseDown(e, spot) {
+    if (!editingSpots) return
+    e.preventDefault()
+    e.stopPropagation()
+    dragSpotIdRef.current = spot.id
+    dragMovedRef.current = false
+    dragStartRef.current = svgCoords(e)
+    setLiveDragPos({ id: spot.id, x: spot.x, y: spot.y })
+  }
+  function onSpotClick(e, spot) {
+    if (!editingSpots) return
+    e.stopPropagation()
+    if (!dragMovedRef.current) editSpot(spot)
+    dragMovedRef.current = false
+  }
   function onSVGMouseMove(e) {
-    if (!draggingDraft) return
-    const p = svgCoords(e)
-    setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
+    if (draggingDraft) {
+      const p = svgCoords(e)
+      setDraftSpot(d => d && ({ ...d, x: p.x, y: p.y }))
+      return
+    }
+    if (dragSpotIdRef.current) {
+      const p = svgCoords(e)
+      if (Math.abs(p.x - dragStartRef.current.x) > 2 || Math.abs(p.y - dragStartRef.current.y) > 2) dragMovedRef.current = true
+      setLiveDragPos({ id: dragSpotIdRef.current, x: p.x, y: p.y })
+    }
   }
   function onSVGMouseUp() {
     setDraggingDraft(false)
+    if (dragSpotIdRef.current) {
+      const id = dragSpotIdRef.current
+      if (dragMovedRef.current && liveDragPos) {
+        const spot = spots.find(s => s.id === id)
+        if (spot) {
+          onSpotUpdated && onSpotUpdated({ ...spot, x: liveDragPos.x, y: liveDragPos.y })
+          setDraftSpot(d => (d && d.id === id) ? { ...d, x: liveDragPos.x, y: liveDragPos.y } : d)
+        }
+      }
+      dragSpotIdRef.current = null
+      setLiveDragPos(null)
+    }
   }
   function setRackCount(n) {
     const count = Math.max(1, parseInt(n) || 1)
@@ -441,6 +533,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
       facility: 'MPF',
       x: draftSpot.x, y: draftSpot.y,
       type: draftSpot.type,
+      rotation: parseInt(draftSpot.rotation) || 0,
       ...(draftSpot.type === 'racks' ? {
         rackNames: (draftSpot.rackNames?.length ? draftSpot.rackNames : ['Rack 1']).map((n, i) => n.trim() || `Rack ${i + 1}`),
         shelvesPerRack: Math.max(1, parseInt(draftSpot.shelvesPerRack) || 1),
@@ -528,7 +621,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
         ) : (
           <div>
             <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
-              {draftSpot.id ? 'Drag the purple marker to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
+              {draftSpot.id ? 'Drag the marker directly on the map to reposition, or edit the details below.' : 'Drag the purple marker on the map to position it.'}
             </div>
             <div className="grid-2">
               <div className="field"><label>Spot Name <span style={{ color: '#c84b2f' }}>*</span></label>
@@ -540,6 +633,15 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
                   <option value="floor">Floor</option>
                   <option value="racks">Racks</option>
                 </select>
+              </div>
+            </div>
+            <div className="field">
+              <label>Label rotation</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) - 15 + 360) % 360 }))}>⟲ -15°</button>
+                <input type="number" value={draftSpot.rotation || 0} onChange={e => setDraftSpot(d => ({ ...d, rotation: e.target.value }))}
+                  style={{ width: 70, textAlign: 'center' }} />
+                <button type="button" className="btn btn-sm" onClick={() => setDraftSpot(d => ({ ...d, rotation: ((parseInt(d.rotation) || 0) + 15) % 360 }))}>⟳ +15°</button>
               </div>
             </div>
             {draftSpot.type === 'racks' && (
@@ -581,7 +683,7 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
       onClick={e => { if (pickMode) { onMapClickForPick(e); return } if (e.target.tagName === 'svg') setTooltip(null) }}
       onMouseMove={onSVGMouseMove}
       onMouseUp={onSVGMouseUp}
-      onMouseLeave={() => setDraggingDraft(false)}>
+      onMouseLeave={() => { setDraggingDraft(false); dragSpotIdRef.current = null; setLiveDragPos(null) }}>
       <rect x="2" y="2" width="536" height="496" fill={C.floor} stroke="#555" strokeWidth="2" rx="2"/>
 
       {/* Shelves */}
@@ -634,37 +736,43 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
       <rect x="290" y="490" width="60" height="6" fill="#777" rx="1"/>
 
       {/* ── Spots ── */}
-      {spots.filter(spot => spot.id !== draftSpot?.id).map(spot => {
+      {spots.map(spot => {
         const isRacks = spot.type === 'racks'
         const anySelected = isRacks
           ? selected.some(id => id.startsWith(spot.id + '-'))
           : selected.includes(spot.id)
         const isOccupied = !isRacks && occupancy[spot.id]?.occupied && !anySelected
+        const isEditing = draftSpot?.id === spot.id
+        const pos = liveDragPos?.id === spot.id ? liveDragPos : spot
         const fill = anySelected ? C.selected : isOccupied ? C.occupied : '#fef9ec'
-        const stroke = anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
-        const label = spot.name.length > 14 ? spot.name.slice(0, 12) + '…' : spot.name
+        const stroke = isEditing ? '#7c3aed' : anySelected ? C.selected_stroke : isOccupied ? C.occupied_stroke : '#c8a000'
+        const label = spot.name
         const pillWidth = Math.max(30, label.length * 7.6 + 14)
+        const rotation = spot.rotation || 0
         return (
-          <g key={spot.id} style={{ cursor: editingSpots ? 'pointer' : 'default' }}
-            onClick={e => { if (editingSpots) { e.stopPropagation(); editSpot(spot) } }}>
-            <rect x={spot.x - pillWidth / 2} y={spot.y - 10} width={pillWidth} height={20} rx={10}
-              fill={fill} stroke={stroke} strokeWidth={1.5} />
-            <text x={spot.x} y={spot.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
+          <g key={spot.id}
+            transform={rotation ? `rotate(${rotation} ${pos.x} ${pos.y})` : undefined}
+            style={{ cursor: editingSpots ? 'grab' : 'default' }}
+            onMouseDown={e => onSpotMouseDown(e, spot)}
+            onClick={e => onSpotClick(e, spot)}>
+            <rect x={pos.x - pillWidth / 2} y={pos.y - 10} width={pillWidth} height={20} rx={10}
+              fill={fill} stroke={stroke} strokeWidth={isEditing ? 2.5 : 1.5} />
+            <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central" fontSize={14} fontFamily="sans-serif"
               fill={isOccupied ? '#fff' : '#3d2a00'} fontWeight="700" style={{ pointerEvents: 'none' }}>
               {label}
             </text>
             {editingSpots && (
-              <g style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
-                <circle cx={spot.x + pillWidth / 2 + 6} cy={spot.y - 10} r={7} fill="#c84b2f"/>
-                <text x={spot.x + pillWidth / 2 + 6} y={spot.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
+              <g style={{ cursor: 'pointer' }} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onSpotDeleted && onSpotDeleted(spot.id) }}>
+                <circle cx={pos.x + pillWidth / 2 + 6} cy={pos.y - 10} r={7} fill="#c84b2f"/>
+                <text x={pos.x + pillWidth / 2 + 6} y={pos.y - 6.5} textAnchor="middle" fontSize={9} fontFamily="sans-serif" fill="#fff" fontWeight="700" style={{ pointerEvents: 'none' }}>×</text>
               </g>
             )}
           </g>
         )
       })}
 
-      {/* Draft spot being placed */}
-      {draftSpot && (
+      {/* Draft marker for a brand-new, not-yet-saved spot */}
+      {draftSpot && draftSpot.id === null && (
         <circle cx={draftSpot.x} cy={draftSpot.y} r={7} fill="#7c3aed" stroke="#fff" strokeWidth={1.5}
           onMouseDown={onDraftMouseDown} style={{ cursor: 'grab' }} />
       )}
@@ -877,12 +985,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       id = pickedSpot.id
       label = pickedSpot.name
     }
-    toggleLocation(id, label, 'ICT')
     setShowAddStorage(false)
     setPickedSpotId(''); setPickedRack(''); setPickedShelf('')
+    saveLocations([id])
   }
 
-  async function confirm() {
+  async function saveLocations(idsArray) {
     if (!canEdit) { onConfirm([]); onClose(); return }
     setSaving(true)
     try {
@@ -893,7 +1001,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       const existingIds = (existing || []).map(e => e.location_id)
 
       // Release locations no longer selected
-      const toRelease = existingIds.filter(id => !selected.includes(id))
+      const toRelease = existingIds.filter(id => !idsArray.includes(id))
       for (const id of toRelease) {
         await sb.from('storage_locations').update({
           occupied: false, project_id: null, material_id: null,
@@ -903,7 +1011,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       }
 
       // Occupy newly selected locations
-      const toOccupy = selected.filter(id => !existingIds.includes(id))
+      const toOccupy = idsArray.filter(id => !existingIds.includes(id))
       const isSolo = session?.loginMode === 'solo'
       const orgId = session?.organizationId || null
       for (const id of toOccupy) {
@@ -933,7 +1041,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       }
 
       // Return selected as location objects
-      const result = selected.map(id => {
+      const result = idsArray.map(id => {
         const det = getLocationDetail(id)
         return { location_id: id, location: det.location, detail: det.detail }
       })
@@ -943,6 +1051,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       console.error(e)
     }
     setSaving(false)
+  }
+
+  async function confirm() {
+    await saveLocations(selected)
   }
 
   // Legend
@@ -1017,7 +1129,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
               spots={spots}
               editingSpots={editingSpots}
-              disableRoomSelect={allowLayoutEdit}
+              disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
               onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
@@ -1025,15 +1137,17 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <MPFMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
               spots={spots}
               editingSpots={editingSpots}
-              disableRoomSelect={allowLayoutEdit}
+              disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
               onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
           )}
         </div>
 
-        {/* Selected chips (hidden in view-only mode, layout-edit mode, and while editing spots) */}
-        {!viewOnly && !allowLayoutEdit && !editingSpots && (
+        {/* Selected chips (hidden in view-only mode, layout-edit mode, while editing spots,
+            and on the ICT/MPF tabs — those facilities are spot-only now: "Add storage to
+            spot" saves immediately, there is nothing left here to confirm) */}
+        {!viewOnly && !allowLayoutEdit && !editingSpots && facility !== 'ICT' && facility !== 'MPF' && (
           <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', minHeight: 44, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {selected.length === 0
               ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>No locations selected — tap a zone or room above</span>
