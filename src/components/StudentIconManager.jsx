@@ -6,6 +6,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
   const [poolModules, setPoolModules] = useState(null) // module meta available for this org
   const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   useEffect(() => { load() }, [student.id])
 
@@ -44,13 +45,27 @@ export default function StudentIconManager({ student, orgId, onClose }) {
 
   async function save() {
     setSaving(true)
+    setSaveError(null)
     const modules = [...PINNED_MODULES, ...Array.from(allowed).filter(k => !PINNED_MODULES.includes(k))]
-    const { data: updated } = await sb.from('user_dashboard_prefs')
+    const { data: updated, error: updateErr } = await sb.from('user_dashboard_prefs')
       .update({ allowed_modules: modules })
       .eq('user_id', student.id)
       .select('id')
+    if (updateErr) {
+      console.error('[StudentIconManager] update failed:', updateErr)
+      setSaveError(`Failed to save: ${updateErr.message}`)
+      setSaving(false)
+      return
+    }
     if (!updated?.length) {
-      await sb.from('user_dashboard_prefs').insert({ user_id: student.id, allowed_modules: modules })
+      const { error: insertErr } = await sb.from('user_dashboard_prefs')
+        .insert({ user_id: student.id, organization_id: orgId || null, allowed_modules: modules })
+      if (insertErr) {
+        console.error('[StudentIconManager] insert failed:', insertErr)
+        setSaveError(`Failed to save: ${insertErr.message}`)
+        setSaving(false)
+        return
+      }
     }
     setSaving(false)
     onClose(true)
@@ -112,6 +127,9 @@ export default function StudentIconManager({ student, orgId, onClose }) {
           )}
         </div>
 
+        {saveError && (
+          <div style={{ margin: '0 24px', padding: '8px 12px', background: '#fef2f2', color: '#c84b2f', fontSize: 12, borderRadius: 8 }}>{saveError}</div>
+        )}
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text3)' }}>Student picks their visible icons from this assigned list.</div>
           <div style={{ display: 'flex', gap: 10 }}>

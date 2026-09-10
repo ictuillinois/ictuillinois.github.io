@@ -2170,6 +2170,7 @@ function StaffStudentIconManager() {
       {iconStudent && (
         <StudentIconManager
           student={iconStudent}
+          orgId={session?.organizationId}
           onClose={(saved) => {
             setIconStudent(null)
             if (saved) toast(`Icons updated for ${sFirstName(iconStudent) || iconStudent.name} ✓`)
