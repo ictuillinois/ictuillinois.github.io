@@ -139,7 +139,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         })
       } else if (session?.userId) {
         const queries = [
-          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
+          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId),
         ]
         // For staff and students: also load which screens admin has granted them
         if (session?.role === 'user' || session?.role === 'lab_user') {
@@ -160,7 +160,10 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         const orgRes = results[results.length - 2]
         const appRes = results[results.length - 1]
 
-        savedModules = prefsRes.data?.[0]?.active_modules
+        // user_dashboard_prefs has no created_at column and can have duplicate rows for a
+        // user — prefer whichever row actually has data populated rather than trusting order
+        const prefRow = (prefsRes.data || []).find(r => r.active_modules?.length || r.allowed_modules?.length) || prefsRes.data?.[0]
+        savedModules = prefRow?.active_modules
 
         // Global app pool (super admin master list)
         let appPool = null
@@ -178,7 +181,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         }
 
         if (session?.role === 'lab_user') {
-          pool = prefsRes.data?.[0]?.allowed_modules || []
+          pool = prefRow?.allowed_modules || []
           setAllowedPool(pool)
           // Unlock studentLocked modules explicitly granted by admin via screen access
           if (accessRes?.data?.length) {

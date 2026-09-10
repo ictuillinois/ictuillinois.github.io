@@ -25,13 +25,14 @@ export default function StudentIconManager({ student, orgId, onClose }) {
       : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked)
     setPoolModules(mods)
 
-    // Load ALL rows for this user_id — this table has had duplicate-row issues, and relying
-    // on a single order-by-created_at-limit-1 read can silently pick an empty duplicate.
-    // Prefer whichever existing row actually has allowed_modules populated.
-    const { data: rows } = await sb.from('user_dashboard_prefs')
+    // Load ALL rows for this user_id — this table has no created_at column (a query
+    // ordering by it errors out and silently returns no data — the root cause of this
+    // whole bug) and can have duplicate rows for a user. Prefer whichever existing row
+    // actually has allowed_modules populated rather than trusting row order.
+    const { data: rows, error: loadErr } = await sb.from('user_dashboard_prefs')
       .select('id, allowed_modules')
       .eq('user_id', student.id)
-      .order('created_at', { ascending: false })
+    if (loadErr) console.error('[StudentIconManager] load failed:', loadErr)
     setExistingRowIds((rows || []).map(r => r.id))
     const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
     setAllowed(new Set(bestRow?.allowed_modules?.length ? bestRow.allowed_modules : []))

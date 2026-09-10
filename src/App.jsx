@@ -238,8 +238,8 @@ export default function App() {
         setShowIconPicker(false)
         return
       }
-      const { data } = await sb.from('user_dashboard_prefs').select('active_modules, has_set_dashboard').eq('user_id', userId).order('created_at', { ascending: false }).limit(1)
-      const row = data?.[0]
+      const { data } = await sb.from('user_dashboard_prefs').select('active_modules, has_set_dashboard').eq('user_id', userId)
+      const row = (data || []).find(r => r.has_set_dashboard || Array.isArray(r.active_modules)) || data?.[0]
       // Any explicit active_modules array (even empty) means admin or user already configured this
       const hasSaved = row && (
         row.has_set_dashboard === true ||

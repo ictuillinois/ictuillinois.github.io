@@ -556,7 +556,7 @@ function DashboardIconsPanel({ session }) {
         setDisplayOrder(initOrder(savedArr, displayKeys))
       } else {
         const [prefsRes, orgResRaw, appRes] = await Promise.all([
-          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
+          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId),
           session?.organizationId
             ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
             : Promise.resolve(null),
@@ -566,7 +566,10 @@ function DashboardIconsPanel({ session }) {
         if (orgResRaw?.error && session?.organizationId) {
           orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
         }
-        const data = prefsRes.data?.[0] ?? null
+        // user_dashboard_prefs has no created_at column and can have duplicate rows for a
+        // user — prefer whichever row actually has data populated rather than trusting order
+        const prefRows = prefsRes.data || []
+        const data = prefRows.find(r => r.active_modules?.length || r.allowed_modules?.length) || prefRows[0] || null
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
         // Role-specific org pool: lab users use labusers pool, staff use labmanagers pool, org admin uses outer pool

@@ -711,7 +711,7 @@ export default function Dashboard() {
         setCustomLinks((soloRes.data?.custom_external_links || []).filter(l => l.enabled))
       } else {
         const [prefsRes, orgResRaw, appRes] = await Promise.all([
-          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules, has_set_dashboard').eq('user_id', session.userId).order('created_at', { ascending: false }).limit(1),
+          sb.from('user_dashboard_prefs').select('active_modules, allowed_modules, has_set_dashboard').eq('user_id', session.userId),
           session?.organizationId
             ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
             : Promise.resolve(null),
@@ -722,7 +722,10 @@ export default function Dashboard() {
         if (orgResRaw?.error && session?.organizationId) {
           orgRes = await sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
         }
-        const row = prefsRes.data?.[0]
+        // user_dashboard_prefs has no created_at column and can have duplicate rows for a
+        // user — prefer whichever row actually has data populated rather than trusting order
+        const prefRows = prefsRes.data || []
+        const row = prefRows.find(r => r.has_set_dashboard || r.active_modules?.length || r.allowed_modules?.length) || prefRows[0]
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
         // studentLocked modules (e.g. QR Labels) bypass the org-wide pool entirely — a lab
