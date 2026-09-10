@@ -67,7 +67,7 @@ function Tooltip({ x, y, info, onClose }) {
 // ICT BUILDING MAP
 // ══════════════════════════════════════════════════════════════
 function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
-                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted }) {
+                  editingSpots = false, onSpotAdded, onSpotUpdated, onSpotDeleted, disableRoomSelect = false }) {
   const [tooltip, setTooltip] = useState(null)
   const [newSpotRoom, setNewSpotRoom] = useState('')
   const [draftSpot, setDraftSpot] = useState(null)   // { id?, room_id, x, y, name, type, rackNames, shelvesPerRack } — id present = editing an existing spot
@@ -278,8 +278,8 @@ function ICTMap({ occupancy, selected, onToggle, canEdit, spots = [],
         return (
           <rect key={r.id} x={r.x} y={r.y} width={r.w} height={r.h}
             fill={getRoomFill(r.id)} stroke={getRoomStroke(r.id)} strokeWidth={selected.includes(r.id) ? 2 : 1.2} rx="1"
-            style={{ cursor: editingSpots ? 'default' : occ?.occupied && !selected.includes(r.id) ? 'not-allowed' : 'pointer' }}
-            onClick={() => { if (!editingSpots) handleClick(r.id, r.label.replace('\n', ' '), cx, cy) }}/>
+            style={{ cursor: (editingSpots || disableRoomSelect) ? 'default' : occ?.occupied && !selected.includes(r.id) ? 'not-allowed' : 'pointer' }}
+            onClick={() => { if (!editingSpots && !disableRoomSelect) handleClick(r.id, r.label.replace('\n', ' '), cx, cy) }}/>
         )
       })}
 
@@ -803,6 +803,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             <ICTMap occupancy={occupancy} selected={selected} onToggle={toggleLocation} canEdit={!viewOnly && canEdit}
               spots={spots}
               editingSpots={editingSpots}
+              disableRoomSelect={allowLayoutEdit}
               onSpotAdded={spot => saveSpots([...spots, spot])}
               onSpotUpdated={spot => saveSpots(spots.map(s => s.id === spot.id ? spot : s))}
               onSpotDeleted={id => saveSpots(spots.filter(s => s.id !== id))} />
