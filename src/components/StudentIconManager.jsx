@@ -7,6 +7,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
   const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [existingRowIds, setExistingRowIds] = useState([]) // ALL rows found for this user_id — duplicates are a known issue
 
   useEffect(() => { load() }, [student.id])
 
@@ -24,14 +25,16 @@ export default function StudentIconManager({ student, orgId, onClose }) {
       : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked)
     setPoolModules(mods)
 
-    // Load student's currently assigned allowed_modules
+    // Load ALL rows for this user_id — this table has had duplicate-row issues, and relying
+    // on a single order-by-created_at-limit-1 read can silently pick an empty duplicate.
+    // Prefer whichever existing row actually has allowed_modules populated.
     const { data: rows } = await sb.from('user_dashboard_prefs')
-      .select('allowed_modules')
+      .select('id, allowed_modules')
       .eq('user_id', student.id)
       .order('created_at', { ascending: false })
-      .limit(1)
-    const row = rows?.[0] ?? null
-    setAllowed(new Set(row?.allowed_modules?.length ? row.allowed_modules : []))
+    setExistingRowIds((rows || []).map(r => r.id))
+    const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
+    setAllowed(new Set(bestRow?.allowed_modules?.length ? bestRow.allowed_modules : []))
   }
 
   function toggle(key) {
@@ -47,17 +50,28 @@ export default function StudentIconManager({ student, orgId, onClose }) {
     setSaving(true)
     setSaveError(null)
     const modules = [...PINNED_MODULES, ...Array.from(allowed).filter(k => !PINNED_MODULES.includes(k))]
-    const { data: updated, error: updateErr } = await sb.from('user_dashboard_prefs')
-      .update({ allowed_modules: modules })
-      .eq('user_id', student.id)
-      .select('id')
-    if (updateErr) {
-      console.error('[StudentIconManager] update failed:', updateErr)
-      setSaveError(`Failed to save: ${updateErr.message}`)
-      setSaving(false)
-      return
-    }
-    if (!updated?.length) {
+
+    if (existingRowIds.length > 0) {
+      // Update the specific row we already confirmed exists (by primary key, not by
+      // user_id) so this can never silently create a duplicate row. If more than one
+      // row exists for this user (a known issue with this table), write the same value
+      // to all of them and delete the extras so reads relying on order-by-created_at
+      // can't pick a stale/empty duplicate anymore.
+      const [keepId, ...extraIds] = existingRowIds
+      const { error: updateErr } = await sb.from('user_dashboard_prefs')
+        .update({ allowed_modules: modules })
+        .eq('id', keepId)
+      if (updateErr) {
+        console.error('[StudentIconManager] update failed:', updateErr)
+        setSaveError(`Failed to save: ${updateErr.message}`)
+        setSaving(false)
+        return
+      }
+      if (extraIds.length) {
+        const { error: delErr } = await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
+        if (delErr) console.warn('[StudentIconManager] could not clean up duplicate rows:', delErr.message)
+      }
+    } else {
       const { error: insertErr } = await sb.from('user_dashboard_prefs')
         .insert({ user_id: student.id, organization_id: orgId || null, allowed_modules: modules })
       if (insertErr) {
