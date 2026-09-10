@@ -441,7 +441,7 @@ function PDFSafetyContent({
 
       doc.setFont('times', 'bold')
       doc.setFontSize(30)
-      doc.setTextColor(255, 140, 0)
+      doc.setTextColor(0, 0, 0)
       doc.text(fullName, W / 2, 82, { align: 'center' })
 
       const nameW = doc.getTextWidth(fullName)
@@ -480,7 +480,7 @@ function PDFSafetyContent({
       doc.setTextColor(255, 255, 255)
       doc.setFont('times', 'normal')
       doc.setFontSize(9)
-      doc.text('ICT Laboratory · College of Engineering · University of Missouri', W / 2, H - 13, { align: 'center' })
+      doc.text('Illinois Center for Transportation · CEE Department · University of Illinois at Urbana-Champaign', W / 2, H - 13, { align: 'center' })
 
       // Upload to Supabase
       const blob = doc.output('blob')
