@@ -589,7 +589,7 @@ function SafetyGate({ onGoToTraining, onRefresh }) {
 }
 
 export default function Dashboard() {
-  const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules } = useAppStore()
+  const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules, studentAllowedPool, setStudentAllowedPool } = useAppStore()
   const [inboxOpen, setInboxOpen]   = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
@@ -599,7 +599,6 @@ export default function Dashboard() {
   const [urlInput, setUrlInput] = useState('')
   const [savingUrl, setSavingUrl] = useState(false)
   const [userAccess, setUserAccess] = useState(null)
-  const [studentAllowedPool, setStudentAllowedPool] = useState(null)
   const [safetyComplete, setSafetyComplete] = useState(null)
   // Module card images: seed from localStorage cache (stale-while-revalidate)
   // so repeat visits paint images on the first frame instead of flashing the

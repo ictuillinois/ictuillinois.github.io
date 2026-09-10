@@ -9,12 +9,20 @@ export const useAppStore = create((set, get) => ({
     sb.auth.signOut()
     localStorage.removeItem('ictlab_login_mode')
     localStorage.removeItem('ictlab_active_user_id')
-    set({ session: null, loginMode: null, activeModules: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
+    set({ session: null, loginMode: null, activeModules: null, studentAllowedPool: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
   },
 
   // ── Active dashboard modules (icon picker) ──
   activeModules: null,
   setActiveModules: (modules) => set({ activeModules: modules }),
+
+  // Per-student module pool (studentLocked modules, e.g. QR Labels, granted individually
+  // by a lab manager). Must live in the global store, not component state — Dashboard.jsx
+  // remounts on every navigation, and the early-return in loadDashboardPrefs (guarded by
+  // activeModules already being set) means a component-local value would never get
+  // repopulated after the very first load in a session.
+  studentAllowedPool: null,
+  setStudentAllowedPool: (pool) => set({ studentAllowedPool: pool }),
 
   // ── Login mode: 'team' | null ──
   loginMode: null,
