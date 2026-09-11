@@ -853,6 +853,10 @@ function MPFMap({ occupancy, selected, onToggle, canEdit, spots = [],
 // CUSTOM FLOOR PLAN TAB (org-uploaded image + drawn zones)
 // ══════════════════════════════════════════════════════════════
 function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
+  // Rendered as a clean diagram (matching the ICT Building / MPF maps' look)
+  // rather than zones overlaid on the raw uploaded photo. The photo is kept
+  // in the DOM at zero opacity purely so the container inherits its aspect
+  // ratio — the percentage-based zone coordinates are relative to it.
   function getZoneStyle(zone) {
     const sel = selected.includes(zone.id)
     const occ = occupancy[zone.id]?.occupied && !sel
@@ -860,9 +864,9 @@ function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
       position: 'absolute',
       left: `${zone.x}%`, top: `${zone.y}%`,
       width: `${zone.w}%`, height: `${zone.h}%`,
-      border: `2px solid ${sel ? '#0F6E56' : occ ? '#a32d2d' : 'var(--accent)'}`,
-      background: sel ? 'rgba(159,225,203,0.45)' : occ ? 'rgba(226,75,74,0.35)' : 'rgba(83,74,183,0.15)',
-      borderRadius: 4, boxSizing: 'border-box',
+      border: `1.5px solid ${sel ? C.selected_stroke : occ ? C.occupied_stroke : '#888'}`,
+      background: sel ? C.selected : occ ? C.occupied : '#f8f7f4',
+      borderRadius: 3, boxSizing: 'border-box',
       cursor: occ ? 'not-allowed' : 'pointer',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       transition: 'background 0.12s, border-color 0.12s',
@@ -870,9 +874,9 @@ function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
   }
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-      <img src={plan.image_url} alt={plan.name} draggable={false}
-        style={{ display: 'block', width: '100%', userSelect: 'none' }} />
+    <div style={{ position: 'relative', display: 'inline-block', width: '100%', background: '#f5f4f0', border: '2px solid #555', borderRadius: 2, overflow: 'hidden' }}>
+      <img src={plan.image_url} alt="" draggable={false} aria-hidden="true"
+        style={{ display: 'block', width: '100%', userSelect: 'none', opacity: 0 }} />
       {(plan.zones || []).map(zone => {
         const occ = occupancy[zone.id]
         const sel = selected.includes(zone.id)
@@ -886,9 +890,8 @@ function CustomPlanTab({ plan, selected, onToggle, occupancy, canEdit }) {
             title={occ?.occupied && !sel ? `Occupied by ${occ.project_name || 'another project'}` : zone.label}>
             <span style={{
               fontSize: 11, fontWeight: 700,
-              color: sel ? '#0F6E56' : occ?.occupied && !sel ? '#fff' : 'var(--accent)',
-              background: sel || (occ?.occupied && !sel) ? 'transparent' : 'rgba(255,255,255,0.88)',
-              padding: '1px 6px', borderRadius: 4,
+              color: occ?.occupied && !sel ? '#fff' : '#333',
+              padding: '1px 6px',
               maxWidth: '90%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               pointerEvents: 'none',
             }}>
