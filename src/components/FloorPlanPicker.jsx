@@ -1253,7 +1253,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
             return plan ? <CustomPlanTab plan={plan} selected={selected} onToggle={pickLocation} occupancy={occupancy} canEdit={!viewOnly && canEdit} /> : null
           })() : facility === 'ICT' ? (
             <ICTMap occupancy={occupancy} selected={selected} onToggle={pickLocation} canEdit={!viewOnly && canEdit}
-              spots={spots}
+              spots={spots.filter(s => (s.facility || 'ICT') === 'ICT')}
               editingSpots={editingSpots}
               disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
@@ -1262,7 +1262,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
               onSpotView={id => setViewSpotId(id)} />
           ) : (
             <MPFMap occupancy={occupancy} selected={selected} onToggle={pickLocation} canEdit={!viewOnly && canEdit}
-              spots={spots}
+              spots={spots.filter(s => s.facility === 'MPF')}
               editingSpots={editingSpots}
               disableRoomSelect
               onSpotAdded={spot => saveSpots([...spots, spot])}
