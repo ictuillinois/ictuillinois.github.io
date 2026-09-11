@@ -201,8 +201,10 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
 
   useEffect(() => {
     async function loadProjects() {
-      let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('name')
+      let q = sb.from('projects').select('id, name, project_id, student_ids').eq('status', 'active').order('name')
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+      // Lab users can only add materials to projects they're assigned to
+      if (session?.dbRole === 'lab_user') q = q.contains('student_ids', [session.userId])
       const { data } = await q
       setProjects(data || [])
     }
@@ -2107,6 +2109,16 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   // Project photo: managers/admins (team) or the workspace owner (solo)
   const canSetPhoto = !viewingWorkspaceOwnerId && (isSolo || session?.userId === null || session?.dbRole === 'admin' || session?.dbRole === 'user')
 
+  // Lab users can fully read/edit/add/remove materials on projects they're assigned to
+  // (project.student_ids), but can only VIEW projects they're not assigned to — no
+  // editing, adding, or deleting. Staff (admin/user/lab manager) and solo users are
+  // unaffected. Standalone (non-project) materials are out of scope for this rule.
+  const isLabUser = !isSolo && session?.dbRole === 'lab_user'
+  function isProjectAssigned(project) {
+    if (!isLabUser) return true
+    return (project?.student_ids || []).includes(session?.userId)
+  }
+
   async function uploadProjectPhoto(file) {
     if (!file || !photoTarget) return
     const ext = file.name.split('.').pop()
@@ -2126,7 +2138,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
 
   async function loadAllMaterials() {
-    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id)').order('created_at', { ascending: false })
+    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id, student_ids)').order('created_at', { ascending: false })
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setAllMaterials(data || [])
@@ -2150,7 +2162,11 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         q = q.is('solo_owner_id', null)
         if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
       }
-      if (filter !== 'all') q = q.eq('status', filter)
+      if (filter === 'my') {
+        if (session?.userId) q = q.or(`pi_user_id.eq.${session.userId},student_ids.cs.{${session.userId}}`)
+      } else if (filter !== 'all') {
+        q = q.eq('status', filter)
+      }
       return q
     }
     const baseSelect = 'id, name, project_id, status, cfop, pi_user_id, student_ids, sampling_date, notes, created_at'
@@ -2235,9 +2251,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         {viewMode === 'projects' && (
           <>
             <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
-            {['all','active','on hold','completed'].map(f => (
+            {['all','my','active','on hold','completed'].map(f => (
               <button key={f} className={'filter-btn' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
-                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'all' ? 'All' : f === 'my' ? 'My Project/s' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </>
@@ -2278,10 +2294,11 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
             {(() => {
               const m = allMaterials.find(x => x.id === selectedMaterialId)
               if (!m) return null
+              const matReadOnly = m.project_id ? !isProjectAssigned(m.projects) : false
               const MAT_TABS = [
                 { key: 'info',    label: '1 · Material Info' },
-                { key: 'edit',    label: '2 · Material' },
-                { key: 'storage', label: '3 · Material Storage' },
+                ...(matReadOnly ? [] : [{ key: 'edit', label: '2 · Material' }]),
+                { key: 'storage', label: matReadOnly ? '2 · Material Storage' : '3 · Material Storage' },
               ]
               return (
                 <div style={{ maxWidth: 900, margin: '0 auto', marginBottom: 20 }}>
@@ -2311,9 +2328,11 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                     {/* Tab 1: Info — same visual style as ProjectInfo */}
                     {matPanelTab === 'info' && (
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                          <button className="btn btn-sm" onClick={() => setMatPanelTab('edit')}>✏️ Edit info</button>
-                        </div>
+                        {!matReadOnly && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                            <button className="btn btn-sm" onClick={() => setMatPanelTab('edit')}>✏️ Edit info</button>
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                           {m.material_type && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>{m.material_type}</span>}
                           {m.projects?.name && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>🧪 {m.projects.name}{m.projects.project_id ? ` · ${m.projects.project_id}` : ''}</span>}
@@ -2335,7 +2354,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                       </div>
                     )}
                     {/* Tab 2: Edit inline */}
-                    {matPanelTab === 'edit' && (
+                    {matPanelTab === 'edit' && !matReadOnly && (
                       <MaterialModal
                         inline
                         projectId={m.project_id}
@@ -2347,7 +2366,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                     )}
                     {/* Tab 3: Storage — same visual style as MaterialStorage */}
                     {matPanelTab === 'storage' && (
-                      <SingleMaterialStorageTab material={m} onRefresh={loadAllMaterials} />
+                      <SingleMaterialStorageTab material={m} onRefresh={loadAllMaterials} readOnly={matReadOnly} />
                     )}
                   </div>
                 </div>
@@ -2410,10 +2429,15 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                   </div>
                 )}
               </div>
-              {!viewingShared && (
+              {!viewingShared && isProjectAssigned(activeProject) && (
                 <button className="btn btn-sm btn-danger" onClick={() => deleteProject(activeProject.id)}>Delete</button>
               )}
             </div>
+            {isLabUser && !isProjectAssigned(activeProject) && (
+              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', background: 'var(--surface2)', borderRadius: 8, padding: '8px 12px' }}>
+                👁️ View only — you're not assigned to this project. Ask your lab manager to add you if you need to edit it.
+              </div>
+            )}
           </div>
           <ScrollTabs style={{ borderBottom: '1px solid var(--border)' }} bg='var(--surface)'>
             {subTabs.map(t => (
@@ -2424,9 +2448,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
             ))}
           </ScrollTabs>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', padding: 24 }}>
-            {subTab === 'info'      && <ProjectInfo project={activeProject} users={users} onSaved={loadActiveProject} isSolo={isSolo} readOnly={viewingShared} />}
-            {subTab === 'materials' && <ProjectMaterials project={activeProject} />}
-            {subTab === 'storage'   && <MaterialStorage project={activeProject} />}
+            {subTab === 'info'      && <ProjectInfo project={activeProject} users={users} onSaved={loadActiveProject} isSolo={isSolo} readOnly={viewingShared || !isProjectAssigned(activeProject)} />}
+            {subTab === 'materials' && <ProjectMaterials project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
+            {subTab === 'storage'   && <MaterialStorage project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
           </div>
         </div>
       )}

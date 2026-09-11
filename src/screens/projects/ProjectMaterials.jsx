@@ -948,7 +948,7 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
 // ══════════════════════════════════════════════════════════════
 const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other']
 
-export default function ProjectMaterials({ project }) {
+export default function ProjectMaterials({ project, readOnly = false }) {
   const { toast, session } = useAppStore()
   const isSoloUser = session?.loginMode === 'solo'
   const [materials, setMaterials] = useState([])
@@ -981,7 +981,9 @@ export default function ProjectMaterials({ project }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>{materials.length} material{materials.length !== 1 ? 's' : ''} in this project</div>
-        <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
+        {!readOnly && (
+          <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
+        )}
       </div>
 
       {materials.length === 0 ? (
@@ -1024,7 +1026,9 @@ export default function ProjectMaterials({ project }) {
                 </div>
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}>Delete</button>
+                  {!readOnly && (
+                    <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}>Delete</button>
+                  )}
                   <span style={{ fontSize: 13, color: 'var(--text3)', display: 'flex', alignItems: 'center' }}>{isOpen ? '▲' : '▼'}</span>
                 </div>
               </div>
@@ -1037,8 +1041,8 @@ export default function ProjectMaterials({ project }) {
                 const subDefs = SOLO_SUBFIELDS[m.material_type] || []
                 const MAT_TABS = [
                   { key: 'info',    label: '1 · Material Info' },
-                  { key: 'edit',    label: '2 · Material' },
-                  { key: 'storage', label: '3 · Material Storage' },
+                  ...(readOnly ? [] : [{ key: 'edit', label: '2 · Material' }]),
+                  { key: 'storage', label: readOnly ? '2 · Material Storage' : '3 · Material Storage' },
                 ]
                 return (
                 <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
@@ -1110,7 +1114,7 @@ export default function ProjectMaterials({ project }) {
                   )}
 
                   {/* Tab 2: Edit form inline */}
-                  {matTab === 'edit' && (
+                  {matTab === 'edit' && !readOnly && (
                     <MaterialModal
                       inline
                       projectId={project.id}

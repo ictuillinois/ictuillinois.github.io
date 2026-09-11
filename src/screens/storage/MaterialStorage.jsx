@@ -143,9 +143,12 @@ function BarcodeEditForm({ material, onSave, onCancel, saving }) {
   )
 }
 
-function StorageNotesForm({ material, onSave }) {
+function StorageNotesForm({ material, onSave, readOnly }) {
   const [notes, setNotes] = useState(material.storage_notes || '')
   const [dirty, setDirty] = useState(false)
+  if (readOnly) {
+    return <div style={{ fontSize: 14, color: notes ? 'var(--text)' : 'var(--text3)' }}>{notes || 'No notes.'}</div>
+  }
   return (
     <div>
       <textarea rows={3} value={notes} onChange={e => { setNotes(e.target.value); setDirty(true) }}
@@ -155,7 +158,7 @@ function StorageNotesForm({ material, onSave }) {
   )
 }
 
-export default function MaterialStorage({ project }) {
+export default function MaterialStorage({ project, readOnly = false }) {
   const { toast } = useAppStore()
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
@@ -255,8 +258,8 @@ export default function MaterialStorage({ project }) {
                     <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{selected.barcode_id}</div>
                     {selected.barcode_scanned_at && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Assigned {new Date(selected.barcode_scanned_at).toLocaleDateString()}</div>}
                     <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                      <button className="btn btn-sm" onClick={() => setEditingBarcode(selected.id)}>✏️ Edit</button>
-                      <button className="btn btn-sm" onClick={() => setShowScanner(true)}>📷 Scan new</button>
+                      {!readOnly && <button className="btn btn-sm" onClick={() => setEditingBarcode(selected.id)}>✏️ Edit</button>}
+                      {!readOnly && <button className="btn btn-sm" onClick={() => setShowScanner(true)}>📷 Scan new</button>}
                       <button className="btn btn-sm btn-primary" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
                     </div>
                   </div>
@@ -268,8 +271,10 @@ export default function MaterialStorage({ project }) {
                   </div>
                 )}
               </div>
-            ) : editingBarcode === selected.id ? (
+            ) : editingBarcode === selected.id && !readOnly ? (
               <BarcodeEditForm material={selected} onSave={(val) => saveBarcode(selected, val)} onCancel={() => setEditingBarcode(null)} saving={saving} />
+            ) : readOnly ? (
+              <div style={{ fontSize: 14, color: 'var(--text3)' }}>No barcode ID assigned yet.</div>
             ) : (
               <div>
                 <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14 }}>No barcode ID assigned yet. Auto-generate one or scan/enter manually.</p>
@@ -299,10 +304,10 @@ export default function MaterialStorage({ project }) {
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
             <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Notes</div>
-            <StorageNotesForm material={selected} onSave={(notes) => saveNotes(selected, notes)} />
+            <StorageNotesForm material={selected} onSave={(notes) => saveNotes(selected, notes)} readOnly={readOnly} />
           </div>
 
-          {!selected.storage_confirmed && (
+          {!selected.storage_confirmed && !readOnly && (
             <button className="btn btn-primary" onClick={() => confirmStorage(selected)} style={{ width: '100%', padding: 14, fontSize: 15 }}>✅ Confirm Storage Complete</button>
           )}
         </div>
@@ -333,7 +338,7 @@ export default function MaterialStorage({ project }) {
 }
 
 // ── Single-material storage tab — same UI as MaterialStorage but for one material ──
-export function SingleMaterialStorageTab({ material, onRefresh }) {
+export function SingleMaterialStorageTab({ material, onRefresh, readOnly = false }) {
   const { toast } = useAppStore()
   const [saving, setSaving] = useState(false)
   const [editingBarcode, setEditingBarcode] = useState(false)
@@ -399,7 +404,7 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>{material.barcode_id}</div>
                 {material.barcode_scanned_at && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Assigned {new Date(material.barcode_scanned_at).toLocaleDateString()}</div>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <button className="btn btn-sm" onClick={() => setEditingBarcode(true)}>✏️ Edit</button>
+                  {!readOnly && <button className="btn btn-sm" onClick={() => setEditingBarcode(true)}>✏️ Edit</button>}
                   <button className="btn btn-sm btn-primary" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
                 </div>
               </div>
@@ -411,8 +416,10 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
               </div>
             )}
           </div>
-        ) : editingBarcode ? (
+        ) : editingBarcode && !readOnly ? (
           <BarcodeEditForm material={material} onSave={saveBarcode} onCancel={() => setEditingBarcode(false)} saving={saving} />
+        ) : readOnly ? (
+          <div style={{ fontSize: 14, color: 'var(--text3)' }}>No barcode ID assigned yet.</div>
         ) : (
           <div>
             <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14 }}>No barcode ID assigned yet. Auto-generate one or enter manually.</p>
@@ -438,10 +445,10 @@ export function SingleMaterialStorageTab({ material, onRefresh }) {
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Storage Notes</div>
-        <StorageNotesForm material={material} onSave={saveNotes} />
+        <StorageNotesForm material={material} onSave={saveNotes} readOnly={readOnly} />
       </div>
 
-      {!material.storage_confirmed && (
+      {!material.storage_confirmed && !readOnly && (
         <button className="btn btn-primary" onClick={confirmStorage} style={{ width: '100%', padding: 14, fontSize: 15 }}>✅ Confirm Storage Complete</button>
       )}
 
