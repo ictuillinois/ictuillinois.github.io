@@ -358,6 +358,24 @@ END $$;
 -- STEP 12: floor_plans, storage_locations, student_lockers
 -- ────────────────────────────────────────────────────────────────
 
+-- floor_plans never existed on this database either — same class of bug as
+-- storage_locations below: _apply_rls() has been silently SKIPping this
+-- policy every run (table-not-found is a no-op by design), so saving a
+-- custom org-uploaded floor plan (FloorPlanEditor.jsx) failed outright with
+-- "Could not find the table 'public.floor_plans' in the schema cache".
+-- Schema inferred from FloorPlanEditor.jsx / FloorPlanPicker.jsx's own
+-- read/write columns. Found + fixed Sept 2026.
+CREATE TABLE IF NOT EXISTS floor_plans (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  organization_id UUID,
+  name            TEXT,
+  image_url       TEXT,
+  zones           JSONB DEFAULT '[]',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS floor_plans_organization_id_idx ON floor_plans(organization_id);
+
 SELECT _apply_rls('floor_plans', 'floor_plans_policy', $b$
 FOR ALL TO authenticated
 USING    (is_super_admin() OR organization_id = my_org_id())
