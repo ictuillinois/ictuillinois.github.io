@@ -924,6 +924,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [pickedSpotId, setPickedSpotId] = useState('')
   const [pickedRack, setPickedRack] = useState('')
   const [pickedShelf, setPickedShelf] = useState('')
+  const [facilityOrder, setFacilityOrder] = useState(null) // saved tab order (array of facility keys), null until loaded
+  const [dragTabKey, setDragTabKey] = useState(null)
   const canEdit = !!session
   const isSolo = session?.loginMode === 'solo'
   const isICTOrg = true  // ictlab is always the ICT org
@@ -948,12 +950,13 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       locQuery = locQuery.eq('organization_id', '00000000-0000-0000-0000-000000000000')
     }
 
-    const [{ data: locData }, { data: planData }, { data: spotsData }] = await Promise.all([
+    const [{ data: locData }, { data: planData }, { data: spotsData }, { data: orderData }] = await Promise.all([
       locQuery,
       orgId
         ? sb.from('floor_plans').select('*').eq('organization_id', orgId).order('created_at')
         : Promise.resolve({ data: [] }),
       sb.from('ict_layout').select('value').eq('key', 'ict_spots').single(),
+      sb.from('ict_layout').select('value').eq('key', 'facility_tab_order').single(),
     ])
 
     const map = {}
@@ -973,6 +976,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
 
     if (spotsData?.value) {
       try { setSpots(JSON.parse(spotsData.value)) } catch {}
+    }
+
+    if (orderData?.value) {
+      try { setFacilityOrder(JSON.parse(orderData.value)) } catch { setFacilityOrder([]) }
+    } else {
+      setFacilityOrder([])
     }
 
     // Default tab: first custom plan if any, else ICT Building.
@@ -1020,6 +1029,15 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       detail: id,
       facility: id.startsWith('MPF') ? 'MPF' : 'ICT',
     }
+  }
+
+  async function saveFacilityOrder(next) {
+    setFacilityOrder(next)
+    const { error } = await sb.from('ict_layout').upsert(
+      { key: 'facility_tab_order', value: JSON.stringify(next) },
+      { onConflict: 'key' }
+    )
+    if (error) console.error('saveFacilityOrder failed:', error)
   }
 
   async function saveSpots(next) {
@@ -1159,21 +1177,60 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           </div>
         </div>
 
-        {/* Facility tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-          {customPlans.map(plan => (
-            <button key={plan.id} onClick={() => setFacility(`custom_${plan.id}`)}
-              style={{ padding: '10px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === `custom_${plan.id}` ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === `custom_${plan.id}` ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              🗺️ {plan.name}
-            </button>
-          ))}
-          {isICTOrg && ['ICT', 'MPF'].map(f => (
-            <button key={f} onClick={() => setFacility(f)}
-              style={{ padding: '10px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: facility === f ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${facility === f ? 'var(--accent)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {f === 'ICT' ? 'ICT Building' : 'MPF'}
-            </button>
-          ))}
-        </div>
+        {/* Facility tabs — order is admin-configurable (drag to reorder in Edit Spots mode) */}
+        {(() => {
+          const allTabs = [
+            ...(isICTOrg ? ['ICT', 'MPF'] : []),
+            ...customPlans.map(plan => `custom_${plan.id}`),
+          ]
+          const order = facilityOrder || []
+          const ordered = [
+            ...order.filter(k => allTabs.includes(k)),
+            ...allTabs.filter(k => !order.includes(k)),
+          ]
+          const tabLabel = key => {
+            if (key === 'ICT') return { icon: null, text: 'ICT Building' }
+            if (key === 'MPF') return { icon: null, text: 'MPF' }
+            const plan = customPlans.find(p => `custom_${p.id}` === key)
+            return { icon: '🗺️ ', text: plan?.name || key }
+          }
+          function handleTabDrop(targetKey) {
+            if (!dragTabKey || dragTabKey === targetKey) { setDragTabKey(null); return }
+            const next = [...ordered]
+            const from = next.indexOf(dragTabKey)
+            const to = next.indexOf(targetKey)
+            next.splice(from, 1)
+            next.splice(to, 0, dragTabKey)
+            setDragTabKey(null)
+            saveFacilityOrder(next)
+          }
+          return (
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+              {ordered.map(key => {
+                const { icon, text } = tabLabel(key)
+                return (
+                  <button key={key} onClick={() => setFacility(key)}
+                    draggable={canEditLayout}
+                    onDragStart={() => setDragTabKey(key)}
+                    onDragOver={e => canEditLayout && e.preventDefault()}
+                    onDrop={() => handleTabDrop(key)}
+                    onDragEnd={() => setDragTabKey(null)}
+                    style={{
+                      padding: '10px 16px', border: 'none',
+                      background: dragTabKey === key ? 'var(--surface2)' : 'transparent',
+                      fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500,
+                      cursor: canEditLayout ? 'grab' : 'pointer',
+                      color: facility === key ? 'var(--accent)' : 'var(--text2)',
+                      borderBottom: `2px solid ${facility === key ? 'var(--accent)' : 'transparent'}`,
+                      transition: 'all 0.15s', whiteSpace: 'nowrap', opacity: dragTabKey === key ? 0.5 : 1,
+                    }}>
+                    {icon}{text}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
 
         {/* Legend */}
         <div style={{ display: 'flex', gap: 16, padding: '8px 16px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
