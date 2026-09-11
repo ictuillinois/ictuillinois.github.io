@@ -676,6 +676,7 @@ function blankForm() {
 
 // ── Validate form ─────────────────────────────────────────────
 function validate(form, toast, isSolo) {
+  if (!form.name?.trim()) { toast('Material Name / Label is required.'); return false }
   if (!form.material_type?.trim()) { toast('Please select a material type.'); return false }
   if (!form.pi_name?.trim()) { toast('Project PI is required.'); return false }
   if (isSolo) return true
@@ -789,8 +790,8 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
   const formBody = (
     <>
       <div className="field">
-        <label>Material Name / Label (optional)</label>
-        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
+        <label>Material Name / Label <span style={{ color: '#c84b2f' }}>*</span></label>
+        <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
       </div>
       <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} />
       {isSolo ? (
