@@ -1066,8 +1066,8 @@ export default function ProjectMaterials({ project, readOnly = false }) {
 
                   {/* Tab 1: Material Info */}
                   {matTab === 'info' && (
-                    <div style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 20px', marginBottom: m.photos?.length ? 14 : 0 }}>
+                    <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
+                      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 20px' }}>
                         {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
                         {isSoloMat ? <>
                           {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
@@ -1109,13 +1109,15 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                         </>}
                       </div>
                       {m.photos?.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Photos ({m.photos.length})</div>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {m.photos.map((url, i) => (
-                              <img key={i} src={url} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
-                            ))}
-                          </div>
+                        <div style={{ flexShrink: 0, width: 140 }}>
+                          <img src={m.photos[0]} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', display: 'block' }} onClick={() => window.open(m.photos[0], '_blank')} />
+                          {m.photos.length > 1 && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                              {m.photos.slice(1).map((url, i) => (
+                                <img key={i} src={url} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
