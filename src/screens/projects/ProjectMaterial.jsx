@@ -1,5 +1,6 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
+import { IconEye, IconCalendar, IconUser } from '../../components/Icons'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
@@ -10,11 +11,14 @@ import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
-function InfoCell({ label, value }) {
+function InfoCell({ label, value, icon: Icon, emptyText = 'Not set' }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontWeight: 500 }}>{value || '—'}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        {Icon && <Icon size={13} />}
+        {label}
+      </div>
+      <div style={value ? { fontWeight: 500 } : { color: 'var(--text3)', fontStyle: 'italic' }}>{value || emptyText}</div>
     </div>
   )
 }
@@ -95,11 +99,11 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         {project.cfop && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--accent-light)', padding: '4px 12px', borderRadius: 99, color: 'var(--accent)' }}>CFOP: {project.cfop}</span>}
         {!isSolo && project.project_group && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>Group: {project.project_group}</span>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-        <InfoCell label="Created" value={new Date(project.created_at).toLocaleDateString()} />
-        {!isSolo && <InfoCell label="Project PI" value={project.pi_name} />}
-        <InfoCell label="Sampling Date" value={project.sampling_date} />
-        <InfoCell label="Storage Date" value={project.storage_date} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 20, marginBottom: 20 }}>
+        <InfoCell label="Created" icon={IconCalendar} value={new Date(project.created_at).toLocaleDateString()} />
+        {!isSolo && <InfoCell label="Project PI" icon={IconUser} value={project.pi_name} emptyText="Not assigned" />}
+        <InfoCell label="Sampling Date" icon={IconCalendar} value={project.sampling_date} />
+        <InfoCell label="Storage Date" icon={IconCalendar} value={project.storage_date} />
       </div>
       {project.notes && (
         <div>
@@ -2385,18 +2389,22 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
           {projects.map(p => {
             const isActive = activeProjectId === p.id
+            const matCount = allMaterials.filter(m => m.project_id === p.id).length
             return (
               <div key={p.id} className="manage-card"
                 onClick={() => { if (isActive) { setActiveProjectId(null); setActiveProject(null) } else { setActiveProjectId(p.id); setSubTab('info') } }}
-                style={{ width: 176, flexShrink: 0, padding: p.photo_url ? '0 12px 14px' : '16px 12px 14px', cursor: 'pointer', overflow: 'hidden', ...(isActive ? { borderColor: 'var(--accent3)', background: 'var(--accent3-light)', boxShadow: '0 6px 18px rgba(83,74,183,0.18)' } : {}) }}>
+                style={{ width: 176, flexShrink: 0, padding: '0 12px 14px', cursor: 'pointer', overflow: 'hidden', ...(isActive ? { borderColor: 'var(--accent3)', background: 'var(--accent3-light)', boxShadow: '0 6px 18px rgba(83,74,183,0.18)' } : {}) }}>
                 {p.photo_url
                   ? <img src={p.photo_url} alt="" style={{ width: 'calc(100% + 24px)', height: 90, objectFit: 'cover', borderRadius: '10px 10px 0 0', margin: '0 -12px 10px' }} />
-                  : <div style={{ fontSize: 28, marginBottom: 8 }}>🧪</div>}
+                  : <div style={{ width: 'calc(100% + 24px)', height: 90, borderRadius: '10px 10px 0 0', margin: '0 -12px 10px', background: 'linear-gradient(135deg, var(--accent3-light), #f5f4fc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>🧪</div>}
                 <div style={{ fontWeight: 600, fontSize: 14, color: isActive ? 'var(--accent3)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                 {p.project_id && <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.project_id}</div>}
-                <div style={{ marginTop: 8, marginBottom: canSetPhoto ? 10 : 0 }}><span className={`badge ${statusBadge(p.status)}`} style={{ fontSize: 10, padding: '2px 8px' }}>{p.status}</span></div>
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span className={`badge ${statusBadge(p.status)}`} style={{ fontSize: 10, padding: '2px 8px' }}>{p.status}</span>
+                  <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>{matCount} material{matCount !== 1 ? 's' : ''}</span>
+                </div>
                 {canSetPhoto && (
-                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }}
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px', marginTop: 10 }}
                     onClick={e => { e.stopPropagation(); setPhotoTarget(p); photoFileRef.current?.click() }}>
                     {p.photo_url ? 'Change photo' : 'Photo'}
                   </button>
@@ -2420,9 +2428,6 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 17 }}>{activeProject.name}</div>
-                <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2 }}>
-                  {[activeProject.project_id && `Title: ${activeProject.project_id}`, activeProject.cfop && `CFOP: ${activeProject.cfop}`].filter(Boolean).join(' · ')}
-                </div>
                 {viewingShared && (
                   <div style={{ marginTop: 4, display: 'inline-block', fontSize: 11, fontWeight: 600, background: '#EEEDFE', color: '#534AB7', borderRadius: 99, padding: '2px 8px' }}>
                     {viewingOwnerName}'s workspace
@@ -2434,8 +2439,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
               )}
             </div>
             {isLabUser && !isProjectAssigned(activeProject) && (
-              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', background: 'var(--surface2)', borderRadius: 8, padding: '8px 12px' }}>
-                👁️ View only — you're not assigned to this project. Ask your lab manager to add you if you need to edit it.
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#92400e', background: '#fefce8', borderLeft: '3px solid #f59e0b', borderRadius: 6, padding: '8px 12px' }}>
+                <IconEye size={15} style={{ color: '#f59e0b' }} />
+                View only — you're not assigned to this project. Ask your lab manager to add you if you need to edit it.
               </div>
             )}
           </div>

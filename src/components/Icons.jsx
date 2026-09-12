@@ -107,3 +107,17 @@ export const IconMegaphone = (p) => (
     <path d="M20 9.5a3.5 3.5 0 0 1 0 5M7.5 15.5l1.5 5h2.5l-1.3-5"/>
   </Icon>
 )
+
+export const IconCalendar = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="2"/>
+    <path d="M3 9.5h18M8 3v4M16 3v4"/>
+  </Icon>
+)
+
+export const IconUser = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="3.8"/>
+    <path d="M4.5 20.5c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/>
+  </Icon>
+)
