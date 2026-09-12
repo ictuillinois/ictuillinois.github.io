@@ -121,3 +121,38 @@ export const IconUser = (p) => (
     <path d="M4.5 20.5c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/>
   </Icon>
 )
+
+export const IconMapPin = (p) => (
+  <Icon {...p}>
+    <path d="M12 21.5S5 15 5 9.8a7 7 0 0 1 14 0C19 15 12 21.5 12 21.5z"/>
+    <circle cx="12" cy="9.5" r="2.5"/>
+  </Icon>
+)
+
+export const IconScale = (p) => (
+  <Icon {...p}>
+    <path d="M12 3v18M8 21h8"/>
+    <path d="M5 7h6M13 7h6"/>
+    <path d="M5 7 2.5 12a2.5 2.5 0 0 0 5 0zM19 7l-2.5 5a2.5 2.5 0 0 0 5 0z"/>
+  </Icon>
+)
+
+export const IconCamera = (p) => (
+  <Icon {...p}>
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H8l1-2h6l1 2h2.5A1.5 1.5 0 0 1 20 8.5v10A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5z"/>
+    <circle cx="12" cy="13" r="3.5"/>
+  </Icon>
+)
+
+export const IconChevronDown = (p) => (
+  <Icon {...p}>
+    <path d="M5 8.5 12 15.5 19 8.5"/>
+  </Icon>
+)
+
+export const IconTrash = (p) => (
+  <Icon {...p}>
+    <path d="M4 6.5h16M9 6.5V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 6.5 7.3 19a2 2 0 0 0 2 1.8h5.4a2 2 0 0 0 2-1.8l.8-12.5"/>
+    <path d="M10 10.5v6M14 10.5v6"/>
+  </Icon>
+)

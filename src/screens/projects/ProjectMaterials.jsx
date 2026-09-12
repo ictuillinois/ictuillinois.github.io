@@ -4,6 +4,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
+import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────
 const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
@@ -992,13 +993,13 @@ export default function ProjectMaterials({ project, readOnly = false }) {
           <div>No materials yet. Add your first material.</div>
         </div>
       ) : (
-        materials.map(m => {
+        materials.map((m, idx) => {
           const isOpen = expanded === m.id
           const firstPhoto = m.photos?.[0]
           return (
             <div key={m.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
               {/* Material card header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: 'var(--surface)' }}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}
                 onClick={() => setExpanded(isOpen ? null : m.id)}>
                 {/* Thumbnail */}
                 <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1018,18 +1019,25 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
                     {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
-                    {m.source_name && <span>📍 {m.source_name}</span>}
-                    {m.container_type && <span>⚖️ {m.container_type}</span>}
-                    {m.sampling_date && <span>📅 {m.sampling_date}</span>}
-                    {m.photos?.length > 0 && <span>📷 {m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
+                    {m.source_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconMapPin size={12} />{m.source_name}</span>}
+                    {m.container_type && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconScale size={12} />{m.container_type}</span>}
+                    {m.sampling_date && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCalendar size={12} />{m.sampling_date}</span>}
+                    {m.photos?.length > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCamera size={12} />{m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
                   </div>
                 </div>
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                   {!readOnly && (
-                    <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}>Delete</button>
+                    <button className="btn btn-sm" title="Delete material" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}
+                      style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#c84b2f' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = '' }}>
+                      <IconTrash size={15} />
+                    </button>
                   )}
-                  <span style={{ fontSize: 13, color: 'var(--text3)', display: 'flex', alignItems: 'center' }}>{isOpen ? '▲' : '▼'}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                    <IconChevronDown size={16} />
+                  </span>
                 </div>
               </div>
 
