@@ -28,18 +28,28 @@ if (localStorage.getItem('ictlab_show_tooltips') === 'false') {
 // serves an old index.html, a plain reload just re-fetches the SAME stale
 // HTML from cache — this instead fetches version.json with cache disabled,
 // and if it doesn't match, force-navigates with a cache-busting query param
-// so the browser can't reuse the stale response. sessionStorage guard limits
-// this to one attempt per tab so a persistently-stale proxy can't loop.
+// so the browser can't reuse the stale response.
+//
+// The guard is keyed to the buildId we are jumping TO, not a plain "have I
+// ever reloaded" boolean. The boolean was loop-proof but went permanently
+// blind: one recovery disabled the check for the life of the tab, so every
+// later deploy went undetected. Keying by target buildId keeps the loop
+// protection (a persistently-stale proxy re-offers the same buildId, which we
+// have already attempted, so we stop) while still letting each genuinely new
+// deploy get exactly one recovery attempt.
 ;(async () => {
   try {
-    if (sessionStorage.getItem('ictlab_update_reload')) return
     const res = await fetch(`${import.meta.env.BASE_URL}version.json`, { cache: 'no-store' })
     const { buildId } = await res.json()
-    if (buildId && window.__BUILD_ID__ && buildId !== window.__BUILD_ID__) {
-      sessionStorage.setItem('ictlab_update_reload', '1')
-      window.location.href = window.location.pathname + window.location.search +
-        (window.location.search ? '&' : '?') + '_v=' + buildId + window.location.hash
-    }
+    if (!buildId || !window.__BUILD_ID__ || buildId === window.__BUILD_ID__) return
+    if (sessionStorage.getItem('ictlab_update_reload_to') === buildId) return
+    sessionStorage.setItem('ictlab_update_reload_to', buildId)
+    // set(), not append — the old code concatenated a fresh _v= on every
+    // recovery, so a tab that survived several deploys accumulated
+    // ?_v=a&_v=b&_v=c… without bound.
+    const url = new URL(window.location.href)
+    url.searchParams.set('_v', buildId)
+    window.location.replace(url.toString())
   } catch {}
 })()
 
