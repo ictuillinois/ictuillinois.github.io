@@ -1067,7 +1067,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   {/* Tab 1: Material Info */}
                   {matTab === 'info' && (
                     <div style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px 20px', marginBottom: m.photos?.length ? 14 : 0 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px 20px', marginBottom: m.photos?.length ? 14 : 0 }}>
                         {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
                         {isSoloMat ? <>
                           {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
