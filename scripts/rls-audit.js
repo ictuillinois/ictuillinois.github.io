@@ -3,7 +3,7 @@
  *
  * HOW TO RUN:
  *   1. Open the app (ictlab.app or localhost) and LOG IN as a lab user
- *      (role='student' or a lab manager) — NOT super admin (super admin
+ *      (role='lab_user' or a lab manager) — NOT super admin (super admin
  *      legitimately sees everything, so it can't reveal a leak).
  *   2. Open DevTools → Console. If prompted, type "allow pasting" first.
  *   3. Paste this whole file and press Enter.

@@ -411,7 +411,7 @@ function PDFSafetyContent({
     try {
       const firstName = user.nick_name?.trim() || user.name || ''
       const lastName  = user.last_name || ''
-      const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Student'
+      const fullName  = [firstName, lastName].filter(Boolean).join(' ') || 'Lab User'
       const dateStr   = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
       // ICT logo as a faint watermark

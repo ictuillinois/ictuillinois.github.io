@@ -2148,7 +2148,7 @@ export default function TrainingRecords() {
         ) : students.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">👥</div>
-            <div>No lab users yet. Add students in Admin → Students.</div>
+            <div>No lab users yet. Add lab users in Admin → Lab Users.</div>
           </div>
         ) : (
           <UserTrainingHub

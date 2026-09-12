@@ -322,7 +322,7 @@ function AdvancedSearch({ projects, users, onResults, onClear }) {
           </div>
           <div className="grid-2" style={{ gap: 10, marginBottom: 10 }}>
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>Student in team</label>
+              <label>Lab user in team</label>
               <select value={q.student} onChange={e => setQ(f => ({ ...f, student: e.target.value }))}>
                 <option value="">Any lab user</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}

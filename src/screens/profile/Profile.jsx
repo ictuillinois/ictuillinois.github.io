@@ -1530,7 +1530,7 @@ export function StudentsPanel({ toast, session }) {
     if (id) {
       const { error } = await sb.from('users').update(payload).eq('id', id)
       if (error) { toast('Error: ' + error.message); return }
-      setShowModal(false); setEditStudent(null); load(); toast('Student saved ✓')
+      setShowModal(false); setEditStudent(null); load(); toast('Lab user saved ✓')
     } else {
       const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single()
       if (error) { toast('Error: ' + error.message); return }
@@ -2159,7 +2159,7 @@ function StaffStudentIconManager() {
   return (
     <div>
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Student Dashboard Icons</div>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Lab User Dashboard Icons</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
           Select a student to choose which icons they are allowed to see and pick from on their dashboard.
         </div>

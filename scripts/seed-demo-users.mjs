@@ -118,7 +118,12 @@ async function main() {
       year_semester:         s.year,
       nickname:              s.nickname,
       organization_id:       demoOrg.id,
-      role:                  'student',
+      // Must be 'lab_user' — the app's only three roles are admin / user
+      // (lab manager) / lab_user. 'student' matched none of the lab_user
+      // gates, so seeded accounts silently escaped every lab-user
+      // restriction (saw all projects, all training records, could edit
+      // materials on projects they were not assigned to).
+      role:                  'lab_user',
       is_active:             true,
       admin_level:           0,
       pin:                   '',

@@ -702,7 +702,7 @@ export function ExamTab({ session }) {
                     <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
                       {requiresExam === false
                         ? 'Exam not required — training requests will be approved directly without scheduling an exam.'
-                        : 'Students must pass an exam before their training can be approved.'}
+                        : 'Lab users must pass an exam before their training can be approved.'}
                     </div>
                   </div>
                 </label>

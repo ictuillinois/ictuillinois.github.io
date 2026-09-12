@@ -40,9 +40,9 @@ const HELP_CONTENT = {
   },
   training: {
     title: 'Training Records',
-    description: 'Track training status across 4 categories: Fresh Student orientation, Golf Car, Equipment, and Building Alarm.',
+    description: 'Track training status across 4 categories: Fresh Lab User orientation, Golf Car, Equipment, and Building Alarm.',
     tips: [
-      'Fresh Student tab: upload certificates and track admin approval',
+      'Fresh Lab User tab: upload certificates and track admin approval',
       'Equipment tab: view your training status per piece of equipment',
       'Request retraining if you have not used equipment in 3+ months',
       'Exam tab: take a knowledge exam before your training session',
