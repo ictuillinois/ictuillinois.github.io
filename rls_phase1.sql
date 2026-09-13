@@ -454,6 +454,34 @@ WITH CHECK (
 )
 $b$);
 
+-- project_results / project_links never existed in this project. ICT has no
+-- Test Results tab, so nothing reads them — but Profile.jsx's user-deletion
+-- and data-export paths DELETE from both, which errored every time and (since
+-- Sept 2026's REST logging) writes an admin_notifications row on each attempt.
+-- Creating them empty makes those cleanup paths no-ops instead of failures.
+-- Columns mirror labhive. project_files is intentionally NOT created: nothing
+-- in this app reads or writes it (ProjectDatabase.jsx is not routed).
+CREATE TABLE IF NOT EXISTS project_results (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id   UUID,
+  submitted_by TEXT,
+  result_type  TEXT,
+  description  TEXT,
+  result_date  DATE,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS project_results_project_idx ON project_results(project_id);
+
+CREATE TABLE IF NOT EXISTS project_links (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID,
+  title      TEXT,
+  url        TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS project_links_project_idx ON project_links(project_id);
+
 DO $$
 DECLARE t TEXT;
 BEGIN
@@ -742,6 +770,31 @@ WITH CHECK (
   OR user_id::text = my_solo_id()::text
 )
 $b$);
+
+-- team_task_groups / team_task_group_members back the Task Board's Team tab,
+-- which is in the PM sidebar for every non-solo user. Neither table existed
+-- here, so the tab never worked — and PM.jsx queries team_task_group_members
+-- on EVERY Task Board load, so each visit also logged a failed REST call.
+-- Columns mirror labhive.
+CREATE TABLE IF NOT EXISTS team_task_groups (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            TEXT NOT NULL,
+  organization_id UUID,
+  created_by      UUID,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS team_task_groups_org_idx ON team_task_groups(organization_id);
+
+CREATE TABLE IF NOT EXISTS team_task_group_members (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id   UUID,
+  user_id    UUID,
+  invited_by UUID,
+  status     TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS team_task_group_members_group_idx ON team_task_group_members(group_id);
+CREATE INDEX IF NOT EXISTS team_task_group_members_user_idx  ON team_task_group_members(user_id);
 
 SELECT _apply_rls('team_task_groups', 'team_task_groups_policy', $b$
 FOR ALL TO authenticated
@@ -1035,6 +1088,30 @@ $b$);
 -- ────────────────────────────────────────────────────────────────
 
 -- team_workspace_invites: inviter_id + invitee_id + organization_id.
+-- team_workspace_invites / team_workspace_members back TeamMembersPanel, shown
+-- as the "Project Team" tab in every lab manager's and lab user's profile
+-- sidebar. Neither table existed here, so the tab was non-functional.
+-- Columns mirror labhive.
+CREATE TABLE IF NOT EXISTS team_workspace_invites (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inviter_id      UUID NOT NULL,
+  invitee_id      UUID NOT NULL,
+  organization_id UUID NOT NULL,
+  status          TEXT DEFAULT 'pending',
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS team_workspace_invites_invitee_idx ON team_workspace_invites(invitee_id);
+
+CREATE TABLE IF NOT EXISTS team_workspace_members (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id        UUID NOT NULL,
+  member_id       UUID NOT NULL,
+  organization_id UUID NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS team_workspace_members_owner_idx  ON team_workspace_members(owner_id);
+CREATE INDEX IF NOT EXISTS team_workspace_members_member_idx ON team_workspace_members(member_id);
+
 SELECT _apply_rls('team_workspace_invites', 'team_workspace_invites_policy', $b$
 FOR ALL TO authenticated
 USING (
