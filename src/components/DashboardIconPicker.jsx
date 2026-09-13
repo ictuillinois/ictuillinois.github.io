@@ -23,7 +23,7 @@ export const ALL_MODULES_META = [
 export const PINNED_MODULES = ['profile']
 export const STAFF_PINNED_MODULES = []
 
-function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restricted, soloLocked }) {
+function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restricted, soloLocked, lockReason }) {
   if (restricted) {
     return (
       <div
@@ -45,7 +45,7 @@ function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restri
         <div style={{ fontSize: 26, marginBottom: 8, pointerEvents: 'none' }}>{module.icon}</div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{module.label}</div>
         <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{module.sub}</div>
-        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text3)', fontWeight: 600, pointerEvents: 'none' }}>{soloLocked ? 'Team accounts only' : 'For lab managers only'}</div>
+        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text3)', fontWeight: 600, pointerEvents: 'none' }}>{lockReason || (soloLocked ? 'Team accounts only' : 'For lab managers only')}</div>
       </div>
     )
   }
@@ -95,6 +95,10 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
   const [dragOverKey, setDragOverKey] = useState(null)
   const dragKeyRef = useRef(null)
   const [allowedPool, setAllowedPool] = useState(null)
+  // Locked because the organization's plan does not include them (as opposed
+  // to locked by role). Shown greyed rather than hidden so users can see the
+  // full feature set and know what to ask for.
+  const [planLockedKeys, setPlanLockedKeys] = useState(() => new Set())
   const [restrictedKeys, setRestrictedKeys] = useState(() => {
     if (isStaff) return new Set()
     const locked = ALL_MODULES_META.filter(m => m.adminOnly || m.studentLocked).map(m => m.key)
@@ -130,7 +134,12 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         let soloPool = null
         try { soloPool = soloSettingsRes?.data?.value ? JSON.parse(soloSettingsRes.data.value) : null } catch { soloPool = null }
         if (soloPool !== null) {
-          localAvailable = localAvailable.filter(m => soloPool.includes(m.key) || m.key === 'profile' || m.soloLocked)
+          const planLocked = new Set()
+          localAvailable.forEach(m => {
+            const inPlan = soloPool.includes(m.key) || m.key === 'profile' || m.soloLocked
+            if (!inPlan) { planLocked.add(m.key); localRestricted.add(m.key) }
+          })
+          setPlanLockedKeys(planLocked)
         }
         // Always ensure soloLocked modules appear in the picker so solo users can see
         // that these features exist (shown grayed with "Team accounts only" label).
@@ -182,7 +191,15 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         const effectivePool = orgPool ?? appPool
 
         if (effectivePool !== null) {
-          localAvailable = localAvailable.filter(m => effectivePool.includes(m.key) || m.key === 'profile' || (isStaff && m.staffOnly))
+          // Previously filtered out entirely, so a user never learned the
+          // feature existed. Keep them visible but locked; selectableModules
+          // already excludes restricted keys from the count.
+          const planLocked = new Set()
+          localAvailable.forEach(m => {
+            const inPlan = effectivePool.includes(m.key) || m.key === 'profile' || (isStaff && m.staffOnly)
+            if (!inPlan) { planLocked.add(m.key); localRestricted.add(m.key) }
+          })
+          setPlanLockedKeys(planLocked)
         }
 
         if (session?.role === 'lab_user') {
@@ -195,7 +212,12 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
               .forEach(m => localRestricted.delete(m.key))
           }
           // Also unlock studentLocked modules included in the admin-assigned allowed pool
-          ALL_MODULES_META.filter(m => m.studentLocked && pool.includes(m.key))
+          // Unlock studentLocked modules granted either per-user by a lab
+          // manager OR org-wide by the admin's lab-user pool. Only the per-user
+          // list was consulted, so an org-wide grant left the icon locked here
+          // while the dashboard showed it.
+          ALL_MODULES_META
+            .filter(m => m.studentLocked && (pool.includes(m.key) || effectivePool?.includes(m.key)))
             .forEach(m => localRestricted.delete(m.key))
         } else if (session?.role === 'user') {
           // Lab managers: adminOnly modules restricted unless explicitly granted; studentLocked modules are free
@@ -389,7 +411,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
                   onDragEnd={handleDragEnd}
                   style={{ opacity: isDragging ? 0.35 : 1, outline: isOver ? `2px dashed ${loginMode === 'solo' ? '#534AB7' : '#1D9E75'}` : 'none', borderRadius: 12, transition: 'opacity 0.15s' }}
                 >
-                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={uiPinnedKeys.includes(m.key)} alwaysOn={!uiPinnedKeys.includes(m.key) && alwaysOnKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={false} />
+                  <ModuleToggleCard module={m} selected={selected.has(m.key)} onToggle={toggle} pinned={uiPinnedKeys.includes(m.key)} alwaysOn={!uiPinnedKeys.includes(m.key) && alwaysOnKeys.includes(m.key)} restricted={restrictedKeys.has(m.key)} soloLocked={false} lockReason={planLockedKeys.has(m.key) ? 'Contact us to enable' : undefined} />
                 </div>
               )
             })}

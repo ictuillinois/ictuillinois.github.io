@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
-import { ALL_MODULES_META } from '../../components/DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import FloorPlanPicker from '../../components/FloorPlanPicker'
@@ -343,9 +343,23 @@ function StudentDefaultIconsPanel({ orgId }) {
 }
 
 // ── Per-pool editor with drag-to-reorder (used by OrgIconPoolsPanel) ──
-function OrgPoolEditor({ orgId, poolKey, label }) {
+// Which modules are even meaningful for a given org-pool role.
+// adminOnly screens are never pooled (they belong to the org admin), and
+// staffOnly modules cannot reach lab users no matter what the admin ticks —
+// offering them was what made an admin think they had granted 9 icons when
+// only 7 could ever arrive.
+function modulesForPoolRole(kind) {
+  return ALL_MODULES_META.filter(m => {
+    if (!m.roles.includes('team')) return false
+    if (m.adminOnly) return false
+    if (kind === 'labusers' && m.staffOnly) return false
+    return true
+  })
+}
+
+function OrgPoolEditor({ orgId, poolKey, label, kind }) {
   const { toast } = useAppStore()
-  const [poolModules, setPoolModules] = useState(null)
+  const [poolModules, setPoolModules] = useState(null)   // every applicable module, each flagged .locked
   const [selected, setSelected] = useState(null)
   const [order, setOrder] = useState(null)
   const [dragKey, setDragKey] = useState(null)
@@ -362,30 +376,48 @@ function OrgPoolEditor({ orgId, poolKey, label }) {
     ])
     let appPool = null
     try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-    const outerKeys = orgRes?.data?.allowed_modules ?? appPool
-    const mods = outerKeys
-      ? ALL_MODULES_META.filter(m => outerKeys.includes(m.key) && !m.staffOnly && !m.adminOnly && m.key !== 'profile')
-      : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked && m.key !== 'profile')
-    setPoolModules(mods)
-    const allKeys = mods.map(m => m.key)
+    // What the SUPER admin granted this org. null = everything is available.
+    const orgGrant = orgRes?.data?.allowed_modules ?? appPool
+
+    const applicable = modulesForPoolRole(kind)
+    // Modules the app force-shows for this role regardless of any pool:
+    // profile for everyone, plus STAFF_PINNED_MODULES (Lab Management) for
+    // staff. The picker and the dashboard both add these back unconditionally,
+    // so showing them as locked here would be a lie — the manager sees the icon
+    // either way. They are always available, always selected, never toggleable.
+    const alwaysOnKeys = kind === 'labmanagers'
+      ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES]
+      : [...PINNED_MODULES]
+    const isAvailable = m => alwaysOnKeys.includes(m.key) || !orgGrant || orgGrant.includes(m.key)
+
+    // Everything applicable is shown. Modules outside the org's grant render
+    // locked so the admin can see the full feature set rather than silently
+    // missing icons, but they cannot be selected and do not count.
+    setPoolModules(applicable.map(m => ({ ...m, locked: !isAvailable(m), alwaysOn: alwaysOnKeys.includes(m.key) })))
+
+    const availKeys = applicable.filter(isAvailable).map(m => m.key)
     const saved = orgRes?.data?.[poolKey]
-    const selKeys = saved?.length ? saved.filter(k => allKeys.includes(k)) : allKeys
-    setSelected(new Set(selKeys))
-    const savedFiltered = saved?.filter(k => allKeys.includes(k))
+    const selKeys = saved?.length ? saved.filter(k => availKeys.includes(k)) : availKeys
+    setSelected(new Set([...selKeys, ...alwaysOnKeys]))
+
+    const savedFiltered = saved?.filter(k => availKeys.includes(k))
     setOrder(savedFiltered?.length
-      ? [...savedFiltered, ...allKeys.filter(k => !savedFiltered.includes(k))]
-      : allKeys)
+      ? [...savedFiltered, ...availKeys.filter(k => !savedFiltered.includes(k))]
+      : availKeys)
   }
 
-  function toggle(key) {
-    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  function toggle(m) {
+    if (m.locked || m.alwaysOn) return
+    setSelected(prev => { const n = new Set(prev); n.has(m.key) ? n.delete(m.key) : n.add(m.key); return n })
   }
 
   async function save() {
     if (saving || !poolModules) return
     setSaving(true)
-    const allKeys = poolModules.map(m => m.key)
-    const toSave = (order || allKeys).filter(k => selected.has(k))
+    const availKeys = poolModules.filter(m => !m.locked).map(m => m.key)
+    const toSave = (order || availKeys).filter(k => selected.has(k) && availKeys.includes(k))
+    const mustKeep = poolModules.filter(m => m.alwaysOn).map(m => m.key)
+    mustKeep.forEach(k => { if (!toSave.includes(k)) toSave.push(k) })
     const { error } = await sb.from('organizations').update({ [poolKey]: toSave }).eq('id', orgId)
     if (error) toast('Error saving: ' + error.message)
     else toast(`${label} icon pool saved ✓`)
@@ -396,30 +428,54 @@ function OrgPoolEditor({ orgId, poolKey, label }) {
     <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
   )
 
-  const dispModules = order.map(k => poolModules.find(m => m.key === k)).filter(Boolean)
+  const available = poolModules.filter(m => !m.locked)
+  const lockedMods = poolModules.filter(m => m.locked)
+  // Locked cards always trail the draggable ones and take no part in ordering.
+  const dispModules = [
+    ...order.map(k => available.find(m => m.key === k)).filter(Boolean),
+    ...available.filter(m => !order.includes(m.key)),
+    ...lockedMods,
+  ]
+  // Count reflects only what this org can actually use — locked icons are shown
+  // for visibility but excluded, so "8 of 8" never hides an ungranted module.
+  const selectableCount = available.length
+  const selectedCount = available.filter(m => selected.has(m.key)).length
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{selected.size}</span> of {poolModules.length} selected
+          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {selectableCount} selected
+          {lockedMods.length > 0 && (
+            <span style={{ color: 'var(--text3)' }}> · {lockedMods.length} locked</span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setSelected(new Set(poolModules.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
+          <button onClick={() => setSelected(new Set(available.map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontWeight: 600 }}>Select all</button>
           <span style={{ color: 'var(--border)' }}>·</span>
-          <button onClick={() => setSelected(new Set())} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
+          <button onClick={() => setSelected(new Set(poolModules.filter(m => m.alwaysOn).map(m => m.key)))} style={{ fontSize: 12, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontWeight: 500 }}>Clear</button>
         </div>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>💡 Drag cards to set the default icon order for this group</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
         {dispModules.map(m => {
           const sel = selected.has(m.key)
           const isDragging = dragKey === m.key
           const isOver = dragOver === m.key && dragKey !== m.key
+          if (m.locked) return (
+            <div key={m.key}
+              title="Not enabled for your organization — contact us to add it to your plan"
+              style={{ borderRadius: 12, border: '2px dashed var(--border)', background: 'var(--surface2)', padding: '12px 12px 10px', position: 'relative', opacity: 0.55, cursor: 'not-allowed', userSelect: 'none' }}>
+              <div style={{ position: 'absolute', top: 8, right: 8, fontSize: 12 }}>🔒</div>
+              <div style={{ fontSize: 24, marginBottom: 6, filter: 'grayscale(1)' }}>{m.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', marginBottom: 2, paddingRight: 20 }}>{m.label}</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>Contact us to enable</div>
+            </div>
+          )
           return (
             <div key={m.key}
-              draggable
-              onDragStart={e => { dragRef.current = m.key; e.dataTransfer.effectAllowed = 'move'; setDragKey(m.key) }}
+              draggable={!m.alwaysOn}
+              onDragStart={e => { if (m.alwaysOn) return; dragRef.current = m.key; e.dataTransfer.effectAllowed = 'move'; setDragKey(m.key) }}
               onDragOver={e => { e.preventDefault(); setDragOver(m.key) }}
               onDrop={e => {
                 e.preventDefault()
@@ -433,14 +489,14 @@ function OrgPoolEditor({ orgId, poolKey, label }) {
                 dragRef.current = null; setDragKey(null); setDragOver(null)
               }}
               onDragEnd={() => { dragRef.current = null; setDragKey(null); setDragOver(null) }}
-              onClick={() => toggle(m.key)}
-              style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : `2px solid ${isOver ? 'var(--accent)' : 'var(--border)'}`, background: sel ? `${m.color}12` : isOver ? '#E1F5EE' : 'var(--surface)', padding: '12px 12px 10px', cursor: 'grab', position: 'relative', transition: 'all 0.15s', opacity: isDragging ? 0.35 : 1, userSelect: 'none' }}>
+              onClick={() => toggle(m)}
+              style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : `2px solid ${isOver ? 'var(--accent)' : 'var(--border)'}`, background: sel ? `${m.color}12` : isOver ? '#E1F5EE' : 'var(--surface)', padding: '12px 12px 10px', cursor: m.alwaysOn ? 'default' : 'grab', position: 'relative', transition: 'all 0.15s', opacity: isDragging ? 0.35 : 1, userSelect: 'none' }}>
               <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 {sel && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
               </div>
               <div style={{ fontSize: 24, marginBottom: 6, pointerEvents: 'none' }}>{m.icon}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{m.label}</div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.alwaysOn ? 'Always available' : m.sub}</div>
             </div>
           )
         })}
@@ -453,21 +509,31 @@ function OrgPoolEditor({ orgId, poolKey, label }) {
 }
 
 function OrgIconPoolsPanel({ orgId }) {
-  const [subTab, setSubTab] = useState('labusers')
+  // Both groups side by side rather than behind tabs: the admin can see at a
+  // glance how many icons each role has, and compare them without switching.
   return (
     <div>
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Organization Icon Pools</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-          Define which icons are available to lab users and lab managers in your organization. Available icons are within those granted by the system administrator. Drag cards to set the default display order.
+          Choose which icons each group sees. Greyed-out icons with a 🔒 are not part of your organization's plan —
+          contact us to enable them. Drag cards to set the default display order.
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <button onClick={() => setSubTab('labusers')} style={{ padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: subTab === 'labusers' ? 'var(--accent)' : 'var(--surface2)', color: subTab === 'labusers' ? '#fff' : 'var(--text2)' }}>👥 Lab User Icons</button>
-        <button onClick={() => setSubTab('labmanagers')} style={{ padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', background: subTab === 'labmanagers' ? 'var(--accent)' : 'var(--surface2)', color: subTab === 'labmanagers' ? '#fff' : 'var(--text2)' }}>👨‍💼 Lab Manager Icons</button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20, alignItems: 'start' }}>
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            👨‍💼 Lab Manager Icons
+          </div>
+          <OrgPoolEditor orgId={orgId} poolKey="allowed_modules_labmanagers" label="Lab manager" kind="labmanagers" />
+        </div>
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            👥 Lab User Icons
+          </div>
+          <OrgPoolEditor orgId={orgId} poolKey="allowed_modules_labusers" label="Lab user" kind="labusers" />
+        </div>
       </div>
-      {subTab === 'labusers' && <OrgPoolEditor key="labusers" orgId={orgId} poolKey="allowed_modules_labusers" label="Lab user" />}
-      {subTab === 'labmanagers' && <OrgPoolEditor key="labmanagers" orgId={orgId} poolKey="allowed_modules_labmanagers" label="Lab manager" />}
     </div>
   )
 }
@@ -726,10 +792,18 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
 // ── Module lists ──────────────────────────────────────────────
 // Org-level pool (org admins): all modules except profile (always pinned)
-const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile')
+// Modules the app force-shows regardless of any pool: profile for everyone,
+// plus STAFF_PINNED_MODULES for staff (empty in this project today, but kept
+// in sync with labhive so a future pinned module cannot be offered as an
+// inert choice). Unticking such a module changes nothing, so offering it only
+// misleads whoever sets the pool.
+const FORCED_MODULES = new Set([...PINNED_MODULES, ...STAFF_PINNED_MODULES])
+const inTeam = m => (m.roles || []).includes('team')
+
+const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => inTeam(m) && !FORCED_MODULES.has(m.key))
 
 // Super admin global team pool: also exclude mileage & labsafety (ICT-org-specific external links)
-const APP_GLOBAL_MODULES = ALL_MODULES_META.filter(m => m.key !== 'profile' && m.key !== 'mileage' && m.key !== 'labsafety')
+const APP_GLOBAL_MODULES = ALL_MODULES_META.filter(m => inTeam(m) && !FORCED_MODULES.has(m.key) && m.key !== 'mileage' && m.key !== 'labsafety')
 
 // Super admin global solo pool: same exclusions + soloLocked
 const SOLO_GLOBAL_MODULES = ALL_MODULES_META.filter(m => !m.soloLocked && m.key !== 'profile' && m.key !== 'mileage' && m.key !== 'labsafety')

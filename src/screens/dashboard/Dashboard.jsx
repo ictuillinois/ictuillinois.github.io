@@ -6,10 +6,12 @@ import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../co
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
   const isStaff = role === 'admin' || role === 'user'
-  const studentAllowed = ['projects', 'booking', 'mileage', 'training', 'profile']
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
-    if (role === 'lab_user' && !studentAllowed.includes(m.key)) return false
+    // No hardcoded lab-user allowlist: what a lab user may see comes from the
+    // org icon pool plus the module's own role flags (studentLocked /
+    // staffOnly / adminOnly). A fixed key list silently overrode whatever the
+    // org admin granted and needed hand-editing for every new module.
     if (m.adminOnly && !isStaff) return false
     if (m.hideForStaff && isStaff) return false
     if (m.staffOnly && !isStaff) return false
@@ -737,6 +739,8 @@ export default function Dashboard() {
         // The org-wide pool filtering below must not strip these back out for a granted student.
         const studentLockedKeys = new Set(ALL_MODULES_META.filter(m => m.studentLocked).map(m => m.key))
         const perStudentGrants = new Set(row?.allowed_modules || [])
+        // Captured out of the try below so the lab-user gate can see it.
+        let orgLabUserPool = null
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
@@ -748,6 +752,7 @@ export default function Dashboard() {
               : orgRes?.data?.allowed_modules
           const orgPool = outerOrgPool || null
           const effectivePool = orgPool ?? appPool
+          orgLabUserPool = effectivePool
           if (effectivePool !== null) {
             if (mods?.length) {
               // Remove modules no longer in the pool; always keep profile, staff-pinned, staffOnly for
@@ -800,7 +805,14 @@ export default function Dashboard() {
         // Lab users with no saved config see all their allowed modules
         setActiveModules(mods?.length ? mods : null)
         if (session?.role === 'lab_user') {
-          setStudentAllowedPool(new Set(row?.allowed_modules || []))
+          // This pool both restricts which cards exist and unlocks `locked`
+          // modules in CardGridView. Reading only the per-user assignment meant
+          // an org admin's grant never reached the unlock check, so modules the
+          // admin had granted AND the user had ticked were dropped from the
+          // dashboard while still showing in the picker and sidebar.
+          const perUser = row?.allowed_modules
+          const gatePool = perUser?.length ? perUser : (orgLabUserPool || [])
+          setStudentAllowedPool(new Set([...gatePool, 'profile']))
         }
       }
     } catch(e) {}
