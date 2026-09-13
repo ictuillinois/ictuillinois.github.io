@@ -903,14 +903,34 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
             if (name) items.push({ name, description })
           }
           if (!items.length) { toast('No equipment found in file.'); setImporting(false); return }
-          const existing = equipment.map(e => e.name.toLowerCase())
+          // Rows come from equipment_inventory, which has equipment_name /
+          // nickname — never a `name` column. The old `e.name.toLowerCase()`
+          // threw on every import and was swallowed by the catch below as a
+          // misleading "Error reading file."
+          const existing = equipment.map(e => String(e.equipment_name || e.nickname || '').toLowerCase())
           const newItems = items.filter(item => !existing.includes(item.name.toLowerCase()))
           if (newItems.length === 0) { toast('All equipment already exists.'); setImporting(false); return }
+          // Insert into equipment_inventory with the same shape addEquipment()
+          // uses. The old code wrote {name, description} to 'equipment_list' —
+          // a table that does not exist — ignored the resulting error, and then
+          // reported success for rows that were never saved.
+          let saved = 0
+          let firstError = null
           for (const item of newItems) {
-            await sb.from('equipment_list').insert(item)
+            const { error } = await sb.from('equipment_inventory').insert({
+              equipment_name: item.name,
+              nickname: item.description || item.name,
+              is_active: true,
+              organization_id: session?.organizationId || null,
+              login_mode: 'team',
+            })
+            if (error) { if (!firstError) firstError = error.message }
+            else saved++
           }
           load()
-          toast(`${newItems.length} equipment item${newItems.length !== 1 ? 's' : ''} imported.`)
+          if (saved === 0) toast('Import failed: ' + (firstError || 'no rows saved'), true)
+          else if (firstError) toast(`Imported ${saved} of ${newItems.length}. First error: ${firstError}`, true)
+          else toast(`${saved} equipment item${saved !== 1 ? 's' : ''} imported.`)
         } catch (err) { toast('Error reading file.') }
         setImporting(false)
       }
