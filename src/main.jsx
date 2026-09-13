@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import UpdateBanner from './components/UpdateBanner.jsx'
 import './index.css'
 
 // Auto-recover from stale deployments. Lazy chunks (jspdf, exceljs, …) have
@@ -53,8 +54,12 @@ if (localStorage.getItem('ictlab_show_tooltips') === 'false') {
   } catch {}
 })()
 
+// Mounted here rather than inside App so it survives App's early returns
+// (login page, maintenance mode, the /admin route) — a stale tab should be
+// told about a new build no matter which of those it is sitting on.
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
+    <UpdateBanner />
   </React.StrictMode>
 )

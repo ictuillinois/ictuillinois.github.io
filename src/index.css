@@ -389,3 +389,35 @@ main > * { animation: screen-fade 0.16s ease-out; }
 /* Suppress when user turned guidance off */
 .tooltips-off [data-tooltip]::after,
 .tooltips-off [data-tooltip]::before { display: none !important; }
+/* ── Update available banner (UpdateBanner.jsx) ────────────────
+   Bottom-right so it never covers the centered Toast. On mobile it clears
+   the 72px bottom nav. */
+.update-banner {
+  position: fixed;
+  right: 16px;
+  bottom: 24px;
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  animation: update-banner-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes update-banner-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 768px) {
+  .update-banner {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+}

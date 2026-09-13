@@ -57,6 +57,27 @@ const Profile              = lazy(() => import('./screens/profile/Profile'))
 const Admin                = lazy(() => import('./screens/admin/Admin'))
 
 const IS_ADMIN_ROUTE = window.location.pathname.endsWith('/admin') || window.location.pathname.endsWith('/admin/')
+// Global error reporting. ictlab previously had none at all: a thrown error
+// or a rejected promise vanished silently, leaving a button that appeared to
+// do nothing. Errors go to the super-admin notification table, and unhandled
+// rejections additionally toast the user — by definition nothing else caught
+// them, so there is no double-message risk.
+window.addEventListener('error', (e) => {
+  logAdminError(`JS Error: ${e.message}`, `${e.filename}:${e.lineno}`)
+})
+let lastRejectionMsg = ''
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason) || 'Unhandled promise rejection'
+  logAdminError(`Promise Error: ${msg}`, e.reason?.stack?.split('\n')[1]?.trim() || '')
+  // A failed lazy chunk is already handled by the vite:preloadError reload in
+  // main.jsx — toasting it too would just add noise mid-recovery.
+  if (/dynamically imported module|Importing a module script failed|Load failed/i.test(msg)) return
+  if (msg === lastRejectionMsg) return          // collapse identical repeats
+  lastRejectionMsg = msg
+  setTimeout(() => { lastRejectionMsg = '' }, 4000)
+  try { useAppStore.getState().toast(`Something didn't complete: ${msg}`, true) } catch {}
+})
+
 const SCAN_EQ_ID   = new URLSearchParams(window.location.search).get('eq')
 const SCAN_ITEM_QR = new URLSearchParams(window.location.search).get('item')
 

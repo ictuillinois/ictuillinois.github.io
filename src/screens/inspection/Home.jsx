@@ -1178,7 +1178,11 @@ function ExportData() {
               <div>📅 <strong>One tab per date</strong> — all rooms stacked in each tab</div>
               <div>🔢 <strong>{data.length}</strong> total inspections across <strong>{uniqueDates.length}</strong> date{uniqueDates.length !== 1 ? 's' : ''}</div>
             </div>
-            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={exportAll}>
+            {/* .catch() is required: exportAll awaits import('exceljs'), and a
+                chunk deleted by a newer deploy rejects with no UI feedback at
+                all — the button would simply do nothing. */}
+            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => exportAll().catch(e => toast('Export failed: ' + (e?.message || e), true))}>
               {exportFormat === 'pdf' ? '📄 Download All Records (PDF)' : '📊 Download All Records (Excel)'}
             </button>
           </div>
