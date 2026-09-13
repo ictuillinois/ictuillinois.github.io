@@ -793,6 +793,35 @@ WITH CHECK (
 )
 $b$);
 
+-- re_messages — backs the Lab Messages screen (routed in App.jsx, shown as a
+-- staff-only dashboard icon). The table was never created in this project, so
+-- every read came back empty and every send failed. Columns mirror labhive.
+-- sender_id / receiver_id are TEXT here, matching labhive and the ::text casts
+-- the policy below uses.
+CREATE TABLE IF NOT EXISTS re_messages (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id       TEXT,
+  sender_name     TEXT,
+  receiver_id     TEXT,
+  receiver_name   TEXT,
+  subject         TEXT,
+  body            TEXT,
+  category        TEXT,
+  status          TEXT DEFAULT 'open',
+  reply           TEXT,
+  attachment_url  TEXT,
+  file_url        TEXT,
+  file_name       TEXT,
+  parent_id       UUID,
+  is_read         BOOLEAN DEFAULT FALSE,
+  edited          BOOLEAN DEFAULT FALSE,
+  edited_at       TIMESTAMPTZ,
+  organization_id UUID,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS re_messages_org_idx    ON re_messages(organization_id);
+CREATE INDEX IF NOT EXISTS re_messages_parent_idx ON re_messages(parent_id);
+
 SELECT _apply_rls('re_messages', 're_messages_policy', $b$
 FOR ALL TO authenticated
 USING    (is_super_admin() OR organization_id = my_org_id())
@@ -846,6 +875,20 @@ SELECT _apply_rls('admin_notifications', 'admin_notif_select',
 SELECT _apply_rls('admin_notifications', 'admin_notif_update',
   $b$FOR UPDATE TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin())$b$);
 
+-- feedback_responses — backs the FeedbackWidget, which is mounted in this app.
+-- The UNIQUE constraint is REQUIRED, not cosmetic: FeedbackWidget upserts with
+-- onConflict 'organization_id,user_id,module_key', and Postgres rejects that
+-- outright without a matching unique index.
+CREATE TABLE IF NOT EXISTS feedback_responses (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID,
+  user_id         UUID,
+  module_key      TEXT NOT NULL,
+  comment         TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT feedback_responses_org_user_module_key UNIQUE (organization_id, user_id, module_key)
+);
+
 SELECT _apply_rls('feedback_responses', 'feedback_responses_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -890,6 +933,23 @@ SELECT _apply_rls('support_messages', 'support_messages_insert',
   $b$FOR INSERT TO authenticated WITH CHECK (true)$b$);
 SELECT _apply_rls('support_messages', 'support_messages_select',
   $b$FOR SELECT TO authenticated USING (is_super_admin() OR user_id::text = my_user_id()::text)$b$);
+
+-- account_deletion_requests — backs the account-deletion flow in Profile, and
+-- the review UI in Admin and LabManagement. Never created in this project, so
+-- requests could not be submitted or reviewed.
+CREATE TABLE IF NOT EXISTS account_deletion_requests (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                 UUID NOT NULL,
+  user_name               TEXT NOT NULL,
+  organization_id         UUID NOT NULL,
+  status                  TEXT NOT NULL DEFAULT 'pending',
+  suggested_transfer_to   UUID,
+  suggested_transfer_name TEXT,
+  requested_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_by             UUID,
+  reviewed_at             TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS account_deletion_requests_org_idx ON account_deletion_requests(organization_id);
 
 SELECT _apply_rls('account_deletion_requests', 'account_deletion_policy', $b$
 FOR ALL TO authenticated
