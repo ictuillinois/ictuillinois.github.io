@@ -60,7 +60,12 @@ $$;
 CREATE OR REPLACE FUNCTION my_user_ids()
 RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
-  SELECT id FROM users WHERE auth_id::text = auth.uid()::text
+  -- COALESCE rather than a bare equality test: a NULL is_active must not
+  -- lock anyone out.
+  -- Deactivating a user has to revoke DATA access, not just block the
+  -- login screen — Supabase auth sessions survive deactivation, so
+  -- without this a deactivated account keeps reading its org's rows.
+  SELECT id FROM users WHERE auth_id::text = auth.uid()::text AND COALESCE(is_active, true)
 $$;
 
 CREATE OR REPLACE FUNCTION my_org_id()
@@ -84,6 +89,7 @@ RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public AS $$
   SELECT DISTINCT organization_id FROM users
   WHERE auth_id::text = auth.uid()::text AND organization_id IS NOT NULL
+    AND COALESCE(is_active, true)
 $$;
 
 -- ICT-Lab has no solo_users table at all (team-only deployment) — a plain
