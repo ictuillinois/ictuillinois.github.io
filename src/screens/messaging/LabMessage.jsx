@@ -240,6 +240,15 @@ function NewConvModal({ session, staff, orgName, onSent, onClose }) {
         receiver_name: 'All org users',
       })
       if (error) { toast('Failed to send: ' + error.message); setSending(false); return }
+      // A broadcast stores ONE row with receiver_id null, so there is no
+      // per-recipient id to notify — this branch used to send no in-app or
+      // email notification at all, and replies in the thread hit the same
+      // problem (sendReply's `if (otherId)` is false when receiver_id is
+      // null). Notify every other org member explicitly.
+      for (const s of staff.filter(s => s.id !== session.userId)) {
+        await sendAppNotification(s.id, session.username, body.trim())
+        await sendMessageEmail(s.id, session.username, body.trim())
+      }
     } else {
       for (const rid of ids) {
         const receiver = staff.find(s => s.id === rid)
@@ -496,6 +505,14 @@ export default function LabMessage() {
     if (otherId) {
       await sendAppNotification(otherId, session.username, replyText.trim())
       await sendMessageEmail(otherId, session.username, replyText.trim())
+    } else {
+      // Broadcast thread: the root row has receiver_id null, so there is no
+      // single "other" party. Without this, every reply in a broadcast
+      // conversation notified nobody.
+      for (const s of staff.filter(s => s.id !== session.userId)) {
+        await sendAppNotification(s.id, session.username, replyText.trim())
+        await sendMessageEmail(s.id, session.username, replyText.trim())
+      }
     }
 
     if (newMsg) {
