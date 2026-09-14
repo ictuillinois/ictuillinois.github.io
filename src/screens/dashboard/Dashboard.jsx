@@ -222,8 +222,13 @@ function LabUserDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
   async function loadLabUserData() {
     setLoading(true)
     try {
-      const userId = session.userId; const userName = session.username
-      let projQ = sb.from('projects').select('id,title,status').or(`students.cs.{"${userName}"},students.ilike.%${userName}%`).eq('status','active')
+      const userId = session.userId
+      // Was filtering on `students`, a column that does not exist on this
+      // database — PostgREST rejected the query, the error was discarded by
+      // `const { data: projects }`, and the count silently showed 0 for every
+      // lab user. Assignment lives in student_ids (uuids), which is what the
+      // rest of the app matches on.
+      let projQ = sb.from('projects').select('id,title,status').contains('student_ids', [userId]).eq('status','active')
       if (session?.organizationId) projQ = projQ.eq('organization_id', session.organizationId)
       const { data: projects } = await projQ
       const [freshRes,golfRes,alarmRes,eqRes,pendingRes,bookingsRes] = await Promise.all([
