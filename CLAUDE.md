@@ -912,3 +912,103 @@ npx cap open android   # opens Android Studio
 
 ### Alternative: PWA (Progressive Web App)
 Add a `manifest.json` and service worker to make the web app installable on iOS home screen without App Store review. Simpler but limited native API access and not listed in App Store.
+
+---
+
+## Module visibility — ONE resolver, four layers (Sept 2026)
+
+**`src/lib/modulePools.js` owns every pool rule. Never compose pools inline.**
+
+Five screens each had their own inline version and drifted apart; the symptom
+was an org admin granting 9 icons, the picker offering 7, and the dashboard
+rendering 5, with no error anywhere.
+
+```
+1. Super admin   settings.app_allowed_modules            global default
+                 organizations.allowed_modules           per-org grant
+2. Org admin     organizations.allowed_modules_labusers  role pools
+                 organizations.allowed_modules_labmanagers
+3. Lab manager   user_dashboard_prefs.allowed_modules    per lab user
+4. The user      user_dashboard_prefs.active_modules     their own picks
+```
+
+Each layer **narrows** the one above. One documented exception: a per-org grant
+**replaces** the global pool rather than intersecting it (rule 9 above).
+
+| Function | Layers | Use for |
+|---|---|---|
+| `orgCapabilityPool()` | 1–2 | what the organisation may use |
+| `capabilityPool()` | 1–3 | what this user may use |
+| `visibleModules()` | 4 | what they actually see |
+| `orgPoolForRole()` | — | role → correct org pool column |
+
+- A per-user assignment can never introduce a module the org admin did not
+  grant. Letting per-user win outright put Equipment & Maintenance on the
+  dashboard while the picker could not deselect it.
+- `PINNED_MODULES` (profile) and `LAB_MANAGER_PINNED_MODULES` (labmanagement)
+  are force-shown regardless of any pool. Never render them as locked and never
+  offer them as pool choices — unticking them has no effect, so offering them
+  only misleads whoever sets the pool.
+- Capability pools are **capabilities, not preferences**: load them before any
+  early return. `loadDashboardPrefs()` returns early when `activeModules` is set
+  and again for demo accounts, which is why the pool moved to
+  `loadLabUserGate()`.
+
+## Silent-failure classes seen in this codebase — check for these
+
+Every one of these shipped and went unnoticed; none produced an error.
+
+1. **Unchecked Supabase errors.** ~271 write call sites do
+   `await sb.from(t).update(...)` without reading `error`. `supabase.js` now
+   logs every non-OK REST response centrally, but see #2.
+2. **A write that matches zero rows is not an error.** `.update()` on a row
+   that doesn't exist returns 200 and changes nothing — the locker "Unavailable"
+   checkbox looked saved and reverted on reload. Use `upsert` with a real unique
+   index when the row may not exist yet.
+3. **`.catch()` on a Supabase query builder throws.** It is a *thenable*, not a
+   Promise. `sb.from(x).update(y).eq(...).catch(...)` raises
+   "catch is not a function". Use `.then(ok, err)` or `await` in a try/catch.
+4. **Querying a column that doesn't exist** fails the whole request; if the call
+   site ignores `error`, the feature silently shows nothing. `projects.students`
+   never existed and lab users' "My active projects" read 0 for months.
+5. **`onConflict` needs a matching unique index**, or the upsert is rejected
+   outright (`feedback_responses`, `lab_user_lockers`).
+6. **Schema drift between ictlab and labhive.** The same shared component hits
+   different columns. Verify a column exists in *both* before relying on it.
+
+## Before changing a conditional that gates UI
+
+Read to the closing brace first. Three regressions in one session came from
+widening a gate that wrapped more than expected (the locker grid gate also
+wrapped the management table), or from editing a branch the target role never
+reaches (lab users hit `panelUser` mode, which early-returns before the grid).
+Ask "which branch does this role actually take?" before editing.
+
+## Terminology — locked
+
+**lab manager** (never "staff") and **lab user** (never "student"), in UI text,
+code identifiers and the database. The DB rename is done:
+`lab_user_ids`, `lab_user_lockers`, `lab_user_default_modules`. `projects.students` does not exist — use `lab_user_ids`. There is no `student` role; the three roles
+are `admin`, `user` (lab manager), `lab_user`.
+
+## RLS helpers must be set-returning
+
+`my_user_id()` / `my_org_id()` use `LIMIT 1` with no `ORDER BY`. One auth
+account routinely owns several `users` rows (Login auto-links every row sharing
+an email), so they return an arbitrary row and ownership checks intermittently
+evaluate false for rows the user genuinely owns — a notification was hidden from
+the very identity it was addressed to. **Use `my_user_ids()` / `my_org_ids()`**
+(set-returning, `is_active`-aware) for all ownership and org scoping.
+
+`_apply_rls` **fails open**: a broken policy disables RLS rather than erroring.
+After any change to `rls_phase1.sql`, run the exposure check — an empty result
+is the only proof nothing silently opened up:
+
+```sql
+SELECT c.relname, c.relrowsecurity,
+       (SELECT count(*) FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname)
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE n.nspname='public' AND c.relkind='r'
+  AND (c.relrowsecurity=false
+       OR NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname));
+```
