@@ -38,17 +38,28 @@ function typeAbbr(type) {
   return { aggregate: 'AGG', asphalt_binder: 'AB', plant_mix: 'PM', cores: 'CORE', other: 'OTH' }[type] || 'MAT'
 }
 
-function generateBarcodeId(project, material, allMaterials) {
-  const projectId = (project.project_id || project.id.slice(0, 8)).toUpperCase().replace(/\s/g, '-')
+// Barcode IDs must be STABLE and UNIQUE — a printed label is physically stuck
+// to a container, so the value can never be allowed to change.
+//
+// The previous version numbered by POSITION: `sameType.findIndex(...) + 1`.
+// That made the id depend on the current list, so deleting one material
+// renumbered the others, and an id that had not been saved yet was recomputed
+// from whatever the caller happened to have loaded — two people could see
+// different codes for the same material.
+//
+// The material's own uuid is the only thing about it that never changes, so
+// the sequence comes from that instead. Keeps the readable
+// PROJECT-TYPE-XXXX shape; `allMaterials` is no longer needed.
+function generateBarcodeId(project, material) {
+  const projectId = (project?.project_id || project?.id?.slice(0, 8) || 'NP').toUpperCase().replace(/\s/g, '-')
   const abbr = typeAbbr(material.material_type)
-  const sameType = allMaterials.filter(m => m.material_type === material.material_type)
-  const seq = String(sameType.findIndex(m => m.id === material.id) + 1).padStart(2, '0')
-  return `${projectId}-${abbr}-${seq}`
+  const suffix = String(material.id || '').replace(/-/g, '').slice(0, 4).toUpperCase()
+  return `${projectId}-${abbr}-${suffix}`
 }
 
 function buildScanUrl(material, project, allMaterials) {
   const name = material.name || typeLabel(material.material_type)
-  const barcodeId = material.barcode_id || generateBarcodeId(project, material, allMaterials)
+  const barcodeId = material.barcode_id || generateBarcodeId(project, material)
   const params = new URLSearchParams({
     item: name,
     type: 'material',
@@ -63,7 +74,7 @@ function buildScanUrl(material, project, allMaterials) {
 }
 
 function PrintLabel({ material, project, allMaterials }) {
-  const barcodeId = material.barcode_id || generateBarcodeId(project, material, allMaterials)
+  const barcodeId = material.barcode_id || generateBarcodeId(project, material)
   const scanUrl   = buildScanUrl(material, project, allMaterials)
   const name      = material.name || typeLabel(material.material_type)
   return (
@@ -181,7 +192,7 @@ export default function MaterialStorage({ project, readOnly = false }) {
   const selected = materials.find(m => m.id === selectedId)
 
   async function assignBarcode(material) {
-    const generated = generateBarcodeId(project, material, materials)
+    const generated = generateBarcodeId(project, material)
     const { error } = await sb.from('project_materials').update({ barcode_id: generated, barcode_scanned_at: new Date().toISOString() }).eq('id', material.id)
     if (error) { toast('Error assigning barcode.'); return }
     toast(`Barcode assigned: ${generated}`); load()
@@ -284,7 +295,7 @@ export default function MaterialStorage({ project, readOnly = false }) {
                   <button className="btn btn-sm" onClick={() => setEditingBarcode(selected.id)}>⌨️ Enter manually</button>
                   <button className="btn btn-sm" onClick={() => setShowPrint(true)}>🖨️ Print QR label</button>
                 </div>
-                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Auto-generated ID: {generateBarcodeId(project, selected, materials)}</div>
+                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>Auto-generated ID: {generateBarcodeId(project, selected)}</div>
               </div>
             )}
           </div>

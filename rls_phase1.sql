@@ -593,6 +593,25 @@ ALTER TABLE project_materials
   END;
 ALTER TABLE project_materials ALTER COLUMN agg_sieve_sizes SET DEFAULT '[]'::jsonb;
 
+-- barcode_id identifies a physically printed label, so duplicates are a real
+-- hazard: two containers scanning to the same record. There was no constraint
+-- at all, and the old generator numbered by position within the loaded list,
+-- so collisions were easy to produce. Guarded so a table that already holds
+-- duplicates reports them instead of failing the whole script.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM project_materials
+    WHERE barcode_id IS NOT NULL
+    GROUP BY barcode_id HAVING count(*) > 1
+  ) THEN
+    RAISE NOTICE 'project_materials: duplicate barcode_id values — unique index NOT created. Resolve them, then re-run.';
+  ELSE
+    CREATE UNIQUE INDEX IF NOT EXISTS project_materials_barcode_id_uniq
+      ON project_materials (barcode_id) WHERE barcode_id IS NOT NULL;
+  END IF;
+END $$;
+
 SELECT _apply_rls('project_materials', 'project_materials_policy', $b$
 FOR ALL TO authenticated
 USING (
