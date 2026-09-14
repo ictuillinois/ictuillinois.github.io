@@ -612,6 +612,26 @@ BEGIN
   END IF;
 END $$;
 
+-- Material reduction: a derived material (e.g. one sieve fraction) points back
+-- at the material it came from. Kept on project_materials rather than a join
+-- table because a fraction IS a material — it needs its own barcode, storage
+-- location, quantity and QR label like any other.
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS parent_material_id UUID;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_method   TEXT;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_value    TEXT;
+CREATE INDEX IF NOT EXISTS project_materials_parent_idx ON project_materials(parent_material_id);
+
+-- ON DELETE SET NULL, not CASCADE: deleting a parent must not silently destroy
+-- fractions that physically exist on a shelf.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_materials_parent_fkey') THEN
+    ALTER TABLE project_materials
+      ADD CONSTRAINT project_materials_parent_fkey
+      FOREIGN KEY (parent_material_id) REFERENCES project_materials(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
 SELECT _apply_rls('project_materials', 'project_materials_policy', $b$
 FOR ALL TO authenticated
 USING (

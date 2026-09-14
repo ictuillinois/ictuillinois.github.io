@@ -951,6 +951,73 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
 // ══════════════════════════════════════════════════════════════
 const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other']
 
+
+// Shows a material's place in a reduction chain, in both directions: the
+// material it was derived from, and the materials derived from it. Read-only
+// by design — the copied answers are edited on the Material tab like any
+// other material's, so there is no second place they can be changed.
+function MaterialReductionTab({ material, allMaterials, onOpen }) {
+  const parent = material.parent_material_id
+    ? allMaterials.find(x => x.id === material.parent_material_id)
+    : null
+  const children = allMaterials.filter(x => x.parent_material_id === material.id)
+
+  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 8 }
+  const linkStyle = { fontWeight: 600, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontSize: 14, textAlign: 'left' }
+
+  if (!parent && !children.length) return (
+    <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
+      This material has not been reduced, and was not derived from another.
+      <div style={{ marginTop: 6 }}>
+        Use <strong>⚗️ Material Reduction</strong> above the project list to split it into sieve fractions.
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ padding: '16px' }}>
+      {parent && (
+        <div style={{ marginBottom: children.length ? 20 : 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Derived from
+          </div>
+          <div style={row}>
+            <span style={{ fontSize: 18 }}>⚗️</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button style={linkStyle} onClick={() => onOpen?.(parent.id)}>{parent.name || 'Material'}</button>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                {material.reduction_method === 'fractionation' ? 'Fractionation' : material.reduction_method || 'Reduction'}
+                {material.reduction_value ? ` · ${material.reduction_value}` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {children.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Reduced into ({children.length})
+          </div>
+          {children.map(c => (
+            <div key={c.id} style={row}>
+              <span style={{ fontSize: 18 }}>📦</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <button style={linkStyle} onClick={() => onOpen?.(c.id)}>{c.name || 'Material'}</button>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                  {c.reduction_method === 'fractionation' ? 'Fractionation' : c.reduction_method || 'Reduction'}
+                  {c.reduction_value ? ` · ${c.reduction_value}` : ''}
+                  {c.barcode_id ? ` · ${c.barcode_id}` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProjectMaterials({ project, readOnly = false }) {
   const { toast, session } = useAppStore()
   const isSoloUser = session?.loginMode === 'solo'
@@ -1053,6 +1120,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   { key: 'info',    label: '1 · Material Info' },
                   ...(readOnly ? [] : [{ key: 'edit', label: '2 · Material' }]),
                   { key: 'storage', label: readOnly ? '2 · Material Storage' : '3 · Material Storage' },
+                  { key: 'reduction', label: readOnly ? '3 · Material Reduction' : '4 · Material Reduction' },
                 ]
                 return (
                 <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
@@ -1139,6 +1207,10 @@ export default function ProjectMaterials({ project, readOnly = false }) {
 
                   {/* Tab 3: QR label */}
                   {matTab === 'storage' && <MaterialQRTab material={m} project={project} />}
+                  {/* Tab 4: reduction — shows BOTH directions: what this
+                      material was derived from, and what has been derived
+                      from it. */}
+                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} />}
                 </div>
               )
               })()}

@@ -7,6 +7,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { exportProjectXlsx, exportAllProjectsXlsx } from '../../lib/exportMaterials'
 import MaterialSearch from '../../components/MaterialSearch'
+import MaterialReductionModal from '../../components/MaterialReductionModal'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
@@ -2181,6 +2182,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
     toast('Material deleted.')
   }
 
+  const [showReduction, setShowReduction] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
 
   // All projects in one sheet. Scoped the same way the project list is, so an
@@ -2269,6 +2271,11 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
             <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowMaterialModal(true)}>
               + Non-Project Material
             </button>
+            {/* Derives new materials (today: sieve fractions) from an existing
+                one, copying the parent's answers across. */}
+            <button className="btn btn-sm" onClick={() => setShowReduction(true)}>
+              ⚗️ Material Reduction
+            </button>
           </>
         )}
       </div>
@@ -2325,6 +2332,14 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       {/* Advanced search across every material field, project and standalone
           alike — answers "do we have CM16 from Quarry X, and how much is
           left?" without opening projects one at a time. */}
+      {showReduction && (
+        <MaterialReductionModal
+          session={session} isSolo={isSolo} viewingWorkspaceOwnerId={viewingWorkspaceOwnerId}
+          onClose={() => setShowReduction(false)}
+          onCreated={() => { loadAllMaterials(); loadProjects() }}
+        />
+      )}
+
       {viewMode === 'search' && (
         <MaterialSearch session={session} isSolo={isSolo} viewingWorkspaceOwnerId={viewingWorkspaceOwnerId} />
       )}
