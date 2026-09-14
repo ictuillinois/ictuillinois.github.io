@@ -590,10 +590,15 @@ function MaterialLabelsTab({ session, typeLabels }) {
     return hay.includes(q.trim().toLowerCase())
   })
 
-  // Shape each material the way printLabels/QRLabel expect.
+  // MaterialStorage.buildScanUrl() falls back to its own FIXED typeLabel map
+  // when a material has no name — not the org's configurable labels. Using
+  // typeLabels here instead would put a different `item=` in the URL, so an
+  // unnamed material would reprint with a QR that does not match the label
+  // already on the container. Mirror the fixed map exactly.
+  const FIXED_TYPE_LABEL = { aggregate: 'Aggregate', asphalt_binder: 'Asphalt Binder', plant_mix: 'Plant Mix', cores: 'Cores', other: 'Other' }
   const toItem = m => ({
     id: m.id,
-    name: m.name || typeLabels[m.material_type] || 'Material',
+    name: m.name || FIXED_TYPE_LABEL[m.material_type] || m.material_type,
     type: 'material',
     meta: {
       project: m.projects?.name || '',
