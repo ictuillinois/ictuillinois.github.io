@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { materialsToCsv, downloadCsv, safeFileName } from '../../lib/exportMaterials'
+import { exportProjectXlsx, exportAllProjectsXlsx } from '../../lib/exportMaterials'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
@@ -41,8 +41,12 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     setExporting(false)
     if (error) { toast('Export failed: ' + error.message, true); return }
     if (!data?.length) { toast('This project has no materials to export.'); return }
-    downloadCsv(`${safeFileName(project.name)}_materials.csv`, materialsToCsv(data))
-    toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+    // try/catch is required: exportProjectXlsx awaits import('xlsx'), and a
+    // chunk deleted by a newer deploy rejects with no UI feedback at all.
+    try {
+      await exportProjectXlsx(project.name, data)
+      toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+    } catch (e) { toast('Export failed: ' + (e?.message || e), true) }
   }
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -108,8 +112,8 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
         <button className="btn btn-sm" onClick={exportMaterials} disabled={exporting}
-          title="Download this project's materials as a CSV for Excel">
-          {exporting ? 'Exporting…' : '⬇️ Export materials (CSV)'}
+          title="Download this project's materials as an Excel file">
+          {exporting ? 'Exporting…' : '⬇️ Export materials (Excel)'}
         </button>
         {!readOnly && <button className="btn btn-sm" onClick={() => setEditing(true)}>✏️ Edit info</button>}
       </div>
@@ -2191,8 +2195,10 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
     setExportingAll(false)
     if (error) { toast('Export failed: ' + error.message, true); return }
     if (!data?.length) { toast('No project materials to export.'); return }
-    downloadCsv('all_projects_materials.csv', materialsToCsv(data, { includeProject: true }))
-    toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+    try {
+      await exportAllProjectsXlsx(data)
+      toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+    } catch (e) { toast('Export failed: ' + (e?.message || e), true) }
   }
 
   async function loadProjects() {
@@ -2304,8 +2310,8 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                 tab; this is the across-the-board version. */}
             <button className="btn btn-sm" style={{ marginLeft: 'auto' }}
               onClick={exportAllMaterials} disabled={exportingAll}
-              title="Download every project's materials as one CSV">
-              {exportingAll ? 'Exporting…' : '⬇️ Export all (CSV)'}
+              title="Download every project's materials — one sheet per project">
+              {exportingAll ? 'Exporting…' : '⬇️ Export all (Excel)'}
             </button>
           </>
         )}
