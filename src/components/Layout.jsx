@@ -125,6 +125,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
     { key: 'records',   icon: '📋', label: 'Records' },
+    { key: 'materials', icon: '🏷️', label: 'Material Labels' },
     ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
       { key: 'types',   icon: '🏷️', label: 'Material Types' },

@@ -38,6 +38,21 @@ function getScanUrl(id, type = 'equipment', name = '', meta = {}) {
     if (meta.storedDate) p.set('stored_date', meta.storedDate)
     return `${base}?${p.toString()}`
   }
+  if (type === 'material') {
+    // MUST byte-match MaterialStorage.buildScanUrl(), or a label reprinted from
+    // the archive would carry a different QR than the one already on the
+    // container. Same keys, same order, empty strings kept rather than omitted.
+    const p = new URLSearchParams({
+      item: name,
+      type: 'material',
+      project: meta.project || '',
+      pid: meta.pid || '',
+      mtype: meta.mtype || '',
+      barcode: meta.barcode || '',
+    })
+    if (meta.sampled) p.set('sampled', meta.sampled)
+    return `${base}?${p.toString()}`
+  }
   return `${base}?item=${encodeURIComponent(name)}&type=${type}`
 }
 
@@ -161,7 +176,7 @@ const LABEL_TYPES = [
   { v: 'other',     icon: '📦', label: 'Other',     sub: 'Any other item' },
 ]
 
-function EquipmentBarcodeTab({ equipment, loading }) {
+function EquipmentBarcodeTab({ equipment, loading, canCreate }) {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [selected, setSelected] = useState(null)
@@ -241,6 +256,10 @@ function EquipmentBarcodeTab({ equipment, loading }) {
   return (
     <div>
       {/* Label subject type selector */}
+      {/* Lab users get equipment labels only. The "Other" option creates an
+          ad-hoc label from free text, which is label CREATION rather than
+          reprinting an existing one — org policy keeps that with lab managers. */}
+      {canCreate && (
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Label Subject</div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -256,6 +275,7 @@ function EquipmentBarcodeTab({ equipment, loading }) {
           ))}
         </div>
       </div>
+      )}
 
       {/* Equipment: sidebar list */}
       {labelType === 'equipment' && sidebarSlot && createPortal(listPanel, sidebarSlot)}
@@ -529,6 +549,113 @@ function RecordsTab({ equipment, loading }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── Material Labels ────────────────────────────────────────────
+// Archive of QR labels for project, non-project and standalone materials, so
+// a label can be reprinted without hunting through the Project Workspace.
+// Derived from project_materials rather than a separate log table: the
+// materials ARE the record, so this list can never drift from reality.
+function MaterialLabelsTab({ session, typeLabels }) {
+  const [materials, setMaterials] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')   // all | project | standalone
+  const [q, setQ] = useState('')
+  const [printSize, setPrintSize] = useState('2x2')
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const isSolo = session?.loginMode === 'solo'
+    let query = sb.from('project_materials')
+      .select('id, name, material_type, barcode_id, sampling_date, project_id, projects(name, project_id)')
+      .order('created_at', { ascending: false })
+    if (isSolo) query = query.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
+    else if (session?.organizationId) query = query.eq('organization_id', session.organizationId)
+    const { data, error } = await query
+    if (error) console.error('[material labels]', error.message)
+    setMaterials(data || [])
+    setLoading(false)
+  }
+
+  const rows = materials.filter(m => {
+    if (filter === 'project' && !m.project_id) return false
+    if (filter === 'standalone' && m.project_id) return false
+    if (!q.trim()) return true
+    const hay = `${m.name || ''} ${m.barcode_id || ''} ${m.projects?.name || ''}`.toLowerCase()
+    return hay.includes(q.trim().toLowerCase())
+  })
+
+  // Shape each material the way printLabels/QRLabel expect.
+  const toItem = m => ({
+    id: m.id,
+    name: m.name || typeLabels[m.material_type] || 'Material',
+    type: 'material',
+    meta: {
+      project: m.projects?.name || '',
+      pid: m.projects?.project_id || '',
+      mtype: m.material_type || '',
+      barcode: m.barcode_id || '',
+      sampled: m.sampling_date || '',
+    },
+  })
+
+  const withBarcode = rows.filter(m => m.barcode_id)
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, barcode or project…" style={{ flex: 1, minWidth: 200 }} />
+        {[['all', 'All'], ['project', 'In a project'], ['standalone', 'No project']].map(([k, label]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ padding: '6px 14px', borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                     border: `1px solid ${filter === k ? 'var(--accent)' : 'var(--border)'}`,
+                     background: filter === k ? 'var(--accent)' : 'var(--surface)',
+                     color: filter === k ? '#fff' : 'var(--text2)' }}>{label}</button>
+        ))}
+        <select value={printSize} onChange={e => setPrintSize(e.target.value)} style={{ width: 'auto' }}>
+          <option value="2x2">2" × 2"</option>
+          <option value="4x6">4" × 6"</option>
+        </select>
+        <button className="btn btn-sm btn-primary" disabled={!withBarcode.length}
+          onClick={() => printLabels(withBarcode.map(toItem), printSize)}>
+          🖨️ Print all shown ({withBarcode.length})
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="empty-state"><div className="empty-icon">🏷️</div>No materials found.</div>
+      ) : (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          <table>
+            <thead>
+              <tr><th>Material</th><th>Type</th><th>Project</th><th>Barcode</th><th style={{ width: 120 }}></th></tr>
+            </thead>
+            <tbody>
+              {rows.map(m => (
+                <tr key={m.id}>
+                  <td style={{ fontWeight: 600 }}>{m.name || '—'}</td>
+                  <td>{typeLabels[m.material_type] || m.material_type || '—'}</td>
+                  <td>{m.projects?.name || <span style={{ color: 'var(--text3)' }}>No project</span>}</td>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>
+                    {m.barcode_id || <span style={{ color: 'var(--text3)' }}>not assigned</span>}
+                  </td>
+                  <td>
+                    {m.barcode_id
+                      ? <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => printLabels([toItem(m)], printSize)}>🖨️ Reprint</button>
+                      : <span style={{ fontSize: 11, color: 'var(--text3)' }}>Assign in Workspace</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function BarcodeManager() {
   const { session, sidebarSubTab } = useAppStore()
   const [equipment, setEquipment] = useState([])
@@ -575,8 +702,9 @@ export default function BarcodeManager() {
         </div>
       )}
 
-      {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
+      {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} canCreate={isAdminOrLabManager} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
+      {tab === 'materials' && <MaterialLabelsTab session={session} typeLabels={typeLabels} />}
       {tab === 'summary'   && isAdminOrLabManager && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
       {tab === 'types'     && isAdminOrLabManager && <MaterialTypesManager session={session} />}
     </div>
