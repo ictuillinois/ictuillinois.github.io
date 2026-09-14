@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
 import { exportAllProjectsXlsx } from '../lib/exportMaterials'
+import { SIEVE_SIZES } from '../lib/materialFields'
 
 // Advanced search across every question the Material tab asks, so "do we have
 // CM16 from Quarry X, and how much is left?" is answerable without opening
@@ -9,8 +10,13 @@ import { exportAllProjectsXlsx } from '../lib/exportMaterials'
 //
 // Filters are declared in FILTER_DEFS rather than written out as individual
 // state + JSX, so adding a question to the Material form means adding one line
-// here. Dropdown options are derived from the data itself, so a filter can
-// never offer a value that matches nothing.
+// here. Dropdown options are derived from the data itself, so a filter cannot
+// offer a value that matches nothing — except where a canonical list is given
+// (`opts`), as with sieve sizes, which must be complete and stay in order.
+//
+// Fields without a filter (barcode, quantity, other info, container colour,
+// storage location) are still matched by the free-text box — dropping a filter
+// removes the control, not the ability to find by that value.
 //
 // Loads its own rows: the screen's allMaterials query selects display columns
 // only and has no source, quantity or type-specific fields to search on.
@@ -29,7 +35,6 @@ const TYPE_LABEL = {
 //   bool      Yes / No against a real boolean column
 //   array     value present in an array column (e.g. one sieve size)
 //   project   project_id, plus a "standalone" option
-//   location  matches a label or id inside the locations array
 //   date      from/to range over a date column
 // group: only shown when that material type is selected (or none is)
 const FILTER_DEFS = [
@@ -43,13 +48,13 @@ const FILTER_DEFS = [
 
   { key: 'container_type',        label: 'Container',          kind: 'select' },
   { key: 'container_other',       label: 'Container (other)',  kind: 'text' },
-  { key: 'container_color',       label: 'Container colour',   kind: 'select' },
-  { key: 'qty_total',             label: 'Quantity contains',  kind: 'text' },
 
   { key: 'agg_raw_or_rap',        label: 'Condition (Raw/RAP)', kind: 'select', group: 'aggregate' },
   { key: 'idot_gradation_cat',    label: 'IDOT gradation',     kind: 'select', group: 'aggregate' },
-  { key: 'idot_gradation_grade',  label: 'IDOT grade',         kind: 'select', group: 'aggregate' },
-  { key: 'agg_sieve_sizes',       label: 'Sieve size',         kind: 'array',  group: 'aggregate' },
+  // Canonical list, not just the sizes already in use: a size nobody has
+  // saved yet must still be selectable, and the order is coarse-to-fine so
+  // it must never be sorted (#100 would land before #16).
+  { key: 'agg_sieve_sizes',       label: 'Sieve size',         kind: 'array',  group: 'aggregate', opts: SIEVE_SIZES },
 
   { key: 'ab_binder_pg',          label: 'Binder PG grade',    kind: 'select', group: 'asphalt_binder' },
   { key: 'ab_has_polymer',        label: 'Has polymer',        kind: 'bool',   group: 'asphalt_binder' },
@@ -61,9 +66,6 @@ const FILTER_DEFS = [
   { key: 'pm_mix_design',         label: 'Plant mix design',   kind: 'select', group: 'plant_mix' },
   { key: 'pm_nmas',               label: 'NMAS',               kind: 'select', group: 'plant_mix' },
 
-  { key: '__location',            label: 'Storage location',   kind: 'location' },
-  { key: 'barcode_id',            label: 'Barcode contains',   kind: 'text' },
-  { key: 'other_info',            label: 'Other info',         kind: 'text' },
   { key: 'sampling_date',         label: 'Sampling date',      kind: 'date' },
   { key: 'storage_date',          label: 'Storage date',       kind: 'date' },
 ]
@@ -92,8 +94,6 @@ function passes(m, def, value) {
   switch (def.kind) {
     case 'project':
       return value === '__none__' ? !m.project_id : m.project_id === value
-    case 'location':
-      return locList(m).some(l => l.toLowerCase().includes(String(value).toLowerCase()))
     case 'text':
       return String(m[def.key] ?? '').toLowerCase().includes(String(value).toLowerCase())
     case 'bool':
@@ -152,8 +152,9 @@ export default function MaterialSearch({ session, isSolo, viewingWorkspaceOwnerI
         out[def.key] = [...new Set(materials.map(m => m[def.key]).filter(v => v !== null && v !== undefined && v !== ''))]
           .map(String).sort()
       } else if (def.kind === 'array') {
-        out[def.key] = [...new Set(materials.flatMap(m => Array.isArray(m[def.key]) ? m[def.key] : []).filter(Boolean))]
-          .map(String).sort()
+        out[def.key] = def.opts
+          ? [...def.opts]   // canonical list — preserve its order, do not sort
+          : [...new Set(materials.flatMap(m => Array.isArray(m[def.key]) ? m[def.key] : []).filter(Boolean))].map(String).sort()
       }
     }
     return out

@@ -1,13 +1,15 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
+import { SIEVE_SIZES } from '../../lib/materialFields'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
 import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────
-const SIEVE_SIZES  = ['2"','1.5"','1"','3/4"','1/2"','3/8"','#4','#8','#16','#30','#50','#100','#200']
+// Canonical list lives in src/lib/materialFields.js so the Material form and
+// the search filters cannot drift apart.
 const IDOT_CATEGORY_LABELS = [
   { key: 'CA',  label: 'CA — Coarse Aggregate' },
   { key: 'CM',  label: 'CM — Coarse Aggregate A+ quality' },
