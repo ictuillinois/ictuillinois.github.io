@@ -1786,7 +1786,10 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
         </div>
       )}
 
-      {canEdit(session) && (
+      {/* The grid is visible to everyone. Lab users see it READ-ONLY so they
+          know which lockers are taken and by whom; their own shows "Yours".
+          Every mutating control below is gated on !readOnly. */}
+      {(canEdit(session) || session?.role === 'lab_user') && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, maxWidth: 500, margin: '0 auto 28px' }}>
             {Array.from({ length: TOTAL_LOCKERS }, (_, i) => {
@@ -1795,29 +1798,34 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
               const occupied = !!locker.user_name
               const unavailable = !!locker.is_unavailable && !occupied
               const isAssigning = assigning === num
-              const borderColor = isAssigning ? 'var(--accent)' : occupied ? '#0369a1' : unavailable ? '#9ca3af' : 'var(--border)'
-              const bgColor = isAssigning ? 'var(--accent-light)' : occupied ? '#e0f2fe' : unavailable ? '#f3f4f6' : 'var(--surface)'
+              const readOnly = !canEdit(session)
+              const isMine = !!locker.user_id && String(locker.user_id) === String(session?.userId)
+              const borderColor = isMine ? 'var(--accent)' : isAssigning ? 'var(--accent)' : occupied ? '#0369a1' : unavailable ? '#9ca3af' : 'var(--border)'
+              const bgColor = isMine ? 'var(--accent-light)' : isAssigning ? 'var(--accent-light)' : occupied ? '#e0f2fe' : unavailable ? '#f3f4f6' : 'var(--surface)'
               return (
                 <div key={num}
-                  style={{ borderRadius: 10, border: `2px solid ${borderColor}`, background: bgColor, padding: '12px 8px', textAlign: 'center', cursor: occupied || unavailable ? 'default' : 'pointer', transition: 'all 0.15s' }}
-                  onClick={() => { if (!occupied && !unavailable && !isAssigning) { setAssigning(num); setSelectedLabUser(''); setNotes('') } }}
-                  onMouseEnter={e => { if (!occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--accent)' }}
-                  onMouseLeave={e => { if (!occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--border)' }}>
+                  style={{ borderRadius: 10, border: `2px solid ${borderColor}`, background: bgColor, padding: '12px 8px', textAlign: 'center', cursor: readOnly || occupied || unavailable ? 'default' : 'pointer', transition: 'all 0.15s' }}
+                  onClick={() => { if (!readOnly && !occupied && !unavailable && !isAssigning) { setAssigning(num); setSelectedLabUser(''); setNotes('') } }}
+                  onMouseEnter={e => { if (!readOnly && !occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onMouseLeave={e => { if (!readOnly && !occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--border)' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: occupied ? '#0369a1' : unavailable ? '#9ca3af' : 'var(--surface2)', color: occupied || unavailable ? '#fff' : 'var(--text)', fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
                     {num}
                   </div>
                   {occupied ? (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#0369a1', lineHeight: 1.3, wordBreak: 'break-word' }}>{locker.user_name}</div>
-                      <button className="btn btn-sm btn-danger" style={{ marginTop: 6, fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); unassignLocker(locker) }}>Remove</button>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: isMine ? 'var(--accent)' : '#0369a1', lineHeight: 1.3, wordBreak: 'break-word' }}>{isMine ? 'Yours' : locker.user_name}</div>
+                      {isMine && locker.user_name && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>{locker.user_name}</div>}
+                      {!readOnly && <button className="btn btn-sm btn-danger" style={{ marginTop: 6, fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); unassignLocker(locker) }}>Remove</button>}
                     </>
                   ) : (
                     <>
                       <div style={{ fontSize: 11, color: unavailable ? '#6b7280' : 'var(--text3)', fontWeight: unavailable ? 600 : 400 }}>{unavailable ? 'Unavailable' : 'Available'}</div>
-                      <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, cursor: 'pointer', marginBottom: 0 }}>
-                        <input type="checkbox" checked={unavailable} onChange={() => toggleUnavailable(num)} style={{ width: 'auto' }} />
-                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>Unavailable</span>
-                      </label>
+                      {!readOnly && (
+                        <label onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, cursor: 'pointer', marginBottom: 0 }}>
+                          <input type="checkbox" checked={unavailable} onChange={() => toggleUnavailable(num)} style={{ width: 'auto' }} />
+                          <span style={{ fontSize: 10, color: 'var(--text3)' }}>Unavailable</span>
+                        </label>
+                      )}
                     </>
                   )}
                 </div>
