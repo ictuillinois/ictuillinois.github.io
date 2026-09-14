@@ -1874,6 +1874,10 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
             </div>
           )}
 
+          {/* Management table — editors only. It carries Assign / Remove /
+              Mark-available actions, so it must never render for lab users;
+              their read-only view is the grid above. */}
+          {canEdit(session) && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 500, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>All Lockers</div>
             <table>
@@ -1917,6 +1921,7 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
     </div>
