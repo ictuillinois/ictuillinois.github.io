@@ -14,9 +14,10 @@ import { SIEVE_SIZES } from '../lib/materialFields'
 // offer a value that matches nothing — except where a canonical list is given
 // (`opts`), as with sieve sizes, which must be complete and stay in order.
 //
-// Fields without a filter (barcode, quantity, other info, container colour,
-// storage location) are still matched by the free-text box — dropping a filter
-// removes the control, not the ability to find by that value.
+// Fields without a filter (barcode, quantity, other info, container color and
+// "container other", storage location, polymer info, other additives) are
+// still matched by the free-text box — dropping a filter removes the control,
+// not the ability to find by that value.
 //
 // Loads its own rows: the screen's allMaterials query selects display columns
 // only and has no source, quantity or type-specific fields to search on.
@@ -47,7 +48,6 @@ const FILTER_DEFS = [
   { key: 'source_location',       label: 'Source location',    kind: 'select' },
 
   { key: 'container_type',        label: 'Container',          kind: 'select' },
-  { key: 'container_other',       label: 'Container (other)',  kind: 'text' },
 
   { key: 'agg_raw_or_rap',        label: 'Condition (Raw/RAP)', kind: 'select', group: 'aggregate' },
   { key: 'idot_gradation_cat',    label: 'IDOT gradation',     kind: 'select', group: 'aggregate' },
@@ -58,9 +58,7 @@ const FILTER_DEFS = [
 
   { key: 'ab_binder_pg',          label: 'Binder PG grade',    kind: 'select', group: 'asphalt_binder' },
   { key: 'ab_has_polymer',        label: 'Has polymer',        kind: 'bool',   group: 'asphalt_binder' },
-  { key: 'ab_polymer_info',       label: 'Polymer info',       kind: 'text',   group: 'asphalt_binder' },
   { key: 'ab_mix_design',         label: 'Binder mix design',  kind: 'select', group: 'asphalt_binder' },
-  { key: 'ab_other_additives',    label: 'Other additives',    kind: 'text',   group: 'asphalt_binder' },
 
   { key: 'pm_binder_pg',          label: 'Plant mix PG grade', kind: 'select', group: 'plant_mix' },
   { key: 'pm_mix_design',         label: 'Plant mix design',   kind: 'select', group: 'plant_mix' },
