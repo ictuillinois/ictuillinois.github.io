@@ -2007,7 +2007,11 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
       case 'equipment': return <EquipmentTraining {...props} />
       case 'alarm':     return <BuildingAlarm {...props} />
       case 'locker':
-        return su && selectedUser
+        // panelUser mode is the compact assign/unassign card for MANAGERS
+        // looking at one lab user. It early-returns before the locker grid, so
+        // routing a lab user through it left them seeing only their own card.
+        // Lab users get the full component instead: hero + read-only grid.
+        return su && selectedUser && canEdit(session)
           ? <LabUserLocker session={session} panelUser={selectedUser} onChanged={loadStatuses} />
           : <LabUserLocker session={session} onChanged={loadStatuses} />
       case 'safety':
