@@ -1692,9 +1692,19 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
       if (exists) return prev.map(l => Number(l.locker_number) === lockerNumber ? { ...l, is_unavailable: nowUnavailable } : l)
       return [...prev, { locker_number: lockerNumber, is_unavailable: nowUnavailable, user_id: null, user_name: null }]
     })
-    let q = sb.from('lab_user_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
-    if (orgId) q = q.eq('organization_id', orgId)
-    const { error } = await q
+    // upsert, not update: an org with no rows yet renders synthetic lockers
+    // client-side, so UPDATE matched zero rows and silently did nothing —
+    // zero rows affected is not an error, so nothing was reported and the
+    // checkbox simply reverted on reload. Only the listed columns are written,
+    // so an assigned locker keeps its user_id / user_name.
+    const { error } = orgId
+      ? await sb.from('lab_user_lockers').upsert(
+          { locker_number: lockerNumber, organization_id: orgId, is_unavailable: nowUnavailable },
+          { onConflict: 'organization_id,locker_number' })
+      // No org on the session (super admin): fall back to updating in place —
+      // the unique index is on (organization_id, locker_number) and NULLs do
+      // not conflict, so an upsert here would insert duplicates.
+      : await sb.from('lab_user_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
     if (error) { toast('Error: ' + error.message); load() }
   }
 
