@@ -36,6 +36,11 @@ function getScanUrl(id, type = 'equipment', name = '', meta = {}) {
     if (meta.storage)    p.set('storage', meta.storage)
     if (meta.qty)        p.set('qty', meta.qty)
     if (meta.storedDate) p.set('stored_date', meta.storedDate)
+    // 'other' labels carry no row id — the QR is built purely from typed
+    // text, so two organizations entering the same item produced identical
+    // codes. The org id makes them org-unique while staying deterministic,
+    // so reprinting the same item still yields the same label.
+    if (meta.orgId) p.set('org', meta.orgId)
     return `${base}?${p.toString()}`
   }
   if (type === 'material') {
@@ -176,7 +181,7 @@ const LABEL_TYPES = [
   { v: 'other',     icon: '📦', label: 'Other',     sub: 'Any other item' },
 ]
 
-function EquipmentBarcodeTab({ equipment, loading, canCreate }) {
+function EquipmentBarcodeTab({ equipment, loading, canCreate, orgId }) {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [selected, setSelected] = useState(null)
@@ -199,7 +204,7 @@ function EquipmentBarcodeTab({ equipment, loading, canCreate }) {
   const activeItem = labelType === 'equipment'
     ? (selected ? { id: selected.id, name: selected.equipment_name + (selected.nickname ? ` (${selected.nickname})` : ''), type: 'equipment' } : null)
     : labelType === 'other'
-      ? (otherReady ? { id: null, name: otherName.trim(), type: 'other', meta: { source: otherSource.trim(), mtype: otherMType.trim(), owner: otherOwner.trim(), storage: otherStorage.trim(), qty: otherQty.trim(), storedDate: otherDate.trim() } } : null)
+      ? (otherReady ? { id: null, name: otherName.trim(), type: 'other', meta: { source: otherSource.trim(), mtype: otherMType.trim(), owner: otherOwner.trim(), storage: otherStorage.trim(), qty: otherQty.trim(), storedDate: otherDate.trim(), orgId } } : null)
       : (customName.trim() ? { id: null, name: customName.trim(), type: labelType } : null)
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))]
@@ -702,7 +707,7 @@ export default function BarcodeManager() {
         </div>
       )}
 
-      {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} canCreate={isAdminOrLabManager} />}
+      {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} canCreate={isAdminOrLabManager} orgId={session?.organizationId || ''} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
       {tab === 'materials' && <MaterialLabelsTab session={session} typeLabels={typeLabels} />}
       {tab === 'summary'   && isAdminOrLabManager && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}

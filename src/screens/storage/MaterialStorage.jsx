@@ -53,7 +53,10 @@ function typeAbbr(type) {
 function generateBarcodeId(project, material) {
   const projectId = (project?.project_id || project?.id?.slice(0, 8) || 'NP').toUpperCase().replace(/\s/g, '-')
   const abbr = typeAbbr(material.material_type)
-  const suffix = String(material.id || '').replace(/-/g, '').slice(0, 4).toUpperCase()
+  // 6 hex chars, not 4: the unique index on barcode_id is database-wide, so a
+  // collision is an outright insert failure rather than a silent duplicate.
+  // 4 chars is only 65k values and collides within a large project; 6 is 16M.
+  const suffix = String(material.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()
   return `${projectId}-${abbr}-${suffix}`
 }
 
