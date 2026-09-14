@@ -91,7 +91,7 @@ function DashboardContent() {
     <div>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontWeight: 700, fontSize: 22, color: '#0C1140', marginBottom: 4 }}>Good morning 👋</div>
-        <div style={{ fontSize: 14, color: '#6b7280' }}>Demo Lab · Staff workspace</div>
+        <div style={{ fontSize: 14, color: '#6b7280' }}>Demo Lab · Lab manager workspace</div>
       </div>
       {/* Stat row */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>

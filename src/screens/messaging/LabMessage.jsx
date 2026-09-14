@@ -568,7 +568,7 @@ export default function LabMessage() {
 
   function otherName(conv) {
     if (!conv) return ''
-    if (conv.sender_id === session?.userId) return conv.receiver_name || 'All Staff'
+    if (conv.sender_id === session?.userId) return conv.receiver_name || 'All Lab Managers'
     return conv.sender_name || 'Unknown'
   }
 

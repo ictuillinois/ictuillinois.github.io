@@ -1492,7 +1492,7 @@ function MaintenanceRecords({ session }) {
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Assign maintenance</div>
             <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>{assignModal.name}</div>
             <div className="field">
-              <label>Assign to staff member</label>
+              <label>Assign to lab manager</label>
               <select value={assignModal.assigned_to} onChange={e => setAssignModal(f => ({ ...f, assigned_to: e.target.value }))}>
                 <option value="">— Unassigned —</option>
                 {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}

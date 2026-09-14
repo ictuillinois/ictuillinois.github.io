@@ -432,7 +432,7 @@ function TemporaryAccessPanel({ equipment, session }) {
     setStudents(studs || []); setTempAccesses(temps || []); setTrainedIds((trained || []).map(t => t.user_id)); setLoading(false)
   }
   async function grantAccess() {
-    if (!selectedUser) { toast('Select a student.'); return }
+    if (!selectedUser) { toast('Select a lab user.'); return }
     setGranting(true)
     const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     await sb.from('equipment_temp_access').upsert({ user_id: selectedUser, equipment_id: equipment.id, granted_by: session.username, granted_at: new Date().toISOString(), expires_at: expires }, { onConflict: 'user_id,equipment_id' })
@@ -449,7 +449,7 @@ function TemporaryAccessPanel({ equipment, session }) {
       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>Grant untrained lab users 1-week access to view SOP and training materials before their training session.</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} style={{ flex: 1, minWidth: 180 }}>
-          <option value="">— Select student —</option>
+          <option value="">— Select lab user —</option>
           {untrainedStudents.map(s => <option key={s.id} value={s.id}>{s.name}{s.project_group ? ` (${s.project_group})` : ''}</option>)}
         </select>
         <button className="btn btn-sm btn-primary" onClick={grantAccess} disabled={granting || !selectedUser}>{granting ? 'Granting…' : 'Grant 1-week access'}</button>

@@ -1992,7 +1992,7 @@ function MultiAssignSelect({ users, selected, onChange }) {
       </button>
       {open && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 200, maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
-          {users.length === 0 && <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text3)' }}>No staff users.</div>}
+          {users.length === 0 && <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text3)' }}>No lab managers.</div>}
           {users.map(u => (
             <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 13, background: selected.includes(u.id) ? '#e0f2fe' : 'transparent', marginBottom: 0 }}>
               <input type="checkbox" checked={selected.includes(u.id)}
@@ -2345,7 +2345,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
                   </div>
                 </div>
                 <div className="field" style={{ marginTop: 8 }}>
-                  <label>Assign to (staff) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
+                  <label>Assign to (lab manager) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
                   <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
                 </div>
                 <div className="field">
@@ -2579,7 +2579,7 @@ function AssignOthers({ userId, orgId }) {
         </div>
         <div className="grid-2">
           <div className="field">
-            <label>Assign to (staff) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
+            <label>Assign to (lab manager) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
             <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
           </div>
           <div className="field"><label>Priority</label>

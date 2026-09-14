@@ -2977,7 +2977,7 @@ function BookingCalendar({ session }) {
               }}
               style={{ flex: 1, fontSize: 12, border: 'none', background: 'transparent', color: filterStudent ? 'var(--accent)' : 'var(--text)', fontWeight: filterStudent ? 600 : 400, outline: 'none', cursor: 'pointer' }}
             >
-              <option value="">— All students —</option>
+              <option value="">— All lab users —</option>
               {orgStudents.map(s => <option key={s.id} value={s.id}>{s.name}{s.role === 'lab_user' ? ' (lab user)' : ''}</option>)}
             </select>
             {filterStudent && (
@@ -3363,7 +3363,7 @@ function BookingHistory({ session }) {
           </select>
           {canEdit(session) && orgUsers.length > 0 && (
             <select value={filterUser} onChange={e => setFilterUser(e.target.value)} style={{ width: 'auto' }}>
-              <option value="">All students</option>
+              <option value="">All lab users</option>
               {orgUsers.map(u => <option key={u.id} value={u.id}>{u.name}{u.role === 'lab_user' ? ' (lab user)' : ''}</option>)}
             </select>
           )}

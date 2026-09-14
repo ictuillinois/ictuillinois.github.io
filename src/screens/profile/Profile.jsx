@@ -781,7 +781,7 @@ function DashboardIconsPanel({ session }) {
               <div style={{ fontSize: 26, marginBottom: 8, pointerEvents: 'none' }}>{m.icon}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{m.label}</div>
               <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
-              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text3)', fontWeight: 600, pointerEvents: 'none' }}>Staff access only</div>
+              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text3)', fontWeight: 600, pointerEvents: 'none' }}>Lab managers only</div>
             </div>
           ))
         }
@@ -1513,7 +1513,7 @@ export function StudentsPanel({ toast, session }) {
     const actualEmail = form.emailAddr?.trim().toLowerCase()
     if (!id) {
       if (!form.password) { toast('Password is required.'); return }
-      if (!actualEmail) { toast('Email is required for student login.'); return }
+      if (!actualEmail) { toast('Email is required for lab user login.'); return }
     }
     if (form.password) {
       const perr = passwordError(form.password)
@@ -1857,7 +1857,7 @@ function StaffListPanel({ toast, session }) {
         if (authUser) payload.auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
-    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); load(); toast('Staff saved ✓') }
+    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); load(); toast('Lab manager saved ✓') }
     else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: fullName }) }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
