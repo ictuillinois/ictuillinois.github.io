@@ -195,7 +195,7 @@ function SoloProfile({ session }) {
       {/* Avatar card */}
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20 }}>
         <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--surface2)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-          {form.photo_url ? <img src={form.photo_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 32, color: 'var(--text3)' }}>👤</span>}
+          <AvatarDisplay photoUrl={form.photo_url} value={form.avatar} size={72} ring={false} fallback="👤" />
         </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 20 }}>{form.nick_name?.trim() || form.name || user.name}</div>
@@ -237,7 +237,7 @@ function SoloProfile({ session }) {
             <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Profile Photo</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, padding: '12px 16px', background: 'var(--surface2)', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                {form.photo_url ? <img src={form.photo_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 28, color: 'var(--text3)' }}>👤</span>}
+                <AvatarDisplay photoUrl={form.photo_url} value={form.avatar} size={56} ring={false} fallback="👤" />
               </div>
               <div style={{ flex: 1, fontSize: 13, color: 'var(--text3)' }}>Saves automatically after upload.</div>
               {form.photo_url && (
@@ -2373,7 +2373,7 @@ function UserProfileForm({ session, toast }) {
     <div style={{ maxWidth: 640 }}>
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20 }}>
         <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--surface2)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-          {previewPhoto ? <img src={previewPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 32, color: 'var(--text3)' }}>👤</span>}
+          <AvatarDisplay photoUrl={previewPhoto} value={form.avatar} size={72} ring={false} fallback="👤" />
         </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 20 }}>{displayName || user.name}</div>
@@ -2445,7 +2445,7 @@ function UserProfileForm({ session, toast }) {
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Profile Photo</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, padding: '12px 16px', background: 'var(--surface2)', borderRadius: 'var(--radius-lg)' }}>
             <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-              {form.photo_url ? <img src={form.photo_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 28, color: 'var(--text3)' }}>👤</span>}
+              <AvatarDisplay photoUrl={form.photo_url} value={form.avatar} size={56} ring={false} fallback="👤" />
             </div>
             <div style={{ flex: 1, fontSize: 13, color: 'var(--text3)' }}>Saves automatically after upload.</div>
             {form.photo_url && (
