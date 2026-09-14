@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
+import { orgCapabilityPool, orgPoolForRole } from '../lib/modulePools'
 
 // ICT-Lab modules
 export const ALL_MODULES_META = [
@@ -157,7 +158,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         // Always fetch org-level allowed modules and global app pool in parallel
         queries.push(
           session?.organizationId
-            ? sb.from('organizations').select('allowed_modules').eq('id', session.organizationId).maybeSingle()
+            ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers').eq('id', session.organizationId).maybeSingle()
             : Promise.resolve(null)
         )
         queries.push(
@@ -183,12 +184,14 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch { appPool = null }
 
-        // Org-level pool (super admin per-org setting)
-        const orgPool = orgRes?.data?.allowed_modules || null
-
-        // Combine: global pool first, then org pool further restricts
-        // Org pool overrides global pool; global is the default when no org pool is set
-        const effectivePool = orgPool ?? appPool
+        // Layers 1-2 via the shared resolver. This previously read only the
+        // OUTER allowed_modules, ignoring the per-role pools that Dashboard and
+        // Profile both honour — so this picker could offer a different set than
+        // the Dashboard Icons panel for the same user.
+        const effectivePool = orgCapabilityPool({
+          appPool,
+          orgRolePool: orgPoolForRole(session?.role, orgRes?.data),
+        })
 
         if (effectivePool !== null) {
           // Previously filtered out entirely, so a user never learned the

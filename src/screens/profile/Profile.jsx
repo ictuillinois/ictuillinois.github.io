@@ -5,6 +5,7 @@ import { passwordError } from '../../lib/passwordPolicy'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
 import { AvatarPicker, AvatarDisplay } from '../../components/Avatars'
 import { useState, useEffect, useRef } from 'react'
 import { IconEye, IconEyeOff } from '../../components/Icons'
@@ -587,14 +588,11 @@ function DashboardIconsPanel({ session }) {
         } : null
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-        // Role-specific org pool: lab users use labusers pool, labManagers use labmanagers pool, org admin uses outer pool
-        const outerOrgPool = session?.role === 'lab_user'
-          ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
-          : session?.role === 'user'
-            ? (orgRes?.data?.allowed_modules_labmanagers ?? orgRes?.data?.allowed_modules)
-            : orgRes?.data?.allowed_modules
-        const orgPool = outerOrgPool || null
-        const effectivePool = orgPool ?? appPool
+        // Layers 1-2 via the shared resolver (see src/lib/modulePools.js).
+        const effectivePool = orgCapabilityPool({
+          appPool,
+          orgRolePool: orgPoolForRole(session?.role, orgRes?.data),
+        })
         setAdminPool(effectivePool)
         if (session?.role === 'lab_user') {
           const pool = data?.allowed_modules || []

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { capabilityPool, orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
 
 function getModules(role, loginMode, activeModules) {
@@ -689,19 +690,15 @@ export default function Dashboard() {
       ])
       let appPool = null
       try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-      const orgPool = (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules) || null
-      const effective = orgPool ?? appPool
-      // A lab manager's per-user assignment NARROWS the org pool; it never
-      // exceeds it. Letting per-user win outright (the previous behaviour) let
-      // a module the org admin had not granted onto the dashboard — Equipment
-      // & Maintenance appeared as a card while the picker, which intersects
-      // the two pools, never offered it and so could not deselect it.
-      // Profile's Dashboard Icons panel uses this same intersection.
-      const perUser = prefsRes.data?.[0]?.allowed_modules
-      const gatePool = perUser?.length
-        ? (effective ? perUser.filter(k => effective.includes(k)) : perUser)
-        : (effective || [])
-      setLabUserAllowedPool(new Set([...gatePool, 'profile']))
+      // Layers 1-3 via the shared resolver: org grant replaces the global pool,
+      // then the lab manager's per-user assignment narrows it.
+      const gatePool = capabilityPool({
+        appPool,
+        orgOuterPool: orgRes?.data?.allowed_modules,
+        orgRolePool:  orgRes?.data?.allowed_modules_labusers,
+        perUserPool:  prefsRes.data?.[0]?.allowed_modules,
+      })
+      setLabUserAllowedPool(new Set([...(gatePool || []), 'profile']))
     } catch { /* leave the pool null: CardGridView then falls back to all */ }
   }
 
@@ -782,14 +779,11 @@ export default function Dashboard() {
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-          // Role-specific org pool: labUsers use labusers pool, labManagers use labmanagers pool
-          const outerOrgPool = session?.role === 'lab_user'
-            ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
-            : session?.role === 'user'
-              ? (orgRes?.data?.allowed_modules_labmanagers ?? orgRes?.data?.allowed_modules)
-              : orgRes?.data?.allowed_modules
-          const orgPool = outerOrgPool || null
-          const effectivePool = orgPool ?? appPool
+          // Layers 1-2 via the shared resolver (see src/lib/modulePools.js).
+          const effectivePool = orgCapabilityPool({
+            appPool,
+            orgRolePool: orgPoolForRole(session?.role, orgRes?.data),
+          })
           if (effectivePool !== null) {
             if (mods?.length) {
               // Remove modules no longer in the pool; always keep profile, labManagers-pinned, labManagerOnly for

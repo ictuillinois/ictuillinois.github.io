@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
+import { orgCapabilityPool } from '../../lib/modulePools'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import FloorPlanPicker from '../../components/FloorPlanPicker'
@@ -376,8 +377,11 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
     ])
     let appPool = null
     try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-    // What the SUPER admin granted this org. null = everything is available.
-    const orgGrant = orgRes?.data?.allowed_modules ?? appPool
+    // Layer 1 via the shared resolver: what the SUPER admin granted this org.
+    // Deliberately the OUTER grant only — this editor defines the role pools
+    // (layer 2), so bounding it by a role pool would be circular.
+    // null = everything is available.
+    const orgGrant = orgCapabilityPool({ appPool, orgOuterPool: orgRes?.data?.allowed_modules })
 
     const applicable = modulesForPoolRole(kind)
     // Modules the app force-shows for this role regardless of any pool:
