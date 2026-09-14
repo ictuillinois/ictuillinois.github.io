@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { exportProjectXlsx, exportAllProjectsXlsx } from '../../lib/exportMaterials'
+import MaterialSearch from '../../components/MaterialSearch'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
@@ -2291,10 +2292,10 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['projects', 'materials'].map(m => (
+        {['projects', 'materials', 'search'].map(m => (
           <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')}
             onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null); setSelectedMaterialId(null); setMatPanelTab('info') }}>
-            {m === 'projects' ? '🧪 Projects' : '📦 Materials'}
+            {m === 'projects' ? '🧪 Projects' : m === 'materials' ? '📦 Materials' : '🔍 Search'}
           </button>
         ))}
         {viewMode === 'projects' && (
@@ -2321,6 +2322,13 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         onChange={e => { uploadProjectPhoto(e.target.files?.[0]); e.target.value = '' }} />
 
       {/* ── Materials card grid (standalone only — same card style as projects) ── */}
+      {/* Advanced search across every material field, project and standalone
+          alike — answers "do we have CM16 from Quarry X, and how much is
+          left?" without opening projects one at a time. */}
+      {viewMode === 'search' && (
+        <MaterialSearch session={session} isSolo={isSolo} viewingWorkspaceOwnerId={viewingWorkspaceOwnerId} />
+      )}
+
       {viewMode === 'materials' && (() => {
         const standaloneMats = allMaterials.filter(m => !m.project_id)
         return standaloneMats.length === 0 ? (
