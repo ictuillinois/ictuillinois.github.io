@@ -464,7 +464,7 @@ WITH CHECK (
 )
 $b$);
 
-SELECT _apply_rls('student_lockers', 'student_lockers_policy', $b$
+SELECT _apply_rls('lab_user_lockers', 'lab_user_lockers_policy', $b$
 FOR ALL TO authenticated
 USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
 WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
@@ -1231,7 +1231,7 @@ DECLARE
     'equipment_inventory_policy','equipment_categories_policy','equipment_locations_policy',
     'equipment_booking_settings_policy','equipment_bookings_policy','booking_notifications_policy',
     'equipment_booking_blocks_policy','eq_hub_policy','equipment_sop_notes_policy','equipment_list_policy',
-    'org_scope_policy','floor_plans_policy','storage_locations_policy','student_lockers_policy',
+    'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy',
     'projects_policy','project_child_policy','project_materials_policy','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',

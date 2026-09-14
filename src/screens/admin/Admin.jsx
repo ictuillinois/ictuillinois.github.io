@@ -287,10 +287,10 @@ function LabUserDefaultIconsPanel({ orgId }) {
 
   useEffect(() => {
     if (!orgId) return
-    sb.from('organizations').select('student_default_modules').eq('id', orgId).maybeSingle()
+    sb.from('organizations').select('lab_user_default_modules').eq('id', orgId).maybeSingle()
       .then(({ data }) => {
-        const mods = data?.student_default_modules?.length
-          ? data.student_default_modules
+        const mods = data?.lab_user_default_modules?.length
+          ? data.lab_user_default_modules
           : ['projects', 'booking', 'barcode', 'mileage', 'labsafety']
         setSelected(new Set(mods))
       })
@@ -307,7 +307,7 @@ function LabUserDefaultIconsPanel({ orgId }) {
   async function save() {
     setSaving(true)
     const modules = LAB_USER_ICON_OPTIONS.filter(m => selected.has(m.key)).map(m => m.key)
-    const { error } = await sb.from('organizations').update({ student_default_modules: modules }).eq('id', orgId)
+    const { error } = await sb.from('organizations').update({ lab_user_default_modules: modules }).eq('id', orgId)
     if (error) toast('Save failed: ' + error.message)
     else toast('Default icons saved ✓ — new lab users will start with these icons.')
     setSaving(false)
@@ -574,10 +574,10 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
           setSelectedIcons(new Set([...(row?.active_modules || []), 'profile']))
         })
     } else if (!user && role === 'lab_user' && effectiveOrgId) {
-      sb.from('organizations').select('student_default_modules').eq('id', effectiveOrgId).maybeSingle()
+      sb.from('organizations').select('lab_user_default_modules').eq('id', effectiveOrgId).maybeSingle()
         .then(({ data }) => {
-          const defaults = data?.student_default_modules?.length
-            ? data.student_default_modules
+          const defaults = data?.lab_user_default_modules?.length
+            ? data.lab_user_default_modules
             : ['projects', 'booking', 'barcode', 'mileage', 'labsafety', 'training']
           setSelectedIcons(new Set([...defaults, 'profile']))
         })

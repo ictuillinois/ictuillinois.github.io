@@ -189,7 +189,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
       let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('project_id')
       if (isSolo) { q = q.eq('solo_owner_id', session.userId) }
       else if (session.organizationId) { q = q.eq('organization_id', session.organizationId) }
-      else { q = q.or(`pi_user_id.eq.${session.userId},student_ids.cs.{${session.userId}}`) }
+      else { q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`) }
       q.then(({ data }) => setProjects(data || []))
     }
   }, [])

@@ -31,24 +31,24 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     name: project.name || '', project_id: project.project_id || '',
     cfop: project.cfop || '', status: project.status || 'active',
     project_group: project.project_group || '',
-    pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', student_ids: project.student_ids || [],
+    pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [],
     sampling_date: project.sampling_date || '', storage_date: project.storage_date || '',
     notes: project.notes || '',
   })
 
   useEffect(() => {
-    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', student_ids: project.student_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
+    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
     setEditing(false)
   }, [project.id])
 
   function toggleLabUser(id) {
-    setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
+    setForm(f => ({ ...f, lab_user_ids: f.lab_user_ids.includes(id) ? f.lab_user_ids.filter(s => s !== id) : [...f.lab_user_ids, id] }))
   }
 
   async function save() {
     if (!form.name.trim()) { toast('Project name is required.'); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
+    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, lab_user_ids: form.lab_user_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
     const { error } = await sb.from('projects').update(payload).eq('id', project.id)
     if (error) { toast('Error saving project.'); return }
     toast('Project info saved.'); setEditing(false); onSaved()
@@ -118,12 +118,12 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 // ── New Project Modal ──────────────────────────────────────────
 export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
   const { session, toast } = useAppStore()
-  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', student_ids: [], sampling_date: '', storage_date: '', notes: '' })
+  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', lab_user_ids: [], sampling_date: '', storage_date: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
   function toggleLabUser(id) {
-    setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
+    setForm(f => ({ ...f, lab_user_ids: f.lab_user_ids.includes(id) ? f.lab_user_ids.filter(s => s !== id) : [...f.lab_user_ids, id] }))
   }
 
   async function create() {
@@ -138,7 +138,7 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
       status: form.status,
       project_group: form.project_group || null,
       pi_user_id: form.pi_user_id || null,
-      student_ids: form.student_ids,
+      lab_user_ids: form.lab_user_ids,
       sampling_date: form.sampling_date || null,
       storage_date: form.storage_date || null,
       notes: form.notes.trim() || null,
@@ -205,10 +205,10 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
 
   useEffect(() => {
     async function loadProjects() {
-      let q = sb.from('projects').select('id, name, project_id, student_ids').eq('status', 'active').order('name')
+      let q = sb.from('projects').select('id, name, project_id, lab_user_ids').eq('status', 'active').order('name')
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
       // Lab users can only add materials to projects they're assigned to
-      if (session?.dbRole === 'lab_user') q = q.contains('student_ids', [session.userId])
+      if (session?.dbRole === 'lab_user') q = q.contains('lab_user_ids', [session.userId])
       const { data } = await q
       setProjects(data || [])
     }
@@ -1411,7 +1411,7 @@ function DataAnalysis({ allowedNames, userProjectGroup, userAssignedProjectIds }
     if (session?.organizationId) {
       // all statuses — needed to resolve project names on old results;
       // the Add Result dropdown filters to active below
-      sb.from('projects').select('id, name, project_id, status, pi_user_id, student_ids, project_group').eq('organization_id', session.organizationId).order('project_id')
+      sb.from('projects').select('id, name, project_id, status, pi_user_id, lab_user_ids, project_group').eq('organization_id', session.organizationId).order('project_id')
         .then(({ data }) => setAllProjects(data || []))
     }
   }, [])
@@ -2114,13 +2114,13 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const canSetPhoto = !viewingWorkspaceOwnerId && (isSolo || session?.userId === null || session?.dbRole === 'admin' || session?.dbRole === 'user')
 
   // Lab users can fully read/edit/add/remove materials on projects they're assigned to
-  // (project.student_ids), but can only VIEW projects they're not assigned to — no
+  // (project.lab_user_ids), but can only VIEW projects they're not assigned to — no
   // editing, adding, or deleting. LabManager (admin/user/lab manager) and solo users are
   // unaffected. Standalone (non-project) materials are out of scope for this rule.
   const isLabUser = !isSolo && session?.dbRole === 'lab_user'
   function isProjectAssigned(project) {
     if (!isLabUser) return true
-    return (project?.student_ids || []).includes(session?.userId)
+    return (project?.lab_user_ids || []).includes(session?.userId)
   }
 
   async function uploadProjectPhoto(file) {
@@ -2142,7 +2142,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
 
   async function loadAllMaterials() {
-    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id, student_ids)').order('created_at', { ascending: false })
+    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id, lab_user_ids)').order('created_at', { ascending: false })
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setAllMaterials(data || [])
@@ -2167,13 +2167,13 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
       }
       if (filter === 'my') {
-        if (session?.userId) q = q.or(`pi_user_id.eq.${session.userId},student_ids.cs.{${session.userId}}`)
+        if (session?.userId) q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`)
       } else if (filter !== 'all') {
         q = q.eq('status', filter)
       }
       return q
     }
-    const baseSelect = 'id, name, project_id, status, cfop, pi_user_id, student_ids, sampling_date, notes, created_at'
+    const baseSelect = 'id, name, project_id, status, cfop, pi_user_id, lab_user_ids, sampling_date, notes, created_at'
     // photo_url needs the one-time SQL migration — fall back gracefully without it
     let { data, error } = await buildQuery(baseSelect + ', photo_url')
     if (error) ({ data } = await buildQuery(baseSelect))

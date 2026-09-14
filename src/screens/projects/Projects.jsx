@@ -273,7 +273,7 @@ function AdvancedSearch({ projects, users, onResults, onClear }) {
     }
     if (q.status) results = results.filter(p => p.status === q.status)
     if (q.pi) results = results.filter(p => p.pi_user_id === q.pi)
-    if (q.labUser) results = results.filter(p => (p.student_ids || []).includes(q.labUser))
+    if (q.labUser) results = results.filter(p => (p.lab_user_ids || []).includes(q.labUser))
     if (q.cfop) results = results.filter(p => p.cfop?.toLowerCase().includes(q.cfop.toLowerCase()))
     if (q.yearStart) results = results.filter(p => p.sampling_date >= q.yearStart + '-01-01')
     if (q.yearEnd) results = results.filter(p => !p.sampling_date || p.sampling_date <= q.yearEnd + '-12-31')
@@ -352,31 +352,31 @@ function ProjectInfo({ project, users, onSaved }) {
   const [form, setForm] = useState({
     name: project.name || '', project_id: project.project_id || '',
     cfop: project.cfop || '', status: project.status || 'active',
-    pi_user_id: project.pi_user_id || '', student_ids: project.student_ids || [],
+    pi_user_id: project.pi_user_id || '', lab_user_ids: project.lab_user_ids || [],
     sampling_date: project.sampling_date || '', storage_date: project.storage_date || '',
     notes: project.notes || '',
   })
 
   useEffect(() => {
-    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', pi_user_id: project.pi_user_id || '', student_ids: project.student_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
+    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', pi_user_id: project.pi_user_id || '', lab_user_ids: project.lab_user_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
     setEditing(false)
   }, [project.id])
 
   function toggleLabUser(id) {
-    setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
+    setForm(f => ({ ...f, lab_user_ids: f.lab_user_ids.includes(id) ? f.lab_user_ids.filter(s => s !== id) : [...f.lab_user_ids, id] }))
   }
 
   async function save() {
     if (!form.name.trim()) { toast('Project name is required.'); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, pi_user_id: form.pi_user_id || null, student_ids: form.student_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
+    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, pi_user_id: form.pi_user_id || null, lab_user_ids: form.lab_user_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
     const { error } = await sb.from('projects').update(payload).eq('id', project.id)
     if (error) { toast('Error saving project.'); return }
     toast('Project info saved.'); setEditing(false); onSaved()
   }
 
   const piUser = users.find(u => u.id === project.pi_user_id)
-  const labUserUsers = users.filter(u => (project.student_ids || []).includes(u.id))
+  const labUserUsers = users.filter(u => (project.lab_user_ids || []).includes(u.id))
   const statusBadge = project.status === 'active' ? 'badge-active' : project.status === 'completed' ? 'badge-completed' : 'badge-hold'
 
   if (editing) return (
@@ -411,9 +411,9 @@ function ProjectInfo({ project, users, onSaved }) {
           {users.length === 0
             ? <div style={{ fontSize: 13, color: 'var(--text3)', gridColumn: '1/-1' }}>No users found.</div>
             : users.map((u, i) => (
-                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.student_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
-                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
-                  <span style={{ color: form.student_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.student_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
+                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.lab_user_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
+                  <input type="checkbox" checked={form.lab_user_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
+                  <span style={{ color: form.lab_user_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.lab_user_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
                 </label>
               ))
           }
@@ -464,12 +464,12 @@ function ProjectInfo({ project, users, onSaved }) {
 
 function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
   const { session, toast } = useAppStore()
-  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', pi_user_id: '', student_ids: [], sampling_date: '', storage_date: '', notes: '' })
+  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', pi_user_id: '', lab_user_ids: [], sampling_date: '', storage_date: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
   function toggleLabUser(id) {
-    setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
+    setForm(f => ({ ...f, lab_user_ids: f.lab_user_ids.includes(id) ? f.lab_user_ids.filter(s => s !== id) : [...f.lab_user_ids, id] }))
   }
 
   async function create() {
@@ -484,7 +484,7 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
       cfop: form.cfop.trim() || null,
       status: form.status,
       pi_user_id: form.pi_user_id || null,
-      student_ids: form.student_ids,
+      lab_user_ids: form.lab_user_ids,
       sampling_date: form.sampling_date || null,
       storage_date: form.storage_date || null,
       notes: form.notes.trim() || null,
@@ -527,9 +527,9 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
           {users.length === 0
             ? <div style={{ fontSize: 13, color: 'var(--text3)', gridColumn: '1/-1' }}>No users found.</div>
             : users.map(u => (
-                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.student_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
-                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
-                  <span style={{ color: form.student_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.student_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
+                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.lab_user_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
+                  <input type="checkbox" checked={form.lab_user_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
+                  <span style={{ color: form.lab_user_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.lab_user_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
                 </label>
               ))
           }
@@ -850,7 +850,7 @@ export default function Projects() {
   async function loadProjects() {
     setLoading(true)
 
-    const baseSelect = 'id, name, project_id, status, cfop, pi_user_id, student_ids, sampling_date, notes'
+    const baseSelect = 'id, name, project_id, status, cfop, pi_user_id, lab_user_ids, sampling_date, notes'
 
     let q = sb.from('projects').select(baseSelect).order('created_at', { ascending: false })
 

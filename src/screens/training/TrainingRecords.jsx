@@ -1635,7 +1635,7 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
     const orgId = session?.organizationId
     let stQ = sb.from('users').select('id, name, last_name, nick_name, project_group').eq('role', 'lab_user').eq('is_active', true).order('name')
     if (orgId) stQ = stQ.eq('organization_id', orgId)
-    let lkQ = sb.from('student_lockers').select('*').order('locker_number')
+    let lkQ = sb.from('lab_user_lockers').select('*').order('locker_number')
     if (orgId) lkQ = lkQ.eq('organization_id', orgId)
     const [{ data: lk }, { data: st }] = await Promise.all([lkQ, stQ])
     if (!lk || lk.length === 0) {
@@ -1654,7 +1654,7 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
     if (!labUser) return
     const orgId = session?.organizationId
     const displayName = firstName(labUser)
-    const { error } = await sb.from('student_lockers').upsert({
+    const { error } = await sb.from('lab_user_lockers').upsert({
       locker_number: lockerNumber,
       organization_id: orgId || null,
       user_id: labUser.id,
@@ -1673,7 +1673,7 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
   async function unassignLocker(locker) {
     if (!confirm(`Remove ${locker.user_name} from locker ${locker.locker_number}?`)) return
     const orgId = session?.organizationId
-    let q = sb.from('student_lockers').update({
+    let q = sb.from('lab_user_lockers').update({
       user_id: null, user_name: null, assigned_by: null, assigned_at: null, notes: null
     }).eq('locker_number', locker.locker_number)
     if (orgId) q = q.eq('organization_id', orgId)
@@ -1692,7 +1692,7 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
       if (exists) return prev.map(l => Number(l.locker_number) === lockerNumber ? { ...l, is_unavailable: nowUnavailable } : l)
       return [...prev, { locker_number: lockerNumber, is_unavailable: nowUnavailable, user_id: null, user_name: null }]
     })
-    let q = sb.from('student_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
+    let q = sb.from('lab_user_lockers').update({ is_unavailable: nowUnavailable }).eq('locker_number', lockerNumber)
     if (orgId) q = q.eq('organization_id', orgId)
     const { error } = await q
     if (error) { toast('Error: ' + error.message); load() }
@@ -1947,7 +1947,7 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
       sb.from('training_golf_car').select('user_id, trained').in('user_id', ids),
       sb.from('training_equipment').select('user_id, passed_exam').in('user_id', ids),
       sb.from('training_building_alarm').select('user_id, trained').in('user_id', ids),
-      sb.from('student_lockers').select('user_id').in('user_id', ids),
+      sb.from('lab_user_lockers').select('user_id').in('user_id', ids),
       sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids).then(r => r, () => ({ data: null })),
     ])
     const map = {}
