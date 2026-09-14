@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
+import { isSvgAvatar, AvatarSvg, AVATAR_PRESETS } from './Avatars'
 import NotificationBell from './NotificationBell'
 import SuperAdminBell from './SuperAdminBell'
 import { ALL_MODULES_META } from './DashboardIconPicker'
@@ -694,9 +695,16 @@ export default function Layout({ children }) {
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
                 {session.photoUrl
                   ? <img src={session.photoUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
-                  : session.avatar
-                    ? <span style={{ fontSize: 15 }}>{session.avatar}</span>
-                    : <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{(session.username || 'A')[0].toUpperCase()}</span>
+                  : isSvgAvatar(session.avatar)
+                    ? (() => {
+                        // `avatar` holds either `svg:<id>` (illustrated preset)
+                        // or a legacy single emoji — both must still render.
+                        const cfg = AVATAR_PRESETS.find(p => `svg:${p.id}` === session.avatar)
+                        return cfg ? <AvatarSvg cfg={cfg} size={28} /> : null
+                      })()
+                    : session.avatar
+                      ? <span style={{ fontSize: 15 }}>{session.avatar}</span>
+                      : <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>{(session.username || 'A')[0].toUpperCase()}</span>
                 }
               </div>
               {!isMobile && displayName && (

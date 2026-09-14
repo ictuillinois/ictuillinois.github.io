@@ -6,6 +6,7 @@ import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './Training
 import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
+import { AvatarDisplay } from '../../components/Avatars'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
 import { buildEmailHtml } from '../../lib/emailTemplate'
@@ -99,16 +100,10 @@ function StatusBadge({ done }) {
 // Round user avatar: profile photo when set, otherwise a scientist emoji
 // based on the gender the user selected in Profile → My Info (neutral default)
 function UserAvatar({ user, size = 44 }) {
-  if (user?.photo_url) {
-    return <img src={user.photo_url} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)', flexShrink: 0 }} />
-  }
+  // photo → chosen avatar (svg preset or legacy emoji) → gender fallback
   const g = (user?.gender || '').toLowerCase()
   const emoji = g === 'male' ? '👨‍🔬' : g === 'female' ? '👩‍🔬' : '🧑‍🔬'
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent-light)', border: '2px solid #9FE1CB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.round(size * 0.5), flexShrink: 0, lineHeight: 1 }}>
-      {emoji}
-    </div>
-  )
+  return <AvatarDisplay photoUrl={user?.photo_url} value={user?.avatar} size={size} fallback={emoji} />
 }
 
 function ApprovalChip({ approved, approvedBy, onClick, editable }) {

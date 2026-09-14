@@ -5,6 +5,7 @@ import { passwordError } from '../../lib/passwordPolicy'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { AvatarPicker, AvatarDisplay } from '../../components/Avatars'
 import { useState, useEffect, useRef } from 'react'
 import { IconEye, IconEyeOff } from '../../components/Icons'
 import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
@@ -119,6 +120,7 @@ function SoloProfile({ session }) {
       email: data.email || '',
       phone: data.phone || '',
       photo_url: data.photo_url || '',
+      avatar: data.avatar || '',
     })
     setLoading(false)
   }
@@ -132,9 +134,10 @@ function SoloProfile({ session }) {
       email: form.email || null,
       phone: form.phone || null,
       photo_url: form.photo_url || null,
+      avatar: form.avatar || null,
     }).eq('id', user.id)
     if (error) { toast('Error saving: ' + error.message); setSaving(false); return }
-    setSession({ ...session, username: form.nick_name?.trim() || form.name.trim(), photoUrl: form.photo_url || null })
+    setSession({ ...session, username: form.nick_name?.trim() || form.name.trim(), photoUrl: form.photo_url || null, avatar: form.avatar || null })
     toast('Profile saved ✓'); setSaving(false); load()
   }
 
@@ -248,6 +251,13 @@ function SoloProfile({ session }) {
             </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadPhoto(e.target.files[0])} />
             <button className="btn btn-sm btn-primary" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳ Uploading…' : '⬆️ Choose photo'}</button>
+            <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Or pick an avatar</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+                Shown when you have no photo. Click a selected avatar again to clear it.
+              </div>
+              <AvatarPicker value={form.avatar} onChange={v => setForm(f => ({ ...f, avatar: v || '' }))} />
+            </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
             <button className="btn btn-primary" onClick={saveInfo} disabled={saving || !form.name.trim()}>{saving ? 'Saving…' : 'Save changes'}</button>
@@ -1465,16 +1475,10 @@ function DeleteUserModal({ user, onClose, onConfirm, deleting }) {
 // Round avatar for user cards: profile photo → gender scientist emoji
 // (same fallback chain as the Training hub / Lab Messages)
 function PersonAvatar({ user, size = 56 }) {
-  if (user?.photo_url) {
-    return <img src={user.photo_url} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)', flexShrink: 0 }} />
-  }
+  // photo → chosen avatar (svg preset or legacy emoji) → gender fallback
   const g = (user?.gender || '').toLowerCase()
   const emoji = g === 'male' ? '👨‍🔬' : g === 'female' ? '👩‍🔬' : '🧑‍🔬'
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent-light)', border: '2px solid #9FE1CB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.round(size * 0.5), flexShrink: 0, lineHeight: 1 }}>
-      {emoji}
-    </div>
-  )
+  return <AvatarDisplay photoUrl={user?.photo_url} value={user?.avatar} size={size} fallback={emoji} />
 }
 
 export function LabUsersPanel({ toast, session }) {
@@ -2315,7 +2319,7 @@ function UserProfileForm({ session, toast }) {
     if (session.userId) { const { data } = await sb.from('users').select('*').eq('id', session.userId).maybeSingle(); u = data }
     if (!u) { const { data } = await sb.from('users').select('*').eq('name', session.username).maybeSingle(); u = data }
     setUser(u)
-    if (u) setForm({ name: u.name||'', last_name: u.last_name||'', nick_name: u.nick_name||'', email: u.email||'', phone: u.phone||'', degree: u.degree||'', year_semester: u.year_semester||'', supervisor: u.supervisor||'', project_group: u.project_group||'', photo_url: u.photo_url||'', gender: u.gender||'' })
+    if (u) setForm({ name: u.name||'', last_name: u.last_name||'', nick_name: u.nick_name||'', email: u.email||'', phone: u.phone||'', degree: u.degree||'', year_semester: u.year_semester||'', supervisor: u.supervisor||'', project_group: u.project_group||'', photo_url: u.photo_url||'', gender: u.gender||'', avatar: u.avatar||'' })
     setLoading(false)
   }
 
@@ -2323,11 +2327,11 @@ function UserProfileForm({ session, toast }) {
 
   async function saveInfo() {
     setSaving(true)
-    const payload = { name: form.name.trim(), last_name: form.last_name||null, nick_name: form.nick_name?.trim()||null, phone: form.phone||null, degree: form.degree||null, year_semester: form.year_semester||null, photo_url: form.photo_url||null, gender: form.gender||null }
+    const payload = { name: form.name.trim(), last_name: form.last_name||null, nick_name: form.nick_name?.trim()||null, phone: form.phone||null, degree: form.degree||null, year_semester: form.year_semester||null, photo_url: form.photo_url||null, gender: form.gender||null, avatar: form.avatar||null }
     if (!isLabUser) { payload.supervisor = form.supervisor||null; payload.project_group = form.project_group||null }
     const { error } = await sb.from('users').update(payload).eq('id', user.id)
     if (error) { toast('Error saving: ' + error.message); setSaving(false); return }
-    setSession({ ...session, username: form.nick_name?.trim() || form.name.trim(), photoUrl: form.photo_url||null })
+    setSession({ ...session, username: form.nick_name?.trim() || form.name.trim(), photoUrl: form.photo_url||null, avatar: form.avatar||null })
     toast('Profile saved ✓'); setSaving(false); load()
   }
 
@@ -2453,6 +2457,13 @@ function UserProfileForm({ session, toast }) {
           </div>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadPhoto(e.target.files[0])} />
           <button className="btn btn-sm btn-primary" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? '⏳ Uploading…' : '⬆️ Choose photo'}</button>
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Or pick an avatar</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              Shown when you have no photo. Click a selected avatar again to clear it.
+            </div>
+            <AvatarPicker value={form.avatar} onChange={v => setForm(f => ({ ...f, avatar: v || '' }))} />
+          </div>
         </div>
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16 }}>
           <button className="btn btn-primary" onClick={saveInfo} disabled={saving || !form.name.trim()}>{saving ? 'Saving…' : 'Save changes'}</button>
