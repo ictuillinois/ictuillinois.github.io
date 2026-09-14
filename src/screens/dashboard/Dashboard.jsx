@@ -691,9 +691,16 @@ export default function Dashboard() {
       try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
       const orgPool = (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules) || null
       const effective = orgPool ?? appPool
-      // A per-user assignment from a lab manager wins; otherwise the org pool.
+      // A lab manager's per-user assignment NARROWS the org pool; it never
+      // exceeds it. Letting per-user win outright (the previous behaviour) let
+      // a module the org admin had not granted onto the dashboard — Equipment
+      // & Maintenance appeared as a card while the picker, which intersects
+      // the two pools, never offered it and so could not deselect it.
+      // Profile's Dashboard Icons panel uses this same intersection.
       const perUser = prefsRes.data?.[0]?.allowed_modules
-      const gatePool = perUser?.length ? perUser : (effective || [])
+      const gatePool = perUser?.length
+        ? (effective ? perUser.filter(k => effective.includes(k)) : perUser)
+        : (effective || [])
       setLabUserAllowedPool(new Set([...gatePool, 'profile']))
     } catch { /* leave the pool null: CardGridView then falls back to all */ }
   }
