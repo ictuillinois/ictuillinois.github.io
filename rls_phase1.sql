@@ -464,6 +464,31 @@ WITH CHECK (
 )
 $b$);
 
+-- lab_user_lockers schema repair. The two projects' locker tables had drifted
+-- apart: ICT-Lab was missing assigned_at and notes entirely, so assigning a
+-- locker failed with "Could not find the 'assigned_at' column" — the shared
+-- TrainingRecords upsert writes both. Added with IF NOT EXISTS so whichever
+-- project already has them is untouched.
+ALTER TABLE lab_user_lockers ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ;
+ALTER TABLE lab_user_lockers ADD COLUMN IF NOT EXISTS notes       TEXT;
+
+-- The assign upsert uses onConflict 'organization_id,locker_number', and
+-- Postgres rejects that outright without a matching unique index (same trap as
+-- feedback_responses). Created only when no duplicate pair exists, so a table
+-- with existing duplicates reports instead of failing the whole script.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM lab_user_lockers
+    GROUP BY organization_id, locker_number HAVING count(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS lab_user_lockers_org_number_uniq
+      ON lab_user_lockers (organization_id, locker_number);
+  ELSE
+    RAISE NOTICE 'lab_user_lockers: duplicate (organization_id, locker_number) rows — unique index NOT created; locker assignment will keep failing until they are resolved';
+  END IF;
+END $$;
+
 SELECT _apply_rls('lab_user_lockers', 'lab_user_lockers_policy', $b$
 FOR ALL TO authenticated
 USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
