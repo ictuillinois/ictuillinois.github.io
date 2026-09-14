@@ -1510,6 +1510,34 @@ export function LabUsersPanel({ toast, session }) {
     return sFirstName(s).toLowerCase().includes(q) || sLastName(s).toLowerCase().includes(q) || sEmail(s).toLowerCase().includes(q)
   })
 
+  // The lab-user assignment is stored in BOTH directions and they were never
+  // synced: this modal wrote users.assigned_project_ids, while the entire
+  // Projects screen — the "My Project/s" filter, isProjectAssigned(), and the
+  // material dropdown — reads projects.lab_user_ids. Assigning projects here
+  // therefore had no visible effect: the user saw "No projects found".
+  //
+  // projects.lab_user_ids is authoritative (read in ~20-34 places vs 2-5), so
+  // saving now writes it too, adding the user to the projects they were given
+  // and removing them from the rest.
+  async function syncProjectAssignments(userId, selectedIds, orgId) {
+    if (!userId || !orgId) return
+    const want = new Set((selectedIds || []).map(String))
+    const { data: projects, error } = await sb
+      .from('projects').select('id, lab_user_ids').eq('organization_id', orgId)
+    if (error) { console.error('[assign] load projects:', error.message); return }
+    for (const p of projects || []) {
+      const current = (p.lab_user_ids || []).map(String)
+      const has = current.includes(String(userId))
+      const should = want.has(String(p.id))
+      if (has === should) continue
+      const next = should
+        ? [...current, String(userId)]
+        : current.filter(x => x !== String(userId))
+      const { error: upErr } = await sb.from('projects').update({ lab_user_ids: next }).eq('id', p.id)
+      if (upErr) console.error('[assign] project', p.id, upErr.message)
+    }
+  }
+  
   async function saveLabUser(form, id) {
     if (!form.firstName.trim() && !form.lastName.trim()) { toast('Name is required.'); return }
     const actualEmail = form.emailAddr?.trim().toLowerCase()
@@ -1532,10 +1560,12 @@ export function LabUsersPanel({ toast, session }) {
     if (id) {
       const { error } = await sb.from('users').update(payload).eq('id', id)
       if (error) { toast('Error: ' + error.message); return }
+      await syncProjectAssignments(id, form.selectedProjectIds, session?.organizationId)
       setShowModal(false); setEditLabUser(null); load(); toast('Lab user saved ✓')
     } else {
       const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single()
       if (error) { toast('Error: ' + error.message); return }
+      await syncProjectAssignments(newUser.id, form.selectedProjectIds, session?.organizationId)
       if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab user added: ${payload.name}`, 'new_user', session.userId)
       const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
       queueWelcomeEmail(sb, { name: dispName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password })
@@ -1739,6 +1769,9 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
   const [form, setForm] = useState(labUser ? {
     firstName: sFirstName(labUser), lastName: sLastName(labUser), emailAddr: sEmail(labUser), supervisor: sSupervisor(labUser),
     password: '', year_semester: labUser.year_semester||'', project_group: labUser.project_group||'',
+    // Prefer the authoritative side (projects.lab_user_ids, resolved in the
+    // effect below); assigned_project_ids is only the seed for legacy rows
+    // saved before the two were kept in sync.
     selectedProjectIds: labUser.assigned_project_ids || [],
     nickname: labUser.nick_name || '',
   } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '' })
