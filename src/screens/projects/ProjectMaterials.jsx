@@ -956,14 +956,117 @@ const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other'
 // material it was derived from, and the materials derived from it. Read-only
 // by design — the copied answers are edited on the Material tab like any
 // other material's, so there is no second place they can be changed.
+// The Material Info readout, extracted so the reduction tab can show the very
+// same fields for a parent or a derived material. Duplicating this markup
+// instead would let the two copies drift the moment a question is added.
+function MaterialInfoView({ m }) {
+  const isSoloMat = !TEAM_TYPES.includes(m.material_type)
+  const soloSub = parseSoloSubfields(m.other_info)
+  const soloSubEntries = Object.entries(soloSub).filter(([, v]) => v)
+  const subDefs = SOLO_SUBFIELDS[m.material_type] || []
+  return (
+                    <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
+                      <div style={{ flex: 1, maxWidth: 900, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoFlow: 'dense', gap: '10px 20px', alignContent: 'start' }}>
+                        {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
+                        {isSoloMat ? <>
+                          {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
+                            const def = subDefs.find(s => s.key === key)
+                            const label = def?.label || key
+                            if (key === 'sieve') {
+                              const sieves = val.split(',').filter(Boolean)
+                              return (
+                                <div key={key} style={{ gridColumn: '1/-1' }}>
+                                  <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{sieves.map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div>
+                                </div>
+                              )
+                            }
+                            return <div key={key}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div><div style={{ fontWeight: 500 }}>{val}</div></div>
+                          })}
+                          {(m.source_name || m.source_type) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
+                          {m.source_location && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}</div></div>}
+                        </> : <>
+                          {m.material_type === 'aggregate' && <>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>IDOT Gradation</div><div style={{ fontWeight: 500 }}>{m.idot_gradation_cat ? `${m.idot_gradation_cat}${m.idot_gradation_grade ? ' · ' + m.idot_gradation_grade : ''}` : '—'}</div></div>
+                            <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
+                          </>}
+                          {m.material_type === 'asphalt_binder' && <>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
+                            {m.ab_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
+                            {m.ab_other_additives && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
+                          </>}
+                          {m.material_type === 'plant_mix' && <>
+                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
+                            {m.pm_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
+                            {m.pm_nmas && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas}</div></div>}
+                          </>}
+                          {m.source_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
+                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
+                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{formatLocation(l) || l.location_id}</span>)}</div></div>}
+                        </>}
+                      </div>
+                      {m.photos?.length > 0 && (
+                        <div style={{ flexShrink: 0, width: 140 }}>
+                          <img src={m.photos[0]} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', display: 'block' }} onClick={() => window.open(m.photos[0], '_blank')} />
+                          {m.photos.length > 1 && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                              {m.photos.slice(1).map((url, i) => (
+                                <img key={i} src={url} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+  )
+}
+
 function MaterialReductionTab({ material, allMaterials, onOpen }) {
+  const [open, setOpen] = useState(null)
+
   const parent = material.parent_material_id
     ? allMaterials.find(x => x.id === material.parent_material_id)
     : null
   const children = allMaterials.filter(x => x.parent_material_id === material.id)
 
-  const row = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 8 }
-  const linkStyle = { fontWeight: 600, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, fontSize: 14, textAlign: 'left' }
+  const methodLabel = x =>
+    (x.reduction_method === 'fractionation' ? 'Fractionation' : x.reduction_method || 'Reduction')
+    + (x.reduction_value ? ` \u00b7 ${x.reduction_value}` : '')
+
+  const capStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }
+
+  // Each row expands in place to the full Material Info readout, so the
+  // answers inherited from the parent can be checked without leaving the tab.
+  // "Open" still jumps to the material itself, which is where they are edited.
+  function Row({ item, caption, icon }) {
+    const isOpen = open === item.id
+    return (
+      <div style={{ borderRadius: 10, background: 'var(--surface)', border: `1px solid ${isOpen ? 'var(--accent)' : 'var(--border)'}`, marginBottom: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}
+          onClick={() => setOpen(isOpen ? null : item.id)}>
+          <span style={{ fontSize: 18 }}>{icon}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name || 'Material'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+              {caption}{item.barcode_id ? ` \u00b7 ${item.barcode_id}` : ''}
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={e => { e.stopPropagation(); onOpen?.(item.id) }}
+            style={{ flexShrink: 0 }}>Open</button>
+          <span style={{ fontSize: 12, color: 'var(--text3)', width: 14, textAlign: 'center', flexShrink: 0 }}>
+            {isOpen ? '\u25be' : '\u25b8'}
+          </span>
+        </div>
+        {isOpen && (
+          <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
+            <MaterialInfoView m={item} />
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (!parent && !children.length) return (
     <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
@@ -975,43 +1078,18 @@ function MaterialReductionTab({ material, allMaterials, onOpen }) {
   )
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div style={{ padding: 16 }}>
       {parent && (
         <div style={{ marginBottom: children.length ? 20 : 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Derived from
-          </div>
-          <div style={row}>
-            <span style={{ fontSize: 18 }}>⚗️</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <button style={linkStyle} onClick={() => onOpen?.(parent.id)}>{parent.name || 'Material'}</button>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                {material.reduction_method === 'fractionation' ? 'Fractionation' : material.reduction_method || 'Reduction'}
-                {material.reduction_value ? ` · ${material.reduction_value}` : ''}
-              </div>
-            </div>
-          </div>
+          <div style={capStyle}>Derived from</div>
+          <Row item={parent} icon="⚗️" caption={methodLabel(material)} />
         </div>
       )}
 
       {children.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Reduced into ({children.length})
-          </div>
-          {children.map(c => (
-            <div key={c.id} style={row}>
-              <span style={{ fontSize: 18 }}>📦</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <button style={linkStyle} onClick={() => onOpen?.(c.id)}>{c.name || 'Material'}</button>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-                  {c.reduction_method === 'fractionation' ? 'Fractionation' : c.reduction_method || 'Reduction'}
-                  {c.reduction_value ? ` · ${c.reduction_value}` : ''}
-                  {c.barcode_id ? ` · ${c.barcode_id}` : ''}
-                </div>
-              </div>
-            </div>
-          ))}
+          <div style={capStyle}>Reduced into ({children.length})</div>
+          {children.map(c => <Row key={c.id} item={c} icon="📦" caption={methodLabel(c)} />)}
         </div>
       )}
     </div>
@@ -1112,10 +1190,6 @@ export default function ProjectMaterials({ project, readOnly = false }) {
 
               {/* Expanded — 3-tab panel */}
               {isOpen && (() => {
-                const isSoloMat = !TEAM_TYPES.includes(m.material_type)
-                const soloSub = parseSoloSubfields(m.other_info)
-                const soloSubEntries = Object.entries(soloSub).filter(([, v]) => v)
-                const subDefs = SOLO_SUBFIELDS[m.material_type] || []
                 const MAT_TABS = [
                   { key: 'info',    label: '1 · Material Info' },
                   ...(readOnly ? [] : [{ key: 'edit', label: '2 · Material' }]),
@@ -1135,63 +1209,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   </div>
 
                   {/* Tab 1: Material Info */}
-                  {matTab === 'info' && (
-                    <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
-                      <div style={{ flex: 1, maxWidth: 900, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoFlow: 'dense', gap: '10px 20px', alignContent: 'start' }}>
-                        {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
-                        {isSoloMat ? <>
-                          {soloSubEntries.length > 0 && soloSubEntries.map(([key, val]) => {
-                            const def = subDefs.find(s => s.key === key)
-                            const label = def?.label || key
-                            if (key === 'sieve') {
-                              const sieves = val.split(',').filter(Boolean)
-                              return (
-                                <div key={key} style={{ gridColumn: '1/-1' }}>
-                                  <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
-                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{sieves.map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div>
-                                </div>
-                              )
-                            }
-                            return <div key={key}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div><div style={{ fontWeight: 500 }}>{val}</div></div>
-                          })}
-                          {(m.source_name || m.source_type) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Supplier</div><div style={{ fontWeight: 500 }}>{m.source_name || '—'}</div>{m.source_type && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ref: {m.source_type}</div>}</div>}
-                          {m.source_location && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Location</div><div style={{ fontWeight: 500 }}>{m.source_location}</div></div>}
-                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}</div></div>}
-                        </> : <>
-                          {m.material_type === 'aggregate' && <>
-                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>IDOT Gradation</div><div style={{ fontWeight: 500 }}>{m.idot_gradation_cat ? `${m.idot_gradation_cat}${m.idot_gradation_grade ? ' · ' + m.idot_gradation_grade : ''}` : '—'}</div></div>
-                            <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Sieve Sizes</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{(m.agg_sieve_sizes || []).map(s => <span key={s} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{s}</span>)}</div></div>
-                          </>}
-                          {m.material_type === 'asphalt_binder' && <>
-                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.ab_binder_pg || '—'}</div></div>
-                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Polymer</div><div style={{ fontWeight: 500 }}>{m.ab_has_polymer ? `Yes — ${m.ab_polymer_info || 'see details'}` : 'No'}</div></div>
-                            {m.ab_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.ab_mix_design}</div></div>}
-                            {m.ab_other_additives && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Other Additives</div><div style={{ fontWeight: 500 }}>{m.ab_other_additives}</div></div>}
-                          </>}
-                          {m.material_type === 'plant_mix' && <>
-                            <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>PG Grade</div><div style={{ fontWeight: 500 }}>{m.pm_binder_pg || '—'}</div></div>
-                            {m.pm_mix_design && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Mix Design</div><div style={{ fontWeight: 500 }}>{m.pm_mix_design}</div></div>}
-                            {m.pm_nmas && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>NMAS</div><div style={{ fontWeight: 500 }}>{m.pm_nmas}</div></div>}
-                          </>}
-                          {m.source_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Source</div><div style={{ fontWeight: 500 }}>{m.source_type && `${m.source_type} · `}{m.source_name}</div>{m.source_location && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{m.source_location}</div>}</div>}
-                          {(m.container_type || m.qty_unit) && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Container</div><div style={{ fontWeight: 500 }}>{m.container_type || m.qty_unit}{m.container_count ? ` · ${m.container_count}` : ''}{m.container_color ? ` (${m.container_color})` : ''}</div></div>}
-                          {m.locations?.length > 0 && <div style={{ gridColumn: '1/-1' }}><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Locations</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{m.locations.map((l, i) => <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>{formatLocation(l) || l.location_id}</span>)}</div></div>}
-                        </>}
-                      </div>
-                      {m.photos?.length > 0 && (
-                        <div style={{ flexShrink: 0, width: 140 }}>
-                          <img src={m.photos[0]} style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', display: 'block' }} onClick={() => window.open(m.photos[0], '_blank')} />
-                          {m.photos.length > 1 && (
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                              {m.photos.slice(1).map((url, i) => (
-                                <img key={i} src={url} style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {matTab === 'info' && <MaterialInfoView m={m} />}
 
                   {/* Tab 2: Edit form inline */}
                   {matTab === 'edit' && !readOnly && (
