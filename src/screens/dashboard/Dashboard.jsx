@@ -672,6 +672,32 @@ export default function Dashboard() {
     return () => { sb.removeChannel(sub) }
   }, [session?.userId, isLabUser])
 
+  // labUserAllowedPool is a CAPABILITY (what an admin granted), not a saved
+  // preference. loadDashboardPrefs() returns early when activeModules is
+  // already in the store, so the pool was never set in that case and
+  // CardGridView hid every `locked` module — modules the admin had granted and
+  // the user had ticked vanished from the dashboard while still showing in the
+  // picker and sidebar. Loading it separately keeps it correct either way.
+  async function loadLabUserGate() {
+    try {
+      const [prefsRes, orgRes, appRes] = await Promise.all([
+        sb.from('user_dashboard_prefs').select('allowed_modules').eq('user_id', session.userId).limit(1),
+        session?.organizationId
+          ? sb.from('organizations').select('allowed_modules, allowed_modules_labusers').eq('id', session.organizationId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
+      ])
+      let appPool = null
+      try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
+      const orgPool = (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules) || null
+      const effective = orgPool ?? appPool
+      // A per-user assignment from a lab manager wins; otherwise the org pool.
+      const perUser = prefsRes.data?.[0]?.allowed_modules
+      const gatePool = perUser?.length ? perUser : (effective || [])
+      setLabUserAllowedPool(new Set([...gatePool, 'profile']))
+    } catch { /* leave the pool null: CardGridView then falls back to all */ }
+  }
+
   async function loadDashboardPrefs() {
     try {
       if (!session?.loginMode) return
@@ -681,6 +707,8 @@ export default function Dashboard() {
         sb.from('settings').select('value').eq('key', 'solo_allowed_modules').maybeSingle()
           .then(({ data }) => { try { setSoloPoolFilter(data?.value ? JSON.parse(data.value) : null) } catch {} })
       }
+      // Capability pool for lab users — must run before the early-returns below.
+      if (session?.role === 'lab_user' && session?.userId) loadLabUserGate()
       // If activeModules is already set (e.g., just saved from Profile), don't overwrite it
       // with a DB re-fetch. Only fetch when null (initial load, page reload, or after logout).
       if (activeModules !== null) return
@@ -744,8 +772,6 @@ export default function Dashboard() {
         // The org-wide pool filtering below must not strip these back out for a granted labUser.
         const labUserLockedKeys = new Set(ALL_MODULES_META.filter(m => m.labUserLocked).map(m => m.key))
         const perLabUserGrants = new Set(row?.allowed_modules || [])
-        // Captured out of the try below so the lab-user gate can see it.
-        let orgLabUserPool = null
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
@@ -757,7 +783,6 @@ export default function Dashboard() {
               : orgRes?.data?.allowed_modules
           const orgPool = outerOrgPool || null
           const effectivePool = orgPool ?? appPool
-          orgLabUserPool = effectivePool
           if (effectivePool !== null) {
             if (mods?.length) {
               // Remove modules no longer in the pool; always keep profile, labManagers-pinned, labManagerOnly for
@@ -809,16 +834,7 @@ export default function Dashboard() {
         }
         // Lab users with no saved config see all their allowed modules
         setActiveModules(mods?.length ? mods : null)
-        if (session?.role === 'lab_user') {
-          // This pool both restricts which cards exist and unlocks `locked`
-          // modules in CardGridView. Reading only the per-user assignment meant
-          // an org admin's grant never reached the unlock check, so modules the
-          // admin had granted AND the user had ticked were dropped from the
-          // dashboard while still showing in the picker and sidebar.
-          const perUser = row?.allowed_modules
-          const gatePool = perUser?.length ? perUser : (orgLabUserPool || [])
-          setLabUserAllowedPool(new Set([...gatePool, 'profile']))
-        }
+        // (the lab-user capability pool is loaded by loadLabUserGate() above)
       }
     } catch(e) {}
   }
