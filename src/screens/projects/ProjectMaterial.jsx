@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { materialsToCsv, downloadCsv, safeFileName } from '../../lib/exportMaterials'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
@@ -26,6 +27,23 @@ function InfoCell({ label, value, icon: Icon, emptyText = 'Not set' }) {
 // ── Project Info (view/edit a project's metadata) ──────────────
 function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
   const { toast } = useAppStore()
+  const [exporting, setExporting] = useState(false)
+
+  // One CSV per project: a row per material, a column per material question.
+  // Fetched fresh rather than reusing whatever the Materials tab has loaded —
+  // that list is filtered for display, and an export must be the whole project.
+  async function exportMaterials() {
+    setExporting(true)
+    const { data, error } = await sb.from('project_materials')
+      .select('*, projects(name, project_id)')
+      .eq('project_id', project.id)
+      .order('created_at', { ascending: true })
+    setExporting(false)
+    if (error) { toast('Export failed: ' + error.message, true); return }
+    if (!data?.length) { toast('This project has no materials to export.'); return }
+    downloadCsv(`${safeFileName(project.name)}_materials.csv`, materialsToCsv(data))
+    toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+  }
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     name: project.name || '', project_id: project.project_id || '',
@@ -88,11 +106,13 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 
   return (
     <div>
-      {!readOnly && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-          <button className="btn btn-sm" onClick={() => setEditing(true)}>✏️ Edit info</button>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+        <button className="btn btn-sm" onClick={exportMaterials} disabled={exporting}
+          title="Download this project's materials as a CSV for Excel">
+          {exporting ? 'Exporting…' : '⬇️ Export materials (CSV)'}
+        </button>
+        {!readOnly && <button className="btn btn-sm" onClick={() => setEditing(true)}>✏️ Edit info</button>}
+      </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
         <span className={`badge ${statusBadge}`} style={{ fontSize: 12, padding: '4px 12px' }}>{project.status}</span>
         {project.project_id && <span style={{ fontFamily: 'var(--mono)', fontSize: 12, background: 'var(--surface2)', padding: '4px 12px', borderRadius: 99, color: 'var(--text2)' }}>Title: {project.project_id}</span>}
@@ -2156,6 +2176,25 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
     toast('Material deleted.')
   }
 
+  const [exportingAll, setExportingAll] = useState(false)
+
+  // All projects in one sheet. Scoped the same way the project list is, so an
+  // export can never include an org the viewer cannot see.
+  async function exportAllMaterials() {
+    setExportingAll(true)
+    let q = sb.from('project_materials')
+      .select('*, projects(name, project_id)')
+      .not('project_id', 'is', null)
+      .order('created_at', { ascending: true })
+    if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
+    const { data, error } = await q
+    setExportingAll(false)
+    if (error) { toast('Export failed: ' + error.message, true); return }
+    if (!data?.length) { toast('No project materials to export.'); return }
+    downloadCsv('all_projects_materials.csv', materialsToCsv(data, { includeProject: true }))
+    toast(`Exported ${data.length} material${data.length !== 1 ? 's' : ''} ✓`)
+  }
+
   async function loadProjects() {
     setLoading(true)
     const buildQuery = (select) => {
@@ -2260,6 +2299,14 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
                 {f === 'all' ? 'All' : f === 'my' ? 'My Project/s' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+            {/* Every project in one sheet, with Project / Project ID as the
+                leading columns. Per-project exports live on the Project Info
+                tab; this is the across-the-board version. */}
+            <button className="btn btn-sm" style={{ marginLeft: 'auto' }}
+              onClick={exportAllMaterials} disabled={exportingAll}
+              title="Download every project's materials as one CSV">
+              {exportingAll ? 'Exporting…' : '⬇️ Export all (CSV)'}
+            </button>
           </>
         )}
       </div>
