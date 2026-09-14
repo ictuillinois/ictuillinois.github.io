@@ -42,7 +42,7 @@ async function sendNotification(userId, type, title, body) {
 
 // Returns display name for a user row: "FirstName LastName" or nickname hint
 function displayName(u) {
-  const first = u.email || ''   // first name is stored in the email column for students
+  const first = u.email || ''   // first name is stored in the email column for labUsers
   const last  = u.name  || ''
   const full  = [first, last].filter(Boolean).join(' ') || last || 'Unknown'
   return u.nickname ? `${full} "${u.nickname}"` : full

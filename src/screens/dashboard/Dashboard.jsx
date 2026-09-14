@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
 
 function getModules(role, loginMode, activeModules) {
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
-  const isStaff = role === 'admin' || role === 'user'
+  const isLabManager = role === 'admin' || role === 'user'
   const base = ALL_MODULES_META.filter(m => {
     if (!m.roles.includes(roleKey)) return false
     // No hardcoded lab-user allowlist: what a lab user may see comes from the
-    // org icon pool plus the module's own role flags (studentLocked /
-    // staffOnly / adminOnly). A fixed key list silently overrode whatever the
+    // org icon pool plus the module's own role flags (labUserLocked /
+    // labManagerOnly / adminOnly). A fixed key list silently overrode whatever the
     // org admin granted and needed hand-editing for every new module.
-    if (m.adminOnly && !isStaff) return false
-    if (m.hideForStaff && isStaff) return false
-    if (m.staffOnly && !isStaff) return false
+    if (m.adminOnly && !isLabManager) return false
+    if (m.hideForLabManager && isLabManager) return false
+    if (m.labManagerOnly && !isLabManager) return false
     if (m.soloLocked && loginMode === 'solo') return false
     return true
   })
@@ -23,16 +23,16 @@ function getModules(role, loginMode, activeModules) {
     const ordered = []
     activeModules.forEach(k => { if (baseMap[k]) ordered.push(baseMap[k]) })
     PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
-    if (isStaff) STAFF_PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
+    if (isLabManager) LAB_MANAGER_PINNED_MODULES.forEach(k => { if (baseMap[k] && !activeModules.includes(k)) ordered.push(baseMap[k]) })
     if (role === 'admin') base.forEach(m => { if (m.adminOnly && !activeModules.includes(m.key)) ordered.push(m) })
-    if (isStaff) base.forEach(m => { if (m.studentLocked && !activeModules.includes(m.key)) ordered.push(m) })
-    if (isStaff) base.forEach(m => { if (m.staffOnly && !activeModules.includes(m.key)) ordered.push(m) })
+    if (isLabManager) base.forEach(m => { if (m.labUserLocked && !activeModules.includes(m.key)) ordered.push(m) })
+    if (isLabManager) base.forEach(m => { if (m.labManagerOnly && !activeModules.includes(m.key)) ordered.push(m) })
     return ordered
   }
   return base
 }
 
-function getAllModulesForStudent() {
+function getAllModulesForLabUser() {
   return [
     { key: 'projects',   screen: 'projects',   label: 'Project & Material', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
     { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
@@ -135,18 +135,18 @@ function gridMaxHeight(count) {
   return rows * CARD_MAX_H + (rows - 1) * GRID_GAP
 }
 
-function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isStudent, activeModules, studentAccess, studentAllowedPool, customLinks = [], onReorder }) {
+function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isLabUser, activeModules, labUserAccess, labUserAllowedPool, customLinks = [], onReorder }) {
   const [confirmExternal, setConfirmExternal] = useState(null)
   const [dragSrc, setDragSrc] = useState(null)
   const [dragOver, setDragOver] = useState(null)
 
-  if (isStudent) {
-    const allMods = getAllModulesForStudent()
+  if (isLabUser) {
+    const allMods = getAllModulesForLabUser()
     // Restrict to lab manager's per-user assignment first (allowed_modules, level #3)
-    const assignedMods = (studentAllowedPool && studentAllowedPool.size > 0)
-      ? allMods.filter(m => studentAllowedPool.has(m.key))
+    const assignedMods = (labUserAllowedPool && labUserAllowedPool.size > 0)
+      ? allMods.filter(m => labUserAllowedPool.has(m.key))
       : allMods
-    // Then apply student's personal visibility toggle (active_modules, level #4)
+    // Then apply labUser's personal visibility toggle (active_modules, level #4)
     const visibleMods = activeModules === null || activeModules === undefined
       ? assignedMods
       : assignedMods.filter(m => activeModules.includes(m.key))
@@ -154,7 +154,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       <>
         <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(visibleMods.length) }}>
           {visibleMods.map(m => {
-            const grantedByAdmin = m.locked && ((m.screen && studentAccess?.has(m.screen)) || studentAllowedPool?.has(m.key))
+            const grantedByAdmin = m.locked && ((m.screen && labUserAccess?.has(m.screen)) || labUserAllowedPool?.has(m.key))
             if (m.locked && !grantedByAdmin) return null
             return <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />
           })}
@@ -208,7 +208,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
   )
 }
 
-function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, activeModules, studentAllowedPool }) {
+function LabUserDashboardView({ session, onNavigate, mileageUrl, moduleImages, activeModules, labUserAllowedPool }) {
   const [data, setData] = useState({ myProjects: 0, trainingsComplete: 0, trainingsTotal: 4, upcomingBookings: [], pendingCert: false })
   const [loading, setLoading] = useState(true)
   const [confirmExternal, setConfirmExternal] = useState(null)
@@ -218,8 +218,8 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     window.addEventListener('resize', fn)
     return () => window.removeEventListener('resize', fn)
   }, [])
-  useEffect(() => { if (session?.userId) loadStudentData() }, [session?.userId])
-  async function loadStudentData() {
+  useEffect(() => { if (session?.userId) loadLabUserData() }, [session?.userId])
+  async function loadLabUserData() {
     setLoading(true)
     try {
       const userId = session.userId; const userName = session.username
@@ -251,8 +251,8 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
     { key:'training',   icon:'🎓', label:'Training Records',  sub:'Safety steps & certifications',  screen:'training',   color:'#0369a1' },
     { key:'mileage',    icon:'🚗', label:'Mileage Form',      sub:'Submit reimbursement',           screen:null,         color:'#c84b2f', external:true },
   ]
-  const assignedQuickLinks = (studentAllowedPool && studentAllowedPool.size > 0)
-    ? allQuickLinks.filter(m => studentAllowedPool.has(m.key))
+  const assignedQuickLinks = (labUserAllowedPool && labUserAllowedPool.size > 0)
+    ? allQuickLinks.filter(m => labUserAllowedPool.has(m.key))
     : allQuickLinks
   const quickLinks = activeModules === null || activeModules === undefined
     ? assignedQuickLinks
@@ -298,7 +298,7 @@ function StudentDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
 
 function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleImages }) {
   const { session } = useAppStore()
-  const [stats, setStats] = useState({ activeProjects:0, students:0, pendingTraining:0, lowSupplies:0 })
+  const [stats, setStats] = useState({ activeProjects:0, labUsers:0, pendingTraining:0, lowSupplies:0 })
   const [recentInspections, setRecentInspections] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmExternal, setConfirmExternal] = useState(null)
@@ -310,23 +310,23 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
       const orgId = session?.organizationId
       let suppliesQ = sb.from('supplies').select('id,min_qty')
       let projectsQ = sb.from('projects').select('id,status').eq('status','active')
-      let studentsQ = sb.from('users').select('id').eq('role','lab_user').eq('is_active',true)
+      let labUsersQ = sb.from('users').select('id').eq('role','lab_user').eq('is_active',true)
       let inspectionsQ = sb.from('inspections').select('id,room_name,inspected_at,flag_count,inspector').order('inspected_at',{ascending:false}).limit(5)
       let trainingQ = sb.from('training_fresh').select('id').eq('admin_approved',false)
       if (!isSuperAdmin && orgId) {
         suppliesQ = suppliesQ.eq('organization_id', orgId)
         projectsQ = projectsQ.eq('organization_id', orgId)
-        studentsQ = studentsQ.eq('organization_id', orgId)
+        labUsersQ = labUsersQ.eq('organization_id', orgId)
         inspectionsQ = inspectionsQ.eq('organization_id', orgId)
         // training_fresh has no organization_id — filter via org user IDs
         const { data: orgUsers } = await sb.from('users').select('id').eq('organization_id', orgId).eq('is_active', true)
         const orgUserIds = (orgUsers || []).map(u => u.id)
         trainingQ = orgUserIds.length ? trainingQ.in('user_id', orgUserIds) : Promise.resolve({ data: [] })
       }
-      const [supplies,projects,students,inspections,training] = await Promise.all([
-        suppliesQ, projectsQ, studentsQ, inspectionsQ, trainingQ,
+      const [supplies,projects,labUsers,inspections,training] = await Promise.all([
+        suppliesQ, projectsQ, labUsersQ, inspectionsQ, trainingQ,
       ])
-      setStats({ lowSupplies:(supplies.data||[]).length, activeProjects:(projects.data||[]).length, students:(students.data||[]).length, pendingTraining:(training.data||[]).length })
+      setStats({ lowSupplies:(supplies.data||[]).length, activeProjects:(projects.data||[]).length, labUsers:(labUsers.data||[]).length, pendingTraining:(training.data||[]).length })
       setRecentInspections(inspections.data||[])
     } catch(e) {}
     setLoading(false)
@@ -338,7 +338,7 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
           <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:20 }}>
             {[
               { label:'Active projects',       value:stats.activeProjects,  color:'#534AB7', screen:'projects' },
-              { label:'Active lab users',        value:stats.students,        color:'#0369a1', screen:'training' },
+              { label:'Active lab users',        value:stats.labUsers,        color:'#0369a1', screen:'training' },
               { label:'Pending cert approvals', value:stats.pendingTraining, color:'#c84b2f', screen:'training' },
               { label:'Supply items tracked',   value:stats.lowSupplies,     color:'#1D9E75', screen:'home'     },
             ].map(s => (
@@ -591,7 +591,7 @@ function SafetyGate({ onGoToTraining, onRefresh }) {
 }
 
 export default function Dashboard() {
-  const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules, studentAllowedPool, setStudentAllowedPool } = useAppStore()
+  const { session, screen, setScreen, setSidebarSubTab, activeModules, setActiveModules, labUserAllowedPool, setLabUserAllowedPool } = useAppStore()
   const [inboxOpen, setInboxOpen]   = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [view, setView] = useState(() => localStorage.getItem('labstock_view') || 'grid')
@@ -621,7 +621,7 @@ export default function Dashboard() {
   const [soloPoolFilter, setSoloPoolFilter] = useState(null)
 
   const isAdmin   = session?.role === 'admin'
-  const isStudent = session?.role === 'lab_user'
+  const isLabUser = session?.role === 'lab_user'
   const isSolo    = session?.loginMode === 'solo'
   const loginMode = session?.loginMode || 'team'
 
@@ -642,7 +642,7 @@ export default function Dashboard() {
   }, [session?.userId, isAdmin])
 
   async function checkSafetyProgress() {
-    if (!isStudent || !session?.userId) { setSafetyComplete(true); return }
+    if (!isLabUser || !session?.userId) { setSafetyComplete(true); return }
     try {
       const { data } = await sb.from('lab_safety_progress')
         .select('step_number')
@@ -653,19 +653,19 @@ export default function Dashboard() {
     } catch { setSafetyComplete(true) }
   }
 
-  useEffect(() => { checkSafetyProgress() }, [session?.userId, isStudent, screen])
+  useEffect(() => { checkSafetyProgress() }, [session?.userId, isLabUser, screen])
 
-  // Re-check live when a manager approves a step or the student submits one, so the
+  // Re-check live when a manager approves a step or the labUser submits one, so the
   // dashboard unlocks without requiring a manual reload/navigation (mirrors Layout.jsx's
   // sidebar lock, which already subscribes to this table).
   useEffect(() => {
-    if (!isStudent || !session?.userId) return
+    if (!isLabUser || !session?.userId) return
     const uid = session.userId
     const sub = sb.channel(`safety_dashboard_${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_safety_progress', filter: `user_id=eq.${uid}` }, checkSafetyProgress)
       .subscribe()
     return () => { sb.removeChannel(sub) }
-  }, [session?.userId, isStudent])
+  }, [session?.userId, isLabUser])
 
   async function loadDashboardPrefs() {
     try {
@@ -734,17 +734,17 @@ export default function Dashboard() {
         } : null
         let mods = row?.active_modules
         const userHasConfigured = row?.has_set_dashboard === true
-        // studentLocked modules (e.g. QR Labels) bypass the org-wide pool entirely — a lab
-        // manager grants them per-student via StudentIconManager (user_dashboard_prefs.allowed_modules).
-        // The org-wide pool filtering below must not strip these back out for a granted student.
-        const studentLockedKeys = new Set(ALL_MODULES_META.filter(m => m.studentLocked).map(m => m.key))
-        const perStudentGrants = new Set(row?.allowed_modules || [])
+        // labUserLocked modules (e.g. QR Labels) bypass the org-wide pool entirely — a lab
+        // manager grants them per-labUser via LabUserIconManager (user_dashboard_prefs.allowed_modules).
+        // The org-wide pool filtering below must not strip these back out for a granted labUser.
+        const labUserLockedKeys = new Set(ALL_MODULES_META.filter(m => m.labUserLocked).map(m => m.key))
+        const perLabUserGrants = new Set(row?.allowed_modules || [])
         // Captured out of the try below so the lab-user gate can see it.
         let orgLabUserPool = null
         try {
           let appPool = null
           try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-          // Role-specific org pool: students use labusers pool, staff use labmanagers pool
+          // Role-specific org pool: labUsers use labusers pool, labManagers use labmanagers pool
           const outerOrgPool = session?.role === 'lab_user'
             ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
             : session?.role === 'user'
@@ -755,44 +755,44 @@ export default function Dashboard() {
           orgLabUserPool = effectivePool
           if (effectivePool !== null) {
             if (mods?.length) {
-              // Remove modules no longer in the pool; always keep profile, staff-pinned, staffOnly for
-              // staff, and studentLocked modules individually granted to this lab user
-              const isStaffUser = session?.role === 'admin' || session?.role === 'user'
-              const staffOnlyKeys = new Set(ALL_MODULES_META.filter(m => m.staffOnly).map(m => m.key))
-              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isStaffUser && STAFF_PINNED_MODULES.includes(k)) || (isStaffUser && staffOnlyKeys.has(k)) || (session?.role === 'lab_user' && studentLockedKeys.has(k) && perStudentGrants.has(k)))
+              // Remove modules no longer in the pool; always keep profile, labManagers-pinned, labManagerOnly for
+              // labManagers, and labUserLocked modules individually granted to this lab user
+              const isLabManagerUser = session?.role === 'admin' || session?.role === 'user'
+              const labManagerOnlyKeys = new Set(ALL_MODULES_META.filter(m => m.labManagerOnly).map(m => m.key))
+              const filtered = mods.filter(k => effectivePool.includes(k) || k === 'profile' || (isLabManagerUser && LAB_MANAGER_PINNED_MODULES.includes(k)) || (isLabManagerUser && labManagerOnlyKeys.has(k)) || (session?.role === 'lab_user' && labUserLockedKeys.has(k) && perLabUserGrants.has(k)))
               if (userHasConfigured) {
                 mods = filtered
-                // Still auto-append newly-granted studentLocked modules even for a configured dashboard —
-                // the student never had a chance to pick something that didn't exist for them before
+                // Still auto-append newly-granted labUserLocked modules even for a configured dashboard —
+                // the labUser never had a chance to pick something that didn't exist for them before
                 if (session?.role === 'lab_user') {
-                  const newlyGranted = [...perStudentGrants].filter(k => studentLockedKeys.has(k) && !mods.includes(k))
+                  const newlyGranted = [...perLabUserGrants].filter(k => labUserLockedKeys.has(k) && !mods.includes(k))
                   if (newlyGranted.length) mods = [...mods, ...newlyGranted]
                 }
               } else {
                 // User never configured — append newly-added pool modules so they appear automatically
-                const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !(isStaffUser && STAFF_PINNED_MODULES.includes(k)))
+                const missing = effectivePool.filter(k => !filtered.includes(k) && k !== 'profile' && !(isLabManagerUser && LAB_MANAGER_PINNED_MODULES.includes(k)))
                 mods = [...filtered, ...missing]
                 if (session?.role === 'lab_user') {
-                  const newlyGranted = [...perStudentGrants].filter(k => studentLockedKeys.has(k) && !mods.includes(k))
+                  const newlyGranted = [...perLabUserGrants].filter(k => labUserLockedKeys.has(k) && !mods.includes(k))
                   if (newlyGranted.length) mods = [...mods, ...newlyGranted]
                 }
               }
             } else if (session?.role !== 'lab_user') {
-              // No saved prefs — pool defines what's visible (not for students: they see nothing until admin assigns)
+              // No saved prefs — pool defines what's visible (not for labUsers: they see nothing until admin assigns)
               mods = effectivePool
-            } else if (perStudentGrants.size) {
+            } else if (perLabUserGrants.size) {
               // Lab user with no saved active_modules yet, but the manager already granted
-              // studentLocked modules — surface those immediately instead of showing nothing
-              mods = [...perStudentGrants].filter(k => studentLockedKeys.has(k))
+              // labUserLocked modules — surface those immediately instead of showing nothing
+              mods = [...perLabUserGrants].filter(k => labUserLockedKeys.has(k))
             }
           }
-          // For staff with no saved mods OR only default profile (not user-configured), default labmanagement to first position
+          // For labManagers with no saved mods OR only default profile (not user-configured), default labmanagement to first position
           if ((session?.role === 'admin' || session?.role === 'user') && (!mods?.length || (mods.length === 1 && mods[0] === 'profile' && !userHasConfigured))) {
-            const staffPool = effectivePool ??
-              ALL_MODULES_META.filter(m => !m.soloLocked && !m.studentOnly).map(m => m.key)
-            const withLabFirst = staffPool.includes('labmanagement')
-              ? ['labmanagement', ...staffPool.filter(k => k !== 'labmanagement')]
-              : staffPool
+            const labManagerPool = effectivePool ??
+              ALL_MODULES_META.filter(m => !m.soloLocked && !m.labUserOnly).map(m => m.key)
+            const withLabFirst = labManagerPool.includes('labmanagement')
+              ? ['labmanagement', ...labManagerPool.filter(k => k !== 'labmanagement')]
+              : labManagerPool
             mods = withLabFirst
           }
           // Ensure profile is always present for all team users
@@ -812,7 +812,7 @@ export default function Dashboard() {
           // dashboard while still showing in the picker and sidebar.
           const perUser = row?.allowed_modules
           const gatePool = perUser?.length ? perUser : (orgLabUserPool || [])
-          setStudentAllowedPool(new Set([...gatePool, 'profile']))
+          setLabUserAllowedPool(new Set([...gatePool, 'profile']))
         }
       }
     } catch(e) {}
@@ -820,7 +820,7 @@ export default function Dashboard() {
 
   const allModules = (() => {
     const base = getModules(session?.role, loginMode, activeModules)
-    // For staff: auto-include adminOnly modules that admin has explicitly granted via user_screen_access
+    // For labManagers: auto-include adminOnly modules that admin has explicitly granted via user_screen_access
     if (session?.role === 'user' && userAccess) {
       const baseKeys = new Set(base.map(m => m.key))
       ALL_MODULES_META.forEach(m => {
@@ -943,13 +943,13 @@ export default function Dashboard() {
           <div style={{ fontSize:13, color:'var(--text3)', fontFamily:'var(--mono)' }}>{dateStr}{orgName ? ` · ICT-Lab for ${orgName}` : ''}</div>
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          {!isStudent && (
+          {!isLabUser && (
             <div style={{ display:'flex', background:'var(--surface2)', borderRadius:'var(--radius)', padding:4, gap:2 }}>
               <button onClick={() => switchView('grid')} style={{ padding:'6px 14px', border:'none', borderRadius:8, fontFamily:'var(--sans)', fontSize:13, fontWeight:500, cursor:'pointer', background:view==='grid'?'var(--surface)':'transparent', color:view==='grid'?'var(--text)':'var(--text2)', transition:'all 0.15s' }}>⊞ Cards</button>
               <button onClick={() => switchView('dashboard')} style={{ padding:'6px 14px', border:'none', borderRadius:8, fontFamily:'var(--sans)', fontSize:13, fontWeight:500, cursor:'pointer', background:view==='dashboard'?'var(--surface)':'transparent', color:view==='dashboard'?'var(--text)':'var(--text2)', transition:'all 0.15s' }}>☰ Dashboard</button>
             </div>
           )}
-          {isStudent && (
+          {isLabUser && (
             <div style={{ display:'flex', background:'var(--surface2)', borderRadius:'var(--radius)', padding:4, gap:2 }}>
               <button onClick={() => switchView('grid')} style={{ padding:'6px 14px', border:'none', borderRadius:8, fontFamily:'var(--sans)', fontSize:13, fontWeight:500, cursor:'pointer', background:view==='grid'?'var(--surface)':'transparent', color:view==='grid'?'var(--text)':'var(--text2)', transition:'all 0.15s' }}>⊞ Cards</button>
               <button onClick={() => switchView('dashboard')} style={{ padding:'6px 14px', border:'none', borderRadius:8, fontFamily:'var(--sans)', fontSize:13, fontWeight:500, cursor:'pointer', background:view==='dashboard'?'var(--surface)':'transparent', color:view==='dashboard'?'var(--text)':'var(--text2)', transition:'all 0.15s' }}>📋 My Activity</button>
@@ -991,13 +991,13 @@ export default function Dashboard() {
       {inboxOpen && <SupportInbox onClose={() => { setInboxOpen(false); if (isAdmin && session?.userId) sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open').then(({ count }) => setUnreadCount(count || 0)) }} onRead={() => sb.from('support_messages').select('id', { count: 'exact', head: true }).eq('status', 'open').then(({ count }) => setUnreadCount(count || 0))} />}
 
       <div style={{ flex: 1, minHeight: 0 }}>
-        {isStudent && safetyComplete === false
+        {isLabUser && safetyComplete === false
           ? <SafetyGate onGoToTraining={() => { setScreen('training'); setSidebarSubTab('safety') }} onRefresh={checkSafetyProgress} />
           : <>
-              {isStudent && view==='dashboard' && <StudentDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} studentAllowedPool={studentAllowedPool} />}
-              {isStudent && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isStudent={true} activeModules={activeModules} studentAccess={userAccess} studentAllowedPool={studentAllowedPool} />}
-              {!isStudent && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isStudent={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
-              {!isStudent && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
+              {isLabUser && view==='dashboard' && <LabUserDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} labUserAllowedPool={labUserAllowedPool} />}
+              {isLabUser && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isLabUser={true} activeModules={activeModules} labUserAccess={userAccess} labUserAllowedPool={labUserAllowedPool} />}
+              {!isLabUser && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isLabUser={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
+              {!isLabUser && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
             </>
         }
       </div>

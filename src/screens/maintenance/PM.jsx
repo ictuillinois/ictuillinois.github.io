@@ -950,7 +950,7 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
 
 function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
   const [tasks, setTasks] = useState([])
-  const [staffMap, setStaffMap] = useState({})
+  const [labManagerMap, setLabManagerMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [activePriority, setActivePriority] = useState(null)
   const { toast } = useAppStore()
@@ -959,12 +959,12 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
     let q = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
     if (!isSolo) q = q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
     if (!isOwnerAdmin && userId) q = q.or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
-    const staffQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
-    Promise.all([q, staffQ])
+    const labManagerQ = isSolo ? Promise.resolve({ data: [] }) : (() => { let q = sb.from('users').select('id, name').eq('is_active', true); if (orgId) q = q.eq('organization_id', orgId); return q })()
+    Promise.all([q, labManagerQ])
       .then(([{ data: t }, { data: u }]) => {
         setTasks(t || [])
         const map = {}; (u || []).forEach(x => { map[x.id] = x.name })
-        setStaffMap(map); setLoading(false)
+        setLabManagerMap(map); setLoading(false)
       })
 
     // Realtime: update progress/status in place without tab switch
@@ -1088,8 +1088,8 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
                       {t.deadline && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Due {t.deadline}</span>}
-                      {t.assigned_to && t.assigned_to !== userId && staffMap[t.assigned_to] && (
-                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>→ {staffMap[t.assigned_to]}</span>
+                      {t.assigned_to && t.assigned_to !== userId && labManagerMap[t.assigned_to] && (
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>→ {labManagerMap[t.assigned_to]}</span>
                       )}
                     </div>
                   </div>
@@ -1116,11 +1116,11 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)' }}>Due {t.deadline}{t.deadline_time ? ` at ${t.deadline_time}` : ''}</div>
-                {t.created_by && t.created_by !== userId && staffMap[t.created_by] && (
-                  <div style={{ fontSize: 10, color: BLUE, marginTop: 1 }}>👤 Assigned by {staffMap[t.created_by]}</div>
+                {t.created_by && t.created_by !== userId && labManagerMap[t.created_by] && (
+                  <div style={{ fontSize: 10, color: BLUE, marginTop: 1 }}>👤 Assigned by {labManagerMap[t.created_by]}</div>
                 )}
-                {t.assigned_to && t.assigned_to !== userId && staffMap[t.assigned_to] && (
-                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>→ Assigned to {staffMap[t.assigned_to]}</div>
+                {t.assigned_to && t.assigned_to !== userId && labManagerMap[t.assigned_to] && (
+                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>→ Assigned to {labManagerMap[t.assigned_to]}</div>
                 )}
               </div>
               <PriorityBadge priority={t.priority || 'medium'} />
@@ -1140,11 +1140,11 @@ function Overview({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                 <div style={{ fontSize: 11, color: '#c84b2f' }}>Was due {t.deadline}</div>
-                {t.created_by && t.created_by !== userId && staffMap[t.created_by] && (
-                  <div style={{ fontSize: 10, color: BLUE, marginTop: 1 }}>👤 Assigned by {staffMap[t.created_by]}</div>
+                {t.created_by && t.created_by !== userId && labManagerMap[t.created_by] && (
+                  <div style={{ fontSize: 10, color: BLUE, marginTop: 1 }}>👤 Assigned by {labManagerMap[t.created_by]}</div>
                 )}
-                {t.assigned_to && t.assigned_to !== userId && staffMap[t.assigned_to] && (
-                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>→ Assigned to {staffMap[t.assigned_to]}</div>
+                {t.assigned_to && t.assigned_to !== userId && labManagerMap[t.assigned_to] && (
+                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>→ Assigned to {labManagerMap[t.assigned_to]}</div>
                 )}
               </div>
               <PriorityBadge priority={t.priority || 'medium'} />
@@ -1310,9 +1310,9 @@ function CalendarView({ onTaskClick, userId, isOwnerAdmin, isSolo, orgId }) {
   )
 }
 
-function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStudent, pendingTask, onPendingTaskConsumed, onGroupChange }) {
+function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLabUser, pendingTask, onPendingTaskConsumed, onGroupChange }) {
   const [tasks, setTasks] = useState([])
-  const [staffMap, setStaffMap] = useState({})
+  const [labManagerMap, setLabManagerMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
   const [outOfLab, setOutOfLab] = useState([])
@@ -1323,7 +1323,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
   const [calDayPopup, setCalDayPopup] = useState(null)
   const [desktop, setDesktop] = useState(isDesktop())
   const [showAddTask, setShowAddTask] = useState(false)
-  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isStudent ? true : false, remind_daily: false })
+  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isLabUser ? true : false, remind_daily: false })
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
 
@@ -1360,7 +1360,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
         const [{ data, error }, { data: users }] = await Promise.all([baseQ(), usersQ])
         if (error) console.error('Load tasks error:', error)
         const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
-        setStaffMap(map)
+        setLabManagerMap(map)
         rawTasks = data || []
       } else {
         // Two explicit queries avoid any .or() ambiguity with UUIDs
@@ -1370,7 +1370,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
           usersQ,
         ])
         const map = {}; (users || []).forEach(u => { map[u.id] = u.name })
-        setStaffMap(map)
+        setLabManagerMap(map)
         const seen = new Set()
         rawTasks = [...(assignedRes.data || []), ...(createdRes.data || [])].filter(t => {
           if (seen.has(t.id)) return false
@@ -1433,7 +1433,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
         })
         return next
       })
-      setNewTask({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isStudent ? true : false, remind_daily: false })
+      setNewTask({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isLabUser ? true : false, remind_daily: false })
       setShowAddTask(false); toast('Task added!')
     } catch (err) { toast('Could not add task: ' + (err?.message || 'Check tasks table')) }
     setSaving(false)
@@ -1546,7 +1546,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
                 />
                 <span style={{ verticalAlign: 'middle', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>🔒 Private task</span>
                 <span style={{ verticalAlign: 'middle', fontSize: 11, color: 'var(--text2)', marginLeft: 6 }}>
-                  — {isStudent ? 'Hidden from group members.' : 'Others see this as "Personal task" — title and notes stay private.'}
+                  — {isLabUser ? 'Hidden from group members.' : 'Others see this as "Personal task" — title and notes stay private.'}
                 </span>
               </div>
             </div>
@@ -1600,9 +1600,9 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
                         <div style={{ height: '100%', width: `${task.progress || 0}%`, background: tColor, borderRadius: 99, transition: 'width 0.3s' }} />
                       </div>
                       {desktop && task.deadline && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>Due {task.deadline}{task.deadline_time ? ` at ${task.deadline_time}` : ''}</div>}
-                      {task.created_by && task.created_by !== (task.assigned_to || userId) && staffMap[task.created_by] && (
+                      {task.created_by && task.created_by !== (task.assigned_to || userId) && labManagerMap[task.created_by] && (
                         <div style={{ fontSize: 10, color: BLUE, marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span>👤</span><span>Assigned by {staffMap[task.created_by]}</span>
+                          <span>👤</span><span>Assigned by {labManagerMap[task.created_by]}</span>
                         </div>
                       )}
                     </div>
@@ -1624,7 +1624,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isStu
           <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Deadline calendar</div>
           <MiniCalendar tasks={tasks} outOfLabDays={outOfLab} onDayClick={(y, m, d) => setCalDayPopup({ year: y, month: m, day: d })} />
           {userId && <OutOfLabPanel userId={userId} isSolo={isSolo} orgId={orgId} onChanged={loadOutOfLab} />}
-          {isStudent && userId && <TaskGroupPanel userId={userId} orgId={orgId} onGroupChange={onGroupChange} />}
+          {isLabUser && userId && <TaskGroupPanel userId={userId} orgId={orgId} onGroupChange={onGroupChange} />}
         </div>
       </div>
     </div>
@@ -1669,7 +1669,7 @@ function TaskViewModal({ task, onClose }) {
 
 function Team({ orgId, isSolo, userId, isAdmin, userName }) {
   const { toast } = useAppStore()
-  const [staffUsers, setStaffUsers] = useState([])
+  const [labManagerUsers, setLabManagerUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [colWidths, setColWidths] = useState({})
@@ -1683,7 +1683,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
     if (orgId) usersQ = usersQ.eq('organization_id', orgId)
     let tasksQ = sb.from('tasks').select('*').eq('login_mode', isSolo ? 'solo' : 'team')
     if (!isSolo) tasksQ = tasksQ.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
+    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setLabManagerUsers(u || []); setTasks(t || []); setLoading(false) })
   }, [orgId, isSolo])
 
   useEffect(() => {
@@ -1704,7 +1704,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
   async function addTeamTask() {
     if (!newTeamTask.title.trim()) { toast('Task title required.'); return }
     setAddingTask(true)
-    const assignees = newTeamTask.assigned_to.length > 0 ? newTeamTask.assigned_to : staffUsers.map(u => u.id)
+    const assignees = newTeamTask.assigned_to.length > 0 ? newTeamTask.assigned_to : labManagerUsers.map(u => u.id)
     const rows = assignees.map(assigneeId => ({
       title: newTeamTask.title.trim(),
       assigned_to: assigneeId,
@@ -1739,7 +1739,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
   const statusLabel = (s) => ({ todo: 'To Do', in_progress: 'In Progress', done: 'Done' }[s] || s)
 
   if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-  if (staffUsers.length === 0) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)', fontSize: 14 }}>No lab managers found.</div>
+  if (labManagerUsers.length === 0) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)', fontSize: 14 }}>No lab managers found.</div>
 
   return (
     <div>
@@ -1766,12 +1766,12 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <label style={{ marginBottom: 0 }}>Assign to <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more, or assign to all</span></label>
                   <button type="button"
-                    onClick={() => setNewTeamTask(t => ({ ...t, assigned_to: t.assigned_to.length === staffUsers.length ? [] : staffUsers.map(u => u.id) }))}
-                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent)' : 'var(--border)'}`, background: newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent-light)' : 'var(--surface2)', color: newTeamTask.assigned_to.length === staffUsers.length ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
-                    {newTeamTask.assigned_to.length === staffUsers.length ? '✓ All Team' : 'All Team'}
+                    onClick={() => setNewTeamTask(t => ({ ...t, assigned_to: t.assigned_to.length === labManagerUsers.length ? [] : labManagerUsers.map(u => u.id) }))}
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${newTeamTask.assigned_to.length === labManagerUsers.length ? 'var(--accent)' : 'var(--border)'}`, background: newTeamTask.assigned_to.length === labManagerUsers.length ? 'var(--accent-light)' : 'var(--surface2)', color: newTeamTask.assigned_to.length === labManagerUsers.length ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+                    {newTeamTask.assigned_to.length === labManagerUsers.length ? '✓ All Team' : 'All Team'}
                   </button>
                 </div>
-                <MultiAssignSelect users={staffUsers} selected={newTeamTask.assigned_to} onChange={v => setNewTeamTask(t => ({ ...t, assigned_to: v }))} />
+                <MultiAssignSelect users={labManagerUsers} selected={newTeamTask.assigned_to} onChange={v => setNewTeamTask(t => ({ ...t, assigned_to: v }))} />
                 {newTeamTask.assigned_to.length === 0 && (
                   <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>No selection = assign to all team members</div>
                 )}
@@ -1814,11 +1814,11 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
 
       <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 12, userSelect: resizing.current ? 'none' : 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 'max-content', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        {staffUsers.map((user, idx) => {
+        {labManagerUsers.map((user, idx) => {
           const width = colWidths[user.id] || 230
           const uPct = pct(user.id)
           const utasks = userTasks(user.id)
-          const isLast = idx === staffUsers.length - 1
+          const isLast = idx === labManagerUsers.length - 1
           return (
             <div key={user.id} style={{ width, flexShrink: 0, position: 'relative', borderRight: isLast ? 'none' : '1px solid var(--border)' }}>
               <div style={{ padding: '12px 14px 10px', background: 'var(--surface2)', borderBottom: '2px solid var(--border)' }}>
@@ -1884,7 +1884,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
   )
 }
 
-function StudentTeamView({ userId, groupId, orgId }) {
+function LabUserTeamView({ userId, groupId, orgId }) {
   const [members, setMembers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -2076,7 +2076,7 @@ function DateRangePicker({ startDate, endDate, onStartChange, onEndChange }) {
 function Meetings({ userId, isAdmin, userName, orgId }) {
   const [meetings, setMeetings] = useState([])
   const [tasks, setTasks] = useState([])
-  const [staffUsers, setStaffUsers] = useState([])
+  const [labManagerUsers, setLabManagerUsers] = useState([])
   const [allUsersMap, setAllUsersMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [activeMeeting, setActiveMeeting] = useState(null)
@@ -2101,7 +2101,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
       const { data: u } = await usersQ
       const allUsers = u || []
       const uMap = {}; allUsers.forEach(x => { uMap[x.id] = x.name })
-      setAllUsersMap(uMap); setStaffUsers(allUsers.filter(x => x.role === 'user'))
+      setAllUsersMap(uMap); setLabManagerUsers(allUsers.filter(x => x.role === 'user'))
       let tasksQ = sb.from('tasks').select('*').eq('is_meeting_task', true)
       if (orgId) tasksQ = tasksQ.eq('organization_id', orgId)
       const { data: t } = await tasksQ
@@ -2116,7 +2116,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
     }
     load()
   }, [orgId])
-  const staffMap = {}; staffUsers.forEach(u => { staffMap[u.id] = u.name })
+  const labManagerMap = {}; labManagerUsers.forEach(u => { labManagerMap[u.id] = u.name })
   const createMeeting = async () => {
     const payload = { date: newMeetingDate || new Date().toISOString().split('T')[0], notes: '', organization_id: orgId || null }
     if (userId) payload.created_by = userId
@@ -2346,7 +2346,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
                 </div>
                 <div className="field" style={{ marginTop: 8 }}>
                   <label>Assign to (lab manager) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
-                  <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
+                  <MultiAssignSelect users={labManagerUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
                 </div>
                 <div className="field">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -2420,7 +2420,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
                   <Wrap>
                     <select value={filterUser} onChange={e => setFilterUser(e.target.value)} style={pill(filterUser !== 'all', '#1d4ed8', '#dbeafe')}>
                       <option value="all">👤 Person</option>
-                      {staffUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      {labManagerUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </Wrap>
                   <Wrap>
@@ -2476,7 +2476,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
                             style={{ fontSize: 11, padding: '1px 8px', borderRadius: 10, background: '#e0f2fe', color: '#0369a1', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>🔗 Ref</a>
                         )}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{allUsersMap[task.assigned_to] || staffMap[task.assigned_to] || 'Unassigned'} · {task.start_date || '—'} → {task.deadline || '—'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{allUsersMap[task.assigned_to] || labManagerMap[task.assigned_to] || 'Unassigned'} · {task.start_date || '—'} → {task.deadline || '—'}</div>
                       {task.created_by && task.created_by !== task.assigned_to && allUsersMap[task.created_by] && (
                         <div style={{ fontSize: 10, color: BLUE, marginTop: 2 }}>Assigned by {allUsersMap[task.created_by]} · decided in this meeting</div>
                       )}
@@ -2495,7 +2495,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
 }
 
 function AssignOthers({ userId, orgId }) {
-  const [staffUsers, setStaffUsers] = useState([])
+  const [labManagerUsers, setLabManagerUsers] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [newTask, setNewTask] = useState({ title: '', assigned_to: [], start_date: '', deadline: '', priority: 'medium', is_meeting_task: false, reference_url: '', icon_url: '' })
@@ -2510,9 +2510,9 @@ function AssignOthers({ userId, orgId }) {
     if (orgId) usersQ = usersQ.eq('organization_id', orgId)
     let tasksQ = sb.from('tasks').select('*').eq('login_mode', 'team').order('created_at', { ascending: false })
     if (orgId) tasksQ = tasksQ.eq('organization_id', orgId)
-    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setStaffUsers(u || []); setTasks(t || []); setLoading(false) })
+    Promise.all([usersQ, tasksQ]).then(([{ data: u }, { data: t }]) => { setLabManagerUsers(u || []); setTasks(t || []); setLoading(false) })
   }, [orgId])
-  const staffMap = {}; staffUsers.forEach(u => { staffMap[u.id] = u.name })
+  const labManagerMap = {}; labManagerUsers.forEach(u => { labManagerMap[u.id] = u.name })
   const createTask = async (e) => {
     e.preventDefault(); setSaving(true)
     try {
@@ -2580,7 +2580,7 @@ function AssignOthers({ userId, orgId }) {
         <div className="grid-2">
           <div className="field">
             <label>Assign to (lab manager) <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>— select one or more</span></label>
-            <MultiAssignSelect users={staffUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
+            <MultiAssignSelect users={labManagerUsers} selected={newTask.assigned_to} onChange={v => setNewTask({ ...newTask, assigned_to: v })} />
           </div>
           <div className="field"><label>Priority</label>
             <select value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
@@ -2624,7 +2624,7 @@ function AssignOthers({ userId, orgId }) {
               <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{task.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{staffMap[task.assigned_to] || 'Unassigned'} · {task.start_date} → {task.deadline}{task.is_meeting_task && <span style={{ color: BLUE, marginLeft: 8 }}>meeting task</span>}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{labManagerMap[task.assigned_to] || 'Unassigned'} · {task.start_date} → {task.deadline}{task.is_meeting_task && <span style={{ color: BLUE, marginLeft: 8 }}>meeting task</span>}</div>
                   <div style={{ height: 3, background: '#e8e8e8', borderRadius: 99, overflow: 'hidden', maxWidth: 100 }}><div style={{ height: '100%', width: `${task.progress||0}%`, background: progressColor(task.progress||0), borderRadius: 99 }} /></div>
                 </div>
                 <PriorityBadge priority={task.priority || 'medium'} />
@@ -2945,21 +2945,21 @@ export default function PM() {
   const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
   const activeTab = sidebarSubTab || 'overview'
   const [pendingTask, setPendingTask] = useState(null)
-  const [studentGroupId, setStudentGroupId] = useState(undefined) // undefined=loading, null=no group, uuid=has group
+  const [labUserGroupId, setLabUserGroupId] = useState(undefined) // undefined=loading, null=no group, uuid=has group
   const userId = session?.userId
   const isOwnerAdmin = !userId
   const isAdmin = session?.role === 'admin' || session?.role === 'user'
-  const isStudent = session?.role === 'lab_user'
+  const isLabUser = session?.role === 'lab_user'
   const userName = session?.username || 'Lab Manager'
   const isSolo = session?.loginMode === 'solo'
   const orgId = session?.organizationId || null
 
   useEffect(() => {
-    if (isStudent && userId) {
+    if (isLabUser && userId) {
       sb.from('team_task_group_members').select('group_id').eq('user_id', userId).eq('status', 'accepted').maybeSingle()
-        .then(({ data }) => setStudentGroupId(data?.group_id || null))
+        .then(({ data }) => setLabUserGroupId(data?.group_id || null))
     }
-  }, [userId, isStudent])
+  }, [userId, isLabUser])
 
   return (
     <div>
@@ -2970,11 +2970,11 @@ export default function PM() {
         <HelpPanel screen="pm" />
       </div>
       {activeTab === 'overview'  && <Overview userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
-      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isStudent} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isStudent={isStudent} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setStudentGroupId(gid || null); if (!gid && activeTab === 'team') setSidebarSubTab('tasks') }} />}
-      {activeTab === 'team'      && !isStudent && <Team orgId={orgId} isSolo={isSolo} userId={userId} isAdmin={isAdmin} userName={userName} />}
-      {activeTab === 'team'      && isStudent && studentGroupId && <StudentTeamView userId={userId} groupId={studentGroupId} orgId={orgId} />}
+      {activeTab === 'tasks'     && <MyTasks userId={userId} isAdmin={isAdmin || isLabUser} isOwnerAdmin={isOwnerAdmin} userName={userName} isSolo={isSolo} orgId={orgId} isLabUser={isLabUser} pendingTask={pendingTask} onPendingTaskConsumed={() => setPendingTask(null)} onGroupChange={gid => { setLabUserGroupId(gid || null); if (!gid && activeTab === 'team') setSidebarSubTab('tasks') }} />}
+      {activeTab === 'team'      && !isLabUser && <Team orgId={orgId} isSolo={isSolo} userId={userId} isAdmin={isAdmin} userName={userName} />}
+      {activeTab === 'team'      && isLabUser && labUserGroupId && <LabUserTeamView userId={userId} groupId={labUserGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
-      {activeTab === 'meetings'  && !isStudent && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
+      {activeTab === 'meetings'  && !isLabUser && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}
     </div>

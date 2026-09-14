@@ -70,7 +70,7 @@ const MODULE_META = {
 function getScreenTabs(screen, session) {
   const isSolo    = session?.loginMode === 'solo'
   const isAdmin   = session?.role === 'admin' || session?.userId === null
-  const isStaff   = session?.role === 'user'
+  const isLabManager   = session?.role === 'user'
 
   if (screen === 'training') return [
     { key: 'safety',    icon: '🦺', label: 'Safety' },
@@ -83,8 +83,8 @@ function getScreenTabs(screen, session) {
   ]
 
   if (screen === 'labmanagement') return [
-    { key: 'students',  icon: '👥', label: 'Lab Users' },
-    { key: 'staff',     icon: '👨‍💼', label: 'Lab Managers' },
+    { key: 'labusers',  icon: '👥', label: 'Lab Users' },
+    { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
     { key: 'guide',     icon: '📖', label: 'Lab Manager Guide' },
   ]
@@ -92,13 +92,13 @@ function getScreenTabs(screen, session) {
   if (screen === 'booking') return [
     { key: 'calendar', icon: '📅', label: 'Book Equipment' },
     { key: 'history',  icon: '📋', label: 'History & Usage' },
-    ...((isAdmin || isStaff) ? [{ key: 'eq_notes', icon: '⚠️', label: 'Special Treatment' }] : []),
+    ...((isAdmin || isLabManager) ? [{ key: 'eq_notes', icon: '⚠️', label: 'Special Treatment' }] : []),
     ...(isAdmin ? [{ key: 'settings', icon: '⚙️', label: 'Settings' }] : []),
   ]
 
   if (screen === 'equipment') return [
     { key: 'list',        icon: '📋', label: 'List of Equipment' },
-    ...((isAdmin || isStaff) ? [
+    ...((isAdmin || isLabManager) ? [
       { key: 'records',     icon: '📊', label: 'Maintenance Records' },
     ] : []),
     { key: 'settings',    icon: '⚙️', label: 'Settings' },
@@ -107,7 +107,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'projects') {
     return [
       { key: 'inventory', icon: '📦', label: 'Material Inventory' },
-      ...((isAdmin || isStaff) && !isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
+      ...((isAdmin || isLabManager) && !isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
     ]
   }
 
@@ -124,7 +124,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
     { key: 'records',   icon: '📋', label: 'Records' },
-    ...(isAdmin || isStaff ? [
+    ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
       { key: 'types',   icon: '🏷️', label: 'Material Types' },
     ] : []),
@@ -196,7 +196,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
   const activeTab   = sidebarSubTab || (tabs?.[0]?.key ?? null)
   const loginMode   = session?.loginMode || 'team'
   const roleKey     = loginMode === 'solo' ? 'solo' : 'team'
-  const isStaff     = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager     = session?.role === 'admin' || session?.role === 'user'
 
   // External URL state for mileage / labsafety links
   const [extUrls, setExtUrls]       = useState({})
@@ -247,16 +247,16 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     if (!m.screen && !m.external) return false
     if (!m.roles || !m.roles.includes(roleKey)) return false
     if (m.soloLocked && loginMode === 'solo') return false
-    if (m.staffOnly && !isStaff) return false
+    if (m.labManagerOnly && !isLabManager) return false
     if (loginMode === 'solo' && soloPool !== null && !m.external && !soloPool.includes(m.key) && m.key !== 'profile') return false
     return true
   })
   const visibleMeta = activeModules
     ? (() => {
         const inActive = activeModules.map(key => navigable.find(m => m.key === key)).filter(Boolean)
-        if (!isStaff) return inActive
+        if (!isLabManager) return inActive
         const activeSet = new Set(activeModules)
-        const extras = navigable.filter(m => m.staffOnly && !activeSet.has(m.key))
+        const extras = navigable.filter(m => m.labManagerOnly && !activeSet.has(m.key))
         return [...inActive, ...extras]
       })()
     : navigable

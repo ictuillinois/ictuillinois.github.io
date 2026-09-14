@@ -758,7 +758,7 @@ export function ScannerContent() {
   )
 }
 
-// ── Main Screen (standalone — for solo users / students) ─────────
+// ── Main Screen (standalone — for solo users / labUsers) ─────────
 export default function BarcodeScannerScreen() {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto' }}>

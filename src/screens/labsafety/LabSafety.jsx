@@ -168,7 +168,7 @@ function StepDot({ number, completed }) {
   )
 }
 
-// ── User card (staff view) ─────────────────────────────────────────────────
+// ── User card (labManagers view) ─────────────────────────────────────────────────
 
 function UserSafetyCard({ user, progress, selected, onClick }) {
   const userProg = progress[user.id] || {}
@@ -1064,10 +1064,10 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       const body = 'I have read, understood, and will comply with the rules outlined in the Civil and Environmental Engineering ICT Laboratory Safety Rules. I will take full responsibility for any action that may happen while using the ICT Laboratories.'
       doc.text(body, 20, 50, { maxWidth: W - 40 })
 
-      // STUDENT section
+      // LAB_USER section
       let y = 82
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20)
-      doc.text('STUDENT:', 20, y); y += 14
+      doc.text('LAB_USER:', 20, y); y += 14
 
       const lineColor = [29, 158, 117]
       doc.setDrawColor(...lineColor); doc.setLineWidth(0.4)
@@ -1594,7 +1594,7 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
 
 // ── Step panel (tabs + content + actions) ─────────────────────────────────
 
-function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerated, saving }) {
+function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGenerated, saving }) {
   const { setScreen, setSidebarSubTab } = useAppStore()
   const [activeStep, setActiveStep] = useState(1)
   const userProg = progress[user?.id] || {}
@@ -1661,13 +1661,13 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
               <StepContentArea
                 step={s}
                 user={user}
-                isManager={isStaff}
+                isManager={isLabManager}
                 stepRow={stepRow}
                 onCertGenerated={extra => onCertGenerated(user.id, s.number, extra)}
               />
             </div>
 
-            {isStaff && (
+            {isLabManager && (
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                 {done ? (
                   <button onClick={() => onRevoke(user.id, s.number)} disabled={saving}
@@ -1691,12 +1691,12 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>🎉 All 4 steps approved!</div>
             <div style={{ fontSize: 12, color: '#085041', marginTop: 2 }}>
-              {isStaff
+              {isLabManager
                 ? `${user.nick_name?.trim() || user.name}'s certificates have been saved to their Documents tab in Training Records.`
                 : 'Your certificates have been saved to your Documents tab in Training Records.'}
             </div>
           </div>
-          {!isStaff && (
+          {!isLabManager && (
             <button onClick={() => { setSidebarSubTab('fresh'); setScreen('training') }}
               style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               View Your Certificates →
@@ -1712,7 +1712,7 @@ function StepPanel({ user, progress, isStaff, onApprove, onRevoke, onCertGenerat
 
 export default function SafetyTab({ asTab = false, targetUser = null }) {
   const { session } = useAppStore()
-  const isStaff   = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager   = session?.role === 'admin' || session?.role === 'user'
   const isLabUser = session?.role === 'lab_user'
 
   const [users, setUsers]           = useState([])
@@ -1728,7 +1728,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
   async function load() {
     setLoading(true)
     try {
-      if (isStaff) {
+      if (isLabManager) {
         const [usersRes, progRes] = await Promise.all([
           sb.from('users')
             .select('id, name, last_name, nick_name, photo_url, avatar, email')
@@ -1894,7 +1894,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.4px', marginBottom: 4 }}>🦺 Safety Training</div>
           <div style={{ fontSize: 13, color: 'var(--text3)' }}>
-            {isStaff
+            {isLabManager
               ? 'Review lab users\' safety training progress and approve each step.'
               : 'Complete all 4 steps — your lab manager will approve each one before you proceed.'}
           </div>
@@ -1905,7 +1905,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         <StepPanel
           user={selectedUser}
           progress={progress}
-          isStaff={false}
+          isLabManager={false}
           onApprove={approveStep}
           onRevoke={revokeStep}
           onCertGenerated={handleCertGenerated}
@@ -1913,7 +1913,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         />
       )}
 
-      {isStaff && (
+      {isLabManager && (
         <>
           {!targetUser && (
             <>
@@ -1946,7 +1946,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
               <StepPanel
                 user={selectedUser}
                 progress={progress}
-                isStaff={true}
+                isLabManager={true}
                 onApprove={approveStep}
                 onRevoke={revokeStep}
                 onCertGenerated={handleCertGenerated}

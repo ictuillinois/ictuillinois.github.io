@@ -211,7 +211,7 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
   const fmt = d => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'
   const nextDate = equipment.next_maintenance_date ? new Date(equipment.next_maintenance_date) : null
   const isOverdue = nextDate && nextDate < new Date()
-  const isStaff = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager = session?.role === 'admin' || session?.role === 'user'
 
   const InfoRow = ({ label, value }) => value ? (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 0', borderBottom: '1px solid var(--surface2)' }}>
@@ -260,8 +260,8 @@ function MaintenanceSection({ equipment, session, onClose, onGoToInventory }) {
         )}
       </div>
 
-      {/* Staff: link to Equipment List */}
-      {isStaff && (
+      {/* LabManager: link to Equipment List */}
+      {isLabManager && (
         <button
           onClick={onGoToInventory}
           style={{ width: '100%', padding: '12px', borderRadius: 9, fontSize: 13, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1.5px solid #fde68a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
@@ -298,7 +298,7 @@ export default function EquipmentScan() {
   const [sop, setSop] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState(null)
-  const isStaff = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager = session?.role === 'admin' || session?.role === 'user'
   const isEquipment = SCAN_TYPE === 'equipment'
 
   // For equipment labels: resolve the equipment ID (store → URL param)
@@ -443,11 +443,11 @@ export default function EquipmentScan() {
           const isNavigate = opt.id === 'openapp' || opt.id === 'book'
           const isLocked =
             (opt.id === 'sop' && !isEquipment) ||
-            (opt.id === 'calibration' && (!isEquipment || !isStaff))
+            (opt.id === 'calibration' && (!isEquipment || !isLabManager))
           const label = opt.id === 'info'
             ? (isEquipment ? 'Equipment Info' : SCAN_TYPE === 'material' ? 'Material Info' : 'Item Info')
             : opt.label
-          const lockNote = opt.id === 'calibration' && !isStaff
+          const lockNote = opt.id === 'calibration' && !isLabManager
             ? '— Lab Manager only'
             : isLocked ? '— Equipment only' : null
           return (
@@ -508,7 +508,7 @@ export default function EquipmentScan() {
                     </SectionCard>
               )}
               {isActive && opt.id === 'calibration' && (
-                isStaff && isEquipment ? (
+                isLabManager && isEquipment ? (
                   <MaintenanceSection equipment={equipment} session={session} onClose={() => setActiveSection(null)} onGoToInventory={() => setScreen('equipment')} />
                 ) : (
                   <SectionCard title="🔧 Calibration" onClose={() => setActiveSection(null)}>

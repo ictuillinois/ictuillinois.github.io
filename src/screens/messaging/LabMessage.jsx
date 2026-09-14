@@ -196,7 +196,7 @@ function Avatar({ name, user, size = 32 }) {
   )
 }
 
-function NewConvModal({ session, staff, orgName, onSent, onClose }) {
+function NewConvModal({ session, labManagers, orgName, onSent, onClose }) {
   const { toast } = useAppStore()
   const [receiverIds, setReceiverIds] = useState(null)
   const [subject, setSubject] = useState('')
@@ -245,13 +245,13 @@ function NewConvModal({ session, staff, orgName, onSent, onClose }) {
       // email notification at all, and replies in the thread hit the same
       // problem (sendReply's `if (otherId)` is false when receiver_id is
       // null). Notify every other org member explicitly.
-      for (const s of staff.filter(s => s.id !== session.userId)) {
+      for (const s of labManagers.filter(s => s.id !== session.userId)) {
         await sendAppNotification(s.id, session.username, body.trim())
         await sendMessageEmail(s.id, session.username, body.trim())
       }
     } else {
       for (const rid of ids) {
-        const receiver = staff.find(s => s.id === rid)
+        const receiver = labManagers.find(s => s.id === rid)
         const { error } = await sb.from('re_messages').insert({
           ...baseMsg,
           receiver_id: rid,
@@ -277,7 +277,7 @@ function NewConvModal({ session, staff, orgName, onSent, onClose }) {
         </div>
         <div className="field">
           <label>To <span style={{ color: '#c84b2f' }}>*</span></label>
-          <UserMultiSelectDropdown users={staff} selectedIds={receiverIds} onChange={setReceiverIds} isLabUser={isLabUser} orgName={orgName} />
+          <UserMultiSelectDropdown users={labManagers} selectedIds={receiverIds} onChange={setReceiverIds} isLabUser={isLabUser} orgName={orgName} />
         </div>
         <div className="field">
           <label>Subject <span style={{ color: '#c84b2f' }}>*</span></label>
@@ -304,7 +304,7 @@ function NewConvModal({ session, staff, orgName, onSent, onClose }) {
 export default function LabMessage() {
   const { session, toast, setScreen } = useAppStore()
   const [conversations, setConversations] = useState([])
-  const [staff, setStaff] = useState([])
+  const [labManagers, setLabManagers] = useState([])
   const [userMap, setUserMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState(null)
@@ -333,11 +333,11 @@ export default function LabMessage() {
   })
 
   const isAdmin = session?.role === 'admin'
-  const isStaff = session?.role === 'user'
+  const isLabManager = session?.role === 'user'
   const isOrgAdmin = isAdmin && !!session?.userId  // excludes super admin (userId===null)
   const selectedConv = conversations.find(c => c.id === selectedId) || null
 
-  useEffect(() => { load(); loadStaff() }, [])
+  useEffect(() => { load(); loadLabManager() }, [])
 
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
@@ -367,13 +367,13 @@ export default function LabMessage() {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight
   }, [selectedId, selectedConv?.replies?.length])
 
-  async function loadStaff() {
+  async function loadLabManager() {
     if (session?.organizationId) {
       const { data: org } = await sb.from('organizations').select('name').eq('id', session.organizationId).maybeSingle()
       if (org?.name) setOrgName(org.name)
     }
-    // Students message staff/admins only; staff/admins can message everyone incl. lab users
-    const roles = (isAdmin || isStaff) ? ['user', 'admin', 'lab_user'] : ['user', 'admin']
+    // LabUsers message labManagers/admins only; labManagers/admins can message everyone incl. lab users
+    const roles = (isAdmin || isLabManager) ? ['user', 'admin', 'lab_user'] : ['user', 'admin']
     let q = sb.from('users').select('id, name, last_name, nick_name, email, role').in('role', roles).eq('is_active', true)
     if (session?.organizationId && session?.userId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
@@ -382,7 +382,7 @@ export default function LabMessage() {
       (ROLE_ORDER[a.role] ?? 3) - (ROLE_ORDER[b.role] ?? 3) ||
       getUserDisplayName(a).localeCompare(getUserDisplayName(b))
     )
-    setStaff(sorted)
+    setLabManagers(sorted)
     // avatar lookup: all org users (photo + gender), keyed by id
     let uq = sb.from('users').select('id, photo_url, gender, role').eq('is_active', true)
     if (session?.organizationId && session?.userId) uq = uq.eq('organization_id', session.organizationId)
@@ -509,7 +509,7 @@ export default function LabMessage() {
       // Broadcast thread: the root row has receiver_id null, so there is no
       // single "other" party. Without this, every reply in a broadcast
       // conversation notified nobody.
-      for (const s of staff.filter(s => s.id !== session.userId)) {
+      for (const s of labManagers.filter(s => s.id !== session.userId)) {
         await sendAppNotification(s.id, session.username, replyText.trim())
         await sendMessageEmail(s.id, session.username, replyText.trim())
       }
@@ -563,7 +563,7 @@ export default function LabMessage() {
   }
 
   function canDelete(m) {
-    return isAdmin || isStaff ? m.sender_id === session?.userId || isAdmin : m.sender_id === session?.userId
+    return isAdmin || isLabManager ? m.sender_id === session?.userId || isAdmin : m.sender_id === session?.userId
   }
 
   function otherName(conv) {
@@ -910,7 +910,7 @@ export default function LabMessage() {
       </div>
 
       {showCompose && (
-        <NewConvModal session={session} staff={staff} orgName={orgName} onSent={() => { setShowCompose(false); load() }} onClose={() => setShowCompose(false)} />
+        <NewConvModal session={session} labManagers={labManagers} orgName={orgName} onSent={() => { setShowCompose(false); load() }} onClose={() => setShowCompose(false)} />
       )}
 
       {deleteConfirm && (

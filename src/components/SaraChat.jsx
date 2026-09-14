@@ -11,7 +11,7 @@ const FAQ = [
   {
     id: 'features',
     q: 'What modules are available?',
-    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (staff)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (staff)',
+    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (labManagers)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (labManagers)',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions', 'available'],
     followups: ['booking', 'training', 'projects'],
   },
@@ -25,8 +25,8 @@ const FAQ = [
   {
     id: 'roles',
     q: 'What user roles are there?',
-    a: 'ICT-Lab has three roles:\n• Org Admin — full control, manages all users and settings\n• Lab Manager (Research Engineer) — manages day-to-day lab operations and approvals\n• Lab User — researcher or student with access to assigned modules',
-    keywords: ['role', 'permission', 'admin', 'manager', 'lab user', 'research engineer', 're', 'access level', 'types of user', 'student', 'researcher'],
+    a: 'ICT-Lab has three roles:\n• Org Admin — full control, manages all users and settings\n• Lab Manager (Research Engineer) — manages day-to-day lab operations and approvals\n• Lab User — researcher or labUser with access to assigned modules',
+    keywords: ['role', 'permission', 'admin', 'manager', 'lab user', 'research engineer', 're', 'access level', 'types of user', 'labUser', 'researcher'],
     followups: ['features', 'access', 'booking'],
   },
   {
@@ -53,7 +53,7 @@ const FAQ = [
   {
     id: 'qr',
     q: 'How do QR codes work?',
-    a: 'Use QR Scan to scan any lab material barcode and look up its details instantly. Staff can use QR Labels to generate and print QR code stickers for equipment. Scanning an equipment QR code opens its SOP, booking calendar, and contact info directly.',
+    a: 'Use QR Scan to scan any lab material barcode and look up its details instantly. LabManager can use QR Labels to generate and print QR code stickers for equipment. Scanning an equipment QR code opens its SOP, booking calendar, and contact info directly.',
     keywords: ['qr', 'qr code', 'barcode', 'scan', 'label', 'generate', 'print', 'sticker'],
     followups: ['booking', 'projects', 'features'],
   },

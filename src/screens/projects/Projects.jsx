@@ -258,7 +258,7 @@ function InfoCell({ label, value }) {
 // ── Advanced Search Panel ─────────────────────────────────────
 function AdvancedSearch({ projects, users, onResults, onClear }) {
   const [open, setOpen] = useState(false)
-  const [q, setQ] = useState({ keyword: '', status: '', pi: '', student: '', cfop: '', yearStart: '', yearEnd: '' })
+  const [q, setQ] = useState({ keyword: '', status: '', pi: '', labUser: '', cfop: '', yearStart: '', yearEnd: '' })
 
   function search() {
     let results = [...projects]
@@ -273,7 +273,7 @@ function AdvancedSearch({ projects, users, onResults, onClear }) {
     }
     if (q.status) results = results.filter(p => p.status === q.status)
     if (q.pi) results = results.filter(p => p.pi_user_id === q.pi)
-    if (q.student) results = results.filter(p => (p.student_ids || []).includes(q.student))
+    if (q.labUser) results = results.filter(p => (p.student_ids || []).includes(q.labUser))
     if (q.cfop) results = results.filter(p => p.cfop?.toLowerCase().includes(q.cfop.toLowerCase()))
     if (q.yearStart) results = results.filter(p => p.sampling_date >= q.yearStart + '-01-01')
     if (q.yearEnd) results = results.filter(p => !p.sampling_date || p.sampling_date <= q.yearEnd + '-12-31')
@@ -281,7 +281,7 @@ function AdvancedSearch({ projects, users, onResults, onClear }) {
   }
 
   function clear() {
-    setQ({ keyword: '', status: '', pi: '', student: '', cfop: '', yearStart: '', yearEnd: '' })
+    setQ({ keyword: '', status: '', pi: '', labUser: '', cfop: '', yearStart: '', yearEnd: '' })
     onClear()
   }
 
@@ -323,7 +323,7 @@ function AdvancedSearch({ projects, users, onResults, onClear }) {
           <div className="grid-2" style={{ gap: 10, marginBottom: 10 }}>
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Lab user in team</label>
-              <select value={q.student} onChange={e => setQ(f => ({ ...f, student: e.target.value }))}>
+              <select value={q.labUser} onChange={e => setQ(f => ({ ...f, labUser: e.target.value }))}>
                 <option value="">Any lab user</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -362,7 +362,7 @@ function ProjectInfo({ project, users, onSaved }) {
     setEditing(false)
   }, [project.id])
 
-  function toggleStudent(id) {
+  function toggleLabUser(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
@@ -376,7 +376,7 @@ function ProjectInfo({ project, users, onSaved }) {
   }
 
   const piUser = users.find(u => u.id === project.pi_user_id)
-  const studentUsers = users.filter(u => (project.student_ids || []).includes(u.id))
+  const labUserUsers = users.filter(u => (project.student_ids || []).includes(u.id))
   const statusBadge = project.status === 'active' ? 'badge-active' : project.status === 'completed' ? 'badge-completed' : 'badge-hold'
 
   if (editing) return (
@@ -412,7 +412,7 @@ function ProjectInfo({ project, users, onSaved }) {
             ? <div style={{ fontSize: 13, color: 'var(--text3)', gridColumn: '1/-1' }}>No users found.</div>
             : users.map((u, i) => (
                 <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.student_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
-                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleStudent(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
                   <span style={{ color: form.student_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.student_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
                 </label>
               ))
@@ -445,10 +445,10 @@ function ProjectInfo({ project, users, onSaved }) {
       </div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Lab Users</div>
-        {studentUsers.length === 0
+        {labUserUsers.length === 0
           ? <div style={{ color: 'var(--text3)', fontSize: 14 }}>No lab users assigned</div>
           : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {studentUsers.map(u => <span key={u.id} style={{ background: 'var(--accent3-light)', color: 'var(--accent3)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>👤 {u.name}</span>)}
+              {labUserUsers.map(u => <span key={u.id} style={{ background: 'var(--accent3-light)', color: 'var(--accent3)', borderRadius: 99, padding: '4px 14px', fontSize: 13, fontWeight: 500 }}>👤 {u.name}</span>)}
             </div>
         }
       </div>
@@ -468,7 +468,7 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
-  function toggleStudent(id) {
+  function toggleLabUser(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
@@ -528,7 +528,7 @@ function NewProjectModal({ users, onClose, onCreated, soloOwnerId }) {
             ? <div style={{ fontSize: 13, color: 'var(--text3)', gridColumn: '1/-1' }}>No users found.</div>
             : users.map(u => (
                 <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 0, background: 'var(--surface)', borderRadius: 6, padding: '6px 10px', border: form.student_ids.includes(u.id) ? '1px solid var(--accent)' : '1px solid var(--border)' }}>
-                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleStudent(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={form.student_ids.includes(u.id)} onChange={() => toggleLabUser(u.id)} style={{ width: 'auto', cursor: 'pointer' }} />
                   <span style={{ color: form.student_ids.includes(u.id) ? 'var(--accent)' : 'var(--text)', fontWeight: form.student_ids.includes(u.id) ? 600 : 400 }}>{u.name}</span>
                 </label>
               ))

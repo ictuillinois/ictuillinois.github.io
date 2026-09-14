@@ -1353,7 +1353,7 @@ function MaintenanceRecords({ session }) {
   const [photoMap, setPhotoMap] = useState({})
   const [editHours, setEditHours] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [staff, setStaff] = useState([])
+  const [labManagers, setLabManagers] = useState([])
   const [assignModal, setAssignModal] = useState(null)
 
   useEffect(() => { load() }, [])
@@ -1363,14 +1363,14 @@ function MaintenanceRecords({ session }) {
     const isSolo = session?.loginMode === 'solo'
     const orgId = !isSolo && session?.userId ? session?.organizationId : null
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name')
-    let staffQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
-    if (orgId) { eqQ = eqQ.eq('organization_id', orgId); staffQ = staffQ.eq('organization_id', orgId) }
-    const [{ data: eq }, { data: bookings }, { data: staffData }] = await Promise.all([
+    let labManagerQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
+    if (orgId) { eqQ = eqQ.eq('organization_id', orgId); labManagerQ = labManagerQ.eq('organization_id', orgId) }
+    const [{ data: eq }, { data: bookings }, { data: labManagerData }] = await Promise.all([
       eqQ,
       sb.from('equipment_bookings').select('equipment_id, start_time, end_time, status').eq('status', 'confirmed'),
-      staffQ,
+      labManagerQ,
     ])
-    setStaff(staffData || [])
+    setLabManagers(labManagerData || [])
     const usage = {}
     ;(bookings || []).forEach(b => {
       const hrs = (new Date(b.end_time) - new Date(b.start_time)) / 3600000
@@ -1495,7 +1495,7 @@ function MaintenanceRecords({ session }) {
               <label>Assign to lab manager</label>
               <select value={assignModal.assigned_to} onChange={e => setAssignModal(f => ({ ...f, assigned_to: e.target.value }))}>
                 <option value="">— Unassigned —</option>
-                {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                {labManagers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>

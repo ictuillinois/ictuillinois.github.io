@@ -7,9 +7,9 @@ import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { useState, useEffect, useRef } from 'react'
 import { IconEye, IconEyeOff } from '../../components/Icons'
-import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
+import DashboardIconPicker, { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import StorageProviderModal from '../../components/StorageProviderModal'
-import StudentIconManager from '../../components/StudentIconManager'
+import LabUserIconManager from '../../components/LabUserIconManager'
 import TeammatesPanel from '../../components/TeammatesPanel'
 import TeamMembersPanel from '../../components/TeamMembersPanel'
 
@@ -82,8 +82,8 @@ async function createAuthUser(email, password) {
 // ══════════════════════════════════════════════════════════════
 
 const SOLO_PROFILE_TABS    = ['info','teammates','dashboard','notifications','password','danger']
-const STAFF_PROFILE_TABS   = ['info','password','dashboard','notifs','team','danger']
-const STUDENT_PROFILE_TABS = ['info','password','dashboard','notifs','team','danger']
+const LAB_MANAGER_PROFILE_TABS   = ['info','password','dashboard','notifs','team','danger']
+const LAB_USER_PROFILE_TABS = ['info','password','dashboard','notifs','team','danger']
 const ADMIN_PROFILE_TABS   = ['admin','icons','dashboard','notifs','org','storage']
 
 // ══════════════════════════════════════════════════════════════
@@ -507,10 +507,10 @@ function DashboardIconsPanel({ session }) {
   const loginMode = session?.loginMode || 'team'
 
   const roleKey = loginMode === 'solo' ? 'solo' : 'team'
-  const isStaff = session?.role === 'admin' || session?.role === 'user'
-  const pinnedKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  const isLabManager = session?.role === 'admin' || session?.role === 'user'
+  const pinnedKeys = isLabManager ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES] : PINNED_MODULES
   const uiPinnedKeys = PINNED_MODULES // grayed-out + non-draggable (profile only)
-  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
+  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
 
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
@@ -577,7 +577,7 @@ function DashboardIconsPanel({ session }) {
         } : null
         let appPool = null
         try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
-        // Role-specific org pool: lab users use labusers pool, staff use labmanagers pool, org admin uses outer pool
+        // Role-specific org pool: lab users use labusers pool, labManagers use labmanagers pool, org admin uses outer pool
         const outerOrgPool = session?.role === 'lab_user'
           ? (orgRes?.data?.allowed_modules_labusers ?? orgRes?.data?.allowed_modules)
           : session?.role === 'user'
@@ -633,7 +633,7 @@ function DashboardIconsPanel({ session }) {
       } else {
         // Consolidate any duplicate rows for this user (a pre-existing issue with this
         // table) instead of just updating all of them in place — merge whichever row has
-        // allowed_modules populated into the one we keep, so a manager's per-student icon
+        // allowed_modules populated into the one we keep, so a manager's per-labUser icon
         // grant never gets orphaned on a row this update doesn't otherwise touch.
         const { data: existingRows } = await sb.from('user_dashboard_prefs')
           .select('id, allowed_modules').eq('user_id', session.userId)
@@ -671,10 +671,10 @@ function DashboardIconsPanel({ session }) {
 
   const baseDisplay = (() => {
     if (session?.role === 'lab_user' && allowedPool?.length) {
-      const studentPool = adminPool !== null
+      const labUserPool = adminPool !== null
         ? allowedPool.filter(k => adminPool.includes(k))
         : allowedPool
-      return available.filter(m => studentPool.includes(m.key) || pinnedKeys.includes(m.key))
+      return available.filter(m => labUserPool.includes(m.key) || pinnedKeys.includes(m.key))
     }
     if (adminPool !== null) return available.filter(m => adminPool.includes(m.key) || pinnedKeys.includes(m.key))
     return available
@@ -772,9 +772,9 @@ function DashboardIconsPanel({ session }) {
             </div>
           )
         })}
-        {/* studentLocked modules: visible on dashboard as gray cards, also shown here so students see the full picture */}
+        {/* labUserLocked modules: visible on dashboard as gray cards, also shown here so labUsers see the full picture */}
         {session?.role === 'lab_user' && ALL_MODULES_META
-          .filter(m => m.studentLocked && m.roles.includes('team') && !allowedPool?.includes(m.key))
+          .filter(m => m.labUserLocked && m.roles.includes('team') && !allowedPool?.includes(m.key))
           .map(m => (
             <div key={m.key} style={{ borderRadius: 12, border: '2px solid var(--border)', background: 'var(--surface2)', padding: '14px 14px 12px', cursor: 'default', position: 'relative', opacity: 0.45, userSelect: 'none', filter: 'grayscale(0.7)' }}>
               <div style={{ position: 'absolute', top: 9, right: 9, width: 20, height: 20, borderRadius: '50%', background: 'var(--surface2)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, pointerEvents: 'none' }}>🔒</div>
@@ -1348,7 +1348,7 @@ function AdminSettings({ session: sessionProp, toast, isSuperAdmin = false }) {
   )
 }
 
-// ── Self-service delete for team users (staff / lab users) ──
+// ── Self-service delete for team users (labManagers / lab users) ──
 function TeamDeleteAccountPanel({ session, toast }) {
   const [pending, setPending] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1461,7 +1461,7 @@ function DeleteUserModal({ user, onClose, onConfirm, deleting }) {
   )
 }
 
-// ── STUDENTS PANEL ── with 🎛️ icon button per student
+// ── LAB_USERS PANEL ── with 🎛️ icon button per labUser
 // Round avatar for user cards: profile photo → gender scientist emoji
 // (same fallback chain as the Training hub / Lab Messages)
 function PersonAvatar({ user, size = 56 }) {
@@ -1477,13 +1477,13 @@ function PersonAvatar({ user, size = 56 }) {
   )
 }
 
-export function StudentsPanel({ toast, session }) {
-  const [students, setStudents] = useState([])
+export function LabUsersPanel({ toast, session }) {
+  const [labUsers, setLabUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
-  const [editStudent, setEditStudent] = useState(null)
-  const [iconStudent, setIconStudent] = useState(null)
+  const [editLabUser, setEditLabUser] = useState(null)
+  const [iconLabUser, setIconLabUser] = useState(null)
   const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -1498,17 +1498,17 @@ export function StudentsPanel({ toast, session }) {
     let q = sb.from('users').select('*').eq('role', 'lab_user').order('name')
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
-    setStudents(data || [])
+    setLabUsers(data || [])
     setLoading(false)
   }
 
-  const filtered = students.filter(s => {
+  const filtered = labUsers.filter(s => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return sFirstName(s).toLowerCase().includes(q) || sLastName(s).toLowerCase().includes(q) || sEmail(s).toLowerCase().includes(q)
   })
 
-  async function saveStudent(form, id) {
+  async function saveLabUser(form, id) {
     if (!form.firstName.trim() && !form.lastName.trim()) { toast('Name is required.'); return }
     const actualEmail = form.emailAddr?.trim().toLowerCase()
     if (!id) {
@@ -1530,21 +1530,21 @@ export function StudentsPanel({ toast, session }) {
     if (id) {
       const { error } = await sb.from('users').update(payload).eq('id', id)
       if (error) { toast('Error: ' + error.message); return }
-      setShowModal(false); setEditStudent(null); load(); toast('Lab user saved ✓')
+      setShowModal(false); setEditLabUser(null); load(); toast('Lab user saved ✓')
     } else {
       const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single()
       if (error) { toast('Error: ' + error.message); return }
       if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab user added: ${payload.name}`, 'new_user', session.userId)
       const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
       queueWelcomeEmail(sb, { name: dispName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password })
-      setShowModal(false); setEditStudent(null)
+      setShowModal(false); setEditLabUser(null)
       setPendingIconSetup({ userId: newUser.id, displayName: dispName })
     }
   }
 
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function clearPhotoFlag(s) { await sb.from('users').update({ photo_denial_flagged: false }).eq('id', s.id); load(); toast('Photo flag cleared.') }
-  async function deleteStudent(id) {
+  async function deleteLabUser(id) {
     setDeleting(true)
     const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
     await sb.from('user_screen_access').delete().eq('user_id', id)
@@ -1584,16 +1584,16 @@ export function StudentsPanel({ toast, session }) {
       const { error } = await sb.from('users').insert({ ...s, pin: '', role: 'lab_user', is_active: true, admin_level: 0, must_change_password: true, terms_accepted_version: null })
       if (!error) added++
     }
-    setImportPreview(null); setImporting(false); load(); toast(`${added} students imported. Set their passwords individually to activate login.`)
+    setImportPreview(null); setImporting(false); load(); toast(`${added} labUsers imported. Set their passwords individually to activate login.`)
   }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{students.length} lab user{students.length !== 1 ? 's' : ''}</div>
+        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labUsers.length} lab user{labUsers.length !== 1 ? 's' : ''}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>⬇️ Import Excel</button>
-          <button className="btn btn-sm btn-primary" onClick={() => { setEditStudent(null); setShowModal(true) }}>+ Add lab user</button>
+          <button className="btn btn-sm btn-primary" onClick={() => { setEditLabUser(null); setShowModal(true) }}>+ Add lab user</button>
         </div>
       </div>
       <div style={{ position: 'relative', marginBottom: 16 }}>
@@ -1636,8 +1636,8 @@ export function StudentsPanel({ toast, session }) {
                 {s.project_group && !s.photo_denial_flagged && s.is_active && <span style={{ fontSize: 10, color: 'var(--text3)' }}>{s.project_group}</span>}
               </div>
               <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} title="Set allowed dashboard icons" onClick={() => setIconStudent(s)}>Icons</button>
-                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditStudent(s); setShowModal(true) }}>Edit</button>
+                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} title="Set allowed dashboard icons" onClick={() => setIconLabUser(s)}>Icons</button>
+                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditLabUser(s); setShowModal(true) }}>Edit</button>
                 <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
                 <button className="btn btn-danger" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setDeleteTarget(s)}>Delete</button>
                 {s.photo_denial_flagged && (
@@ -1649,10 +1649,10 @@ export function StudentsPanel({ toast, session }) {
         </div>
         )
       }
-      {showModal && <StudentModal student={editStudent} session={session} onClose={() => { setShowModal(false); setEditStudent(null) }} onSave={saveStudent} />}
-      {iconStudent && <StudentIconManager student={iconStudent} orgId={session?.organizationId} onClose={(saved) => { setIconStudent(null); if (saved) toast(`Icons updated for ${iconStudent.email || iconStudent.name} ✓`) }} />}
-      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="student" onDone={() => { setPendingIconSetup(null); load(); toast('Lab user created & icons saved ✓') }} />}
-      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: sLastName(deleteTarget) || sFirstName(deleteTarget) || 'this user' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteStudent} deleting={deleting} />}
+      {showModal && <LabUserModal labUser={editLabUser} session={session} onClose={() => { setShowModal(false); setEditLabUser(null) }} onSave={saveLabUser} />}
+      {iconLabUser && <LabUserIconManager labUser={iconLabUser} orgId={session?.organizationId} onClose={(saved) => { setIconLabUser(null); if (saved) toast(`Icons updated for ${iconLabUser.email || iconLabUser.name} ✓`) }} />}
+      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="labUser" onDone={() => { setPendingIconSetup(null); load(); toast('Lab user created & icons saved ✓') }} />}
+      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: sLastName(deleteTarget) || sFirstName(deleteTarget) || 'this user' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteLabUser} deleting={deleting} />}
     </div>
   )
 }
@@ -1733,12 +1733,12 @@ function SupervisorManager({ session, supervisors, onChanged }) {
   )
 }
 
-function StudentModal({ student, session, onClose, onSave }) {
-  const [form, setForm] = useState(student ? {
-    firstName: sFirstName(student), lastName: sLastName(student), emailAddr: sEmail(student), supervisor: sSupervisor(student),
-    password: '', year_semester: student.year_semester||'', project_group: student.project_group||'',
-    selectedProjectIds: student.assigned_project_ids || [],
-    nickname: student.nick_name || '',
+function LabUserModal({ labUser, session, onClose, onSave }) {
+  const [form, setForm] = useState(labUser ? {
+    firstName: sFirstName(labUser), lastName: sLastName(labUser), emailAddr: sEmail(labUser), supervisor: sSupervisor(labUser),
+    password: '', year_semester: labUser.year_semester||'', project_group: labUser.project_group||'',
+    selectedProjectIds: labUser.assigned_project_ids || [],
+    nickname: labUser.nick_name || '',
   } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '' })
   const [orgProjects, setOrgProjects] = useState([])
   const [showPw, setShowPw] = useState(false)
@@ -1765,7 +1765,7 @@ function StudentModal({ student, session, onClose, onSave }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <form onSubmit={e => e.preventDefault()} autoComplete="on" style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:28, maxWidth:520, width:'100%', maxHeight:'90vh', overflowY:'auto', border:'1px solid var(--border)' }}>
-        <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{student ? 'Edit lab user' : 'Add lab user'}</div>
+        <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{labUser ? 'Edit lab user' : 'Add lab user'}</div>
         <div className="grid-2">
           <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Ivan" autoFocus /></div>
           <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Akonya" /></div>
@@ -1775,8 +1775,8 @@ function StudentModal({ student, session, onClose, onSave }) {
           <div className="field"><label>Email Address</label><input type="email" value={form.emailAddr} onChange={e=>setForm(f=>({...f,emailAddr:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         </div>
         <div className="field">
-          <label>Password{student ? ' (leave blank to keep current)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
-          <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={student ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
+          <label>Password{labUser ? ' (leave blank to keep current)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
+          <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={labUser ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
           <PasswordStrengthHint password={form.password} />
         </div>
         <div className="grid-2">
@@ -1814,7 +1814,7 @@ function StudentModal({ student, session, onClose, onSave }) {
           )}
         </div>
         <div style={{ display:'flex', gap:10, marginTop:8 }}>
-          <button type="button" className="btn btn-primary" onClick={()=>onSave(form, student?.id)}>Save</button>
+          <button type="button" className="btn btn-primary" onClick={()=>onSave(form, labUser?.id)}>Save</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
         </div>
       </form>
@@ -1822,23 +1822,23 @@ function StudentModal({ student, session, onClose, onSave }) {
   )
 }
 
-export function StaffPanel({ toast, session }) {
+export function LabManagersPanel({ toast, session }) {
   // Access Control merged into the cards — "Access" button per lab manager
-  return <StaffListPanel toast={toast} session={session} />
+  return <LabManagerListPanel toast={toast} session={session} />
 }
 
-function StaffListPanel({ toast, session }) {
-  const [staff, setStaff] = useState([])
+function LabManagerListPanel({ toast, session }) {
+  const [labManagers, setLabManagers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [editStaff, setEditStaff] = useState(null)
+  const [editLabManager, setEditLabManager] = useState(null)
   const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [accessTarget, setAccessTarget] = useState(null)
   useEffect(() => { load() }, [])
-  async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setStaff(data || []); setLoading(false) }
-  async function saveStaff(form, id) {
+  async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setLabManagers(data || []); setLoading(false) }
+  async function saveLabManager(form, id) {
     const fullName = [form.firstName?.trim(), form.lastName?.trim()].filter(Boolean).join(' ')
     if (!fullName) { toast('Name is required.'); return }
     const actualEmail = form.email?.trim().toLowerCase()
@@ -1857,11 +1857,11 @@ function StaffListPanel({ toast, session }) {
         if (authUser) payload.auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
-    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditStaff(null); load(); toast('Lab manager saved ✓') }
-    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditStaff(null); setPendingIconSetup({ userId: newUser.id, displayName: fullName }) }
+    if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditLabManager(null); load(); toast('Lab manager saved ✓') }
+    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditLabManager(null); setPendingIconSetup({ userId: newUser.id, displayName: fullName }) }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
-  async function deleteStaff(id) {
+  async function deleteLabManager(id) {
     setDeleting(true)
     const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
     await sb.from('user_screen_access').delete().eq('user_id', id)
@@ -1870,8 +1870,8 @@ function StaffListPanel({ toast, session }) {
     await sb.from('users').delete().eq('id', id)
     setDeleting(false); setDeleteTarget(null); load(); toast('Member deleted.')
   }
-  // Role change must REMAP name/email columns: staff store name=full,
-  // email=login; lab users (legacy student convention) store email=firstName,
+  // Role change must REMAP name/email columns: labManagers store name=full,
+  // email=login; lab users (legacy labUser convention) store email=firstName,
   // name=lastName, phone=login email. Without this, a converted user shows
   // their email as first name and loses their login email display.
   async function setMemberRole(u, newRole) {
@@ -1899,16 +1899,16 @@ function StaffListPanel({ toast, session }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{staff.length} lab manager{staff.length !== 1 ? 's' : ''} &amp; org admin{staff.filter(s=>s.role==='admin').length !== 1 ? 's' : ''}</div>
-        <button className="btn btn-sm btn-primary" onClick={() => { setEditStaff(null); setShowModal(true) }}>+ Add lab manager</button>
+        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labManagers.length} lab manager{labManagers.length !== 1 ? 's' : ''} &amp; org admin{labManagers.filter(s=>s.role==='admin').length !== 1 ? 's' : ''}</div>
+        <button className="btn btn-sm btn-primary" onClick={() => { setEditLabManager(null); setShowModal(true) }}>+ Add lab manager</button>
       </div>
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        : staff.length === 0 ? <div className="empty-state"><div className="empty-icon">👨‍💼</div>No lab managers yet.</div>
+        : labManagers.length === 0 ? <div className="empty-state"><div className="empty-icon">👨‍💼</div>No lab managers yet.</div>
         : (
         /* Supply-Inventory-style card grid: photo strip on top,
            action buttons under each member */
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-          {staff.map(s => (
+          {labManagers.map(s => (
             <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55 }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
                 {s.photo_url
@@ -1926,7 +1926,7 @@ function StaffListPanel({ toast, session }) {
                   {s.role === 'user' && (
                     <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} title="Set module access" onClick={() => setAccessTarget(s)}>Access</button>
                   )}
-                  <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditStaff(s); setShowModal(true) }}>Edit</button>
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditLabManager(s); setShowModal(true) }}>Edit</button>
                   <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
                   <button className="btn btn-danger" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setDeleteTarget(s)}>Delete</button>
                 </div>
@@ -1936,35 +1936,35 @@ function StaffListPanel({ toast, session }) {
         </div>
         )
       }
-      {showModal && <StaffModal staff={editStaff} onClose={() => { setShowModal(false); setEditStaff(null) }} onSave={saveStaff} onRoleChange={setMemberRole} />}
+      {showModal && <LabManagerModal labManagers={editLabManager} onClose={() => { setShowModal(false); setEditLabManager(null) }} onSave={saveLabManager} onRoleChange={setMemberRole} />}
       {accessTarget && <AccessModal user={accessTarget} toast={toast} session={session} onClose={() => setAccessTarget(null)} />}
       {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="user" onDone={() => { setPendingIconSetup(null); load(); toast('Lab manager created & icons saved ✓') }} />}
-      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: deleteTarget.name || 'this member' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteStaff} deleting={deleting} />}
+      {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: deleteTarget.name || 'this member' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteLabManager} deleting={deleting} />}
     </div>
   )
 }
 
-function StaffModal({ staff, onClose, onSave, onRoleChange }) {
+function LabManagerModal({ labManagers, onClose, onSave, onRoleChange }) {
   // First/Last collected separately (stored joined in `name`) so role
   // conversions to lab user can split reliably
   const [form, setForm] = useState(() => {
-    if (!staff) return { firstName: '', lastName: '', password: '', email: '', phone: '' }
-    const parts = (staff.name || '').trim().split(/\s+/)
-    return { firstName: parts[0] || '', lastName: parts.slice(1).join(' '), password: '', email: staff.email || '', phone: staff.phone || '' }
+    if (!labManagers) return { firstName: '', lastName: '', password: '', email: '', phone: '' }
+    const parts = (labManagers.name || '').trim().split(/\s+/)
+    return { firstName: parts[0] || '', lastName: parts.slice(1).join(' '), password: '', email: labManagers.email || '', phone: labManagers.phone || '' }
   })
   const [confirmDowngrade, setConfirmDowngrade] = useState(false)
   const [showPw, setShowPw] = useState(false)
 
   function handleRoleClick(opt) {
-    if (opt.role === staff.role) return
+    if (opt.role === labManagers.role) return
     if (opt.role === 'lab_user') { setConfirmDowngrade(true); return }
-    onRoleChange(staff, opt.role); onClose()
+    onRoleChange(labManagers, opt.role); onClose()
   }
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
       <form onSubmit={e => e.preventDefault()} autoComplete="on" style={{ background:'var(--surface)', borderRadius:'var(--radius-lg)', padding:28, maxWidth:480, width:'100%', border:'1px solid var(--border)' }}>
-        <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{staff ? 'Edit lab manager' : 'Add lab manager'}</div>
+        <div style={{ fontWeight:600, fontSize:16, marginBottom:20 }}>{labManagers ? 'Edit lab manager' : 'Add lab manager'}</div>
         <div className="grid-2">
           <div className="field"><label>First Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} placeholder="e.g. Sara" autoFocus /></div>
           <div className="field"><label>Last Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} placeholder="e.g. Chen" /></div>
@@ -1972,19 +1972,19 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
         <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         <div className="grid-2">
           <div className="field">
-            <label>Password{staff ? ' (leave blank to keep)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
-            <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={staff ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
+            <label>Password{labManagers ? ' (leave blank to keep)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
+            <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={labManagers ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
             <PasswordStrengthHint password={form.password} />
           </div>
           <div className="field"><label>Phone</label><input value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} /></div>
         </div>
-        {staff && onRoleChange && (
+        {labManagers && onRoleChange && (
           <div className="field">
             <label>Role</label>
             <div style={{ display:'flex', gap:8 }}>
               {[{ label: 'Lab Manager', role: 'user' }, { label: 'Lab User', role: 'lab_user' }].map(opt => (
                 <button key={opt.role}
-                  className={`btn btn-sm${staff.role === opt.role ? ' btn-primary' : ''}`}
+                  className={`btn btn-sm${labManagers.role === opt.role ? ' btn-primary' : ''}`}
                   onClick={() => handleRoleClick(opt)}>
                   {opt.label}
                 </button>
@@ -2000,13 +2000,13 @@ function StaffModal({ staff, onClose, onSave, onRoleChange }) {
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <button className="btn btn-sm btn-primary" style={{ background:'#d97706', borderColor:'#d97706' }}
-                onClick={() => { onRoleChange(staff, 'lab_user'); onClose() }}>Yes, change role</button>
+                onClick={() => { onRoleChange(labManagers, 'lab_user'); onClose() }}>Yes, change role</button>
               <button className="btn btn-sm" onClick={() => setConfirmDowngrade(false)}>No, keep as Lab Manager</button>
             </div>
           </div>
         )}
         <div style={{ display:'flex', gap:10, marginTop:8 }}>
-          <button type="button" className="btn btn-primary" onClick={()=>onSave(form, staff?.id)}>Save</button>
+          <button type="button" className="btn btn-primary" onClick={()=>onSave(form, labManagers?.id)}>Save</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
         </div>
       </form>
@@ -2130,14 +2130,14 @@ function IconSetupModal({ userId, displayName, organizationId, userRole = 'lab_u
 }
 
 // ══════════════════════════════════════════════════════════════
-// STAFF: MANAGE STUDENT DASHBOARD ICONS
+// LAB_MANAGER: MANAGE LAB_USER DASHBOARD ICONS
 // ══════════════════════════════════════════════════════════════
-function StaffStudentIconManager() {
+function LabManagerLabUserIconManager() {
   const { toast, session } = useAppStore()
-  const [students, setStudents] = useState([])
+  const [labUsers, setLabUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [iconStudent, setIconStudent] = useState(null)
+  const [iconLabUser, setIconLabUser] = useState(null)
 
   useEffect(() => { load() }, [])
 
@@ -2146,11 +2146,11 @@ function StaffStudentIconManager() {
     let q = sb.from('users').select('*').eq('role', 'lab_user').order('name')
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
-    setStudents(data || [])
+    setLabUsers(data || [])
     setLoading(false)
   }
 
-  const filtered = students.filter(s => {
+  const filtered = labUsers.filter(s => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return sFirstName(s).toLowerCase().includes(q) || sLastName(s).toLowerCase().includes(q) || sEmail(s).toLowerCase().includes(q)
@@ -2161,7 +2161,7 @@ function StaffStudentIconManager() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🎛️ Lab User Dashboard Icons</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-          Select a student to choose which icons they are allowed to see and pick from on their dashboard.
+          Select a labUser to choose which icons they are allowed to see and pick from on their dashboard.
         </div>
       </div>
 
@@ -2185,19 +2185,19 @@ function StaffStudentIconManager() {
                   </div>
                   {sEmail(s) && <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>📧 {sEmail(s)}</div>}
                 </div>
-                <button className="btn btn-sm" onClick={() => setIconStudent(s)}>🎛️ Assign Icons</button>
+                <button className="btn btn-sm" onClick={() => setIconLabUser(s)}>🎛️ Assign Icons</button>
               </div>
             </div>
           ))
       }
 
-      {iconStudent && (
-        <StudentIconManager
-          student={iconStudent}
+      {iconLabUser && (
+        <LabUserIconManager
+          labUser={iconLabUser}
           orgId={session?.organizationId}
           onClose={(saved) => {
-            setIconStudent(null)
-            if (saved) toast(`Icons updated for ${sFirstName(iconStudent) || iconStudent.name} ✓`)
+            setIconLabUser(null)
+            if (saved) toast(`Icons updated for ${sFirstName(iconLabUser) || iconLabUser.name} ✓`)
           }}
         />
       )}
@@ -2253,14 +2253,14 @@ function PasswordChangePanel({ session, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STAFF PROFILE
+// LAB_MANAGER PROFILE
 // ══════════════════════════════════════════════════════════════
-function StaffProfile({ session }) {
+function LabManagerProfile({ session }) {
   const { toast, pendingProfileTab, setPendingProfileTab, clearSession, sidebarSubTab, setSidebarSubTab } = useAppStore()
 
-  const activeTab = STAFF_PROFILE_TABS.includes(sidebarSubTab) ? sidebarSubTab : 'info'
+  const activeTab = LAB_MANAGER_PROFILE_TABS.includes(sidebarSubTab) ? sidebarSubTab : 'info'
 
-  useEffect(() => { if (!STAFF_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('info') }, [])
+  useEffect(() => { if (!LAB_MANAGER_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('info') }, [])
   useEffect(() => {
     if (pendingProfileTab) {
       setSidebarSubTab(pendingProfileTab)
@@ -2319,12 +2319,12 @@ function UserProfileForm({ session, toast }) {
     setLoading(false)
   }
 
-  const isStudent = session?.role === 'lab_user'
+  const isLabUser = session?.role === 'lab_user'
 
   async function saveInfo() {
     setSaving(true)
     const payload = { name: form.name.trim(), last_name: form.last_name||null, nick_name: form.nick_name?.trim()||null, phone: form.phone||null, degree: form.degree||null, year_semester: form.year_semester||null, photo_url: form.photo_url||null, gender: form.gender||null }
-    if (!isStudent) { payload.supervisor = form.supervisor||null; payload.project_group = form.project_group||null }
+    if (!isLabUser) { payload.supervisor = form.supervisor||null; payload.project_group = form.project_group||null }
     const { error } = await sb.from('users').update(payload).eq('id', user.id)
     if (error) { toast('Error saving: ' + error.message); setSaving(false); return }
     setSession({ ...session, username: form.nick_name?.trim() || form.name.trim(), photoUrl: form.photo_url||null })
@@ -2429,7 +2429,7 @@ function UserProfileForm({ session, toast }) {
           </div>
           {session?.organizationId === ICT_ORG_ID && (
             <div className="field"><label>Project Group</label>
-              {isStudent
+              {isLabUser
                 ? <input value={form.project_group || '—'} readOnly style={{ background: 'var(--surface2)', color: 'var(--text3)', cursor: 'default' }} />
                 : <select value={form.project_group} onChange={e => setForm(f => ({ ...f, project_group: e.target.value }))}>
                     <option value="">— Select —</option>{PROJECT_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
@@ -2463,14 +2463,14 @@ function UserProfileForm({ session, toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// STUDENT PROFILE
+// LAB_USER PROFILE
 // ══════════════════════════════════════════════════════════════
 function UserProfile({ session }) {
   const { toast, pendingProfileTab, setPendingProfileTab, clearSession, sidebarSubTab, setSidebarSubTab } = useAppStore()
 
-  const activeTab = STUDENT_PROFILE_TABS.includes(sidebarSubTab) ? sidebarSubTab : 'info'
+  const activeTab = LAB_USER_PROFILE_TABS.includes(sidebarSubTab) ? sidebarSubTab : 'info'
 
-  useEffect(() => { if (!STUDENT_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('info') }, [])
+  useEffect(() => { if (!LAB_USER_PROFILE_TABS.includes(sidebarSubTab)) setSidebarSubTab('info') }, [])
   useEffect(() => {
     if (pendingProfileTab) {
       setSidebarSubTab(pendingProfileTab)
@@ -2700,7 +2700,7 @@ export function ApprovalRequestsPanel({ toast, session, onCountChange }) {
 export default function Profile() {
   const { session } = useAppStore()
   if (session?.role === 'admin') return <AdminProfile />
-  if (session?.role === 'user') return <StaffProfile session={session} />
+  if (session?.role === 'user') return <LabManagerProfile session={session} />
   if (session?.loginMode === 'solo') return <SoloProfile session={session} />
   return <UserProfile session={session} />
 }

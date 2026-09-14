@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
-import { ALL_MODULES_META, PINNED_MODULES, STAFF_PINNED_MODULES } from '../../components/DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import FloorPlanEditor from '../../components/FloorPlanEditor'
 import FloorPlanPicker from '../../components/FloorPlanPicker'
@@ -279,8 +279,8 @@ function OrgSettingsPanel({ session }) {
   )
 }
 
-// ── Org-level student default icons (set by org admin, pre-loaded in UserModal) ──
-function StudentDefaultIconsPanel({ orgId }) {
+// ── Org-level labUser default icons (set by org admin, pre-loaded in UserModal) ──
+function LabUserDefaultIconsPanel({ orgId }) {
   const { toast } = useAppStore()
   const [selected, setSelected] = useState(null) // null = loading
   const [saving, setSaving] = useState(false)
@@ -306,7 +306,7 @@ function StudentDefaultIconsPanel({ orgId }) {
 
   async function save() {
     setSaving(true)
-    const modules = STUDENT_ICON_OPTIONS.filter(m => selected.has(m.key)).map(m => m.key)
+    const modules = LAB_USER_ICON_OPTIONS.filter(m => selected.has(m.key)).map(m => m.key)
     const { error } = await sb.from('organizations').update({ student_default_modules: modules }).eq('id', orgId)
     if (error) toast('Save failed: ' + error.message)
     else toast('Default icons saved ✓ — new lab users will start with these icons.')
@@ -325,7 +325,7 @@ function StudentDefaultIconsPanel({ orgId }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 12px', borderRadius: 20, border: '1.5px solid #1D9E75', background: '#E1F5EE', fontSize: 12, fontWeight: 500, color: '#0F6E56', cursor: 'default' }}>
           <span>👤</span><span>Profile</span><span style={{ fontSize: 10, opacity: 0.6 }}>🔒</span>
         </div>
-        {STUDENT_ICON_OPTIONS.map(m => {
+        {LAB_USER_ICON_OPTIONS.map(m => {
           const on = selected.has(m.key)
           return (
             <button key={m.key} type="button" onClick={() => toggle(m.key)}
@@ -345,14 +345,14 @@ function StudentDefaultIconsPanel({ orgId }) {
 // ── Per-pool editor with drag-to-reorder (used by OrgIconPoolsPanel) ──
 // Which modules are even meaningful for a given org-pool role.
 // adminOnly screens are never pooled (they belong to the org admin), and
-// staffOnly modules cannot reach lab users no matter what the admin ticks —
+// labManagerOnly modules cannot reach lab users no matter what the admin ticks —
 // offering them was what made an admin think they had granted 9 icons when
 // only 7 could ever arrive.
 function modulesForPoolRole(kind) {
   return ALL_MODULES_META.filter(m => {
     if (!m.roles.includes('team')) return false
     if (m.adminOnly) return false
-    if (kind === 'labusers' && m.staffOnly) return false
+    if (kind === 'labusers' && m.labManagerOnly) return false
     return true
   })
 }
@@ -381,12 +381,12 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
 
     const applicable = modulesForPoolRole(kind)
     // Modules the app force-shows for this role regardless of any pool:
-    // profile for everyone, plus STAFF_PINNED_MODULES (Lab Management) for
-    // staff. The picker and the dashboard both add these back unconditionally,
+    // profile for everyone, plus LAB_MANAGER_PINNED_MODULES (Lab Management) for
+    // labManagers. The picker and the dashboard both add these back unconditionally,
     // so showing them as locked here would be a lie — the manager sees the icon
     // either way. They are always available, always selected, never toggleable.
     const alwaysOnKeys = kind === 'labmanagers'
-      ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES]
+      ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES]
       : [...PINNED_MODULES]
     const isAvailable = m => alwaysOnKeys.includes(m.key) || !orgGrant || orgGrant.includes(m.key)
 
@@ -538,7 +538,7 @@ function OrgIconPoolsPanel({ orgId }) {
   )
 }
 
-const STUDENT_ICON_OPTIONS = [
+const LAB_USER_ICON_OPTIONS = [
   { key: 'projects',  label: 'Project & Material', icon: '🧪' },
   { key: 'booking',   label: 'Reserve Equipment', icon: '📅' },
   { key: 'barcode',   label: 'QR Scan',           icon: '📷' },
@@ -563,7 +563,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 
   const effectiveOrgId = orgId || defaultOrgId
 
-  // Load icons: org defaults for new student, existing prefs for edit
+  // Load icons: org defaults for new labUser, existing prefs for edit
   useEffect(() => {
     if (user?.id && user?.role === 'lab_user') {
       // .maybeSingle() errors out (rather than picking one) if duplicate rows already
@@ -597,10 +597,10 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   }
 
   async function saveIconPrefs(userId) {
-    const modules = ['profile', ...STUDENT_ICON_OPTIONS.filter(m => selectedIcons.has(m.key)).map(m => m.key)]
+    const modules = ['profile', ...LAB_USER_ICON_OPTIONS.filter(m => selectedIcons.has(m.key)).map(m => m.key)]
     // .maybeSingle() errors out (rather than picking one) if duplicate rows already exist
     // for this user — fetch all rows instead, consolidate to one, and preserve whatever
-    // allowed_modules a lab manager may have separately granted via StudentIconManager.
+    // allowed_modules a lab manager may have separately granted via LabUserIconManager.
     const { data: existingRows } = await sb.from('user_dashboard_prefs').select('id, allowed_modules').eq('user_id', userId)
     const rows = existingRows || []
     const preservedAllowed = rows.find(r => r.allowed_modules?.length)?.allowed_modules
@@ -757,7 +757,7 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1.5px solid #1D9E75', background: '#E1F5EE', fontSize: 12, fontWeight: 500, color: '#0F6E56', cursor: 'default' }}>
               <span>👤</span><span>Profile</span><span style={{ fontSize: 10, opacity: 0.6 }}>🔒</span>
             </div>
-            {STUDENT_ICON_OPTIONS.map(m => {
+            {LAB_USER_ICON_OPTIONS.map(m => {
               const on = selectedIcons.has(m.key)
               return (
                 <button key={m.key} type="button" onClick={() => toggleIcon(m.key)}
@@ -793,11 +793,11 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
 // ── Module lists ──────────────────────────────────────────────
 // Org-level pool (org admins): all modules except profile (always pinned)
 // Modules the app force-shows regardless of any pool: profile for everyone,
-// plus STAFF_PINNED_MODULES for staff (empty in this project today, but kept
+// plus LAB_MANAGER_PINNED_MODULES for labManagers (empty in this project today, but kept
 // in sync with labhive so a future pinned module cannot be offered as an
 // inert choice). Unticking such a module changes nothing, so offering it only
 // misleads whoever sets the pool.
-const FORCED_MODULES = new Set([...PINNED_MODULES, ...STAFF_PINNED_MODULES])
+const FORCED_MODULES = new Set([...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES])
 const inTeam = m => (m.roles || []).includes('team')
 
 const ORG_CONFIGURABLE_MODULES = ALL_MODULES_META.filter(m => inTeam(m) && !FORCED_MODULES.has(m.key))
@@ -1488,7 +1488,7 @@ export default function Admin() {
 
   const tabs = isSuperAdmin
     ? [{ key: 'organizations', label: '🏢 Organizations' }, { key: 'useraccounts', label: '👥 User Accounts' }]
-    : [{ key: 'users', label: 'Lab Managers' }, { key: 'students', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
+    : [{ key: 'users', label: 'Lab Managers' }, { key: 'labusers', label: 'Lab Users' }, { key: 'iconpools', label: '🎛️ Icon Pools' }, { key: 'images', label: 'Module Images' }, { key: 'floorplan', label: '🗺️ Floor Plan' }, { key: 'orgsettings', label: 'Org Settings' }]
 
   useEffect(() => {
     loadOrgs()
@@ -1514,7 +1514,7 @@ export default function Admin() {
     setTeamLoading(false)
   }
   useEffect(() => {
-    if (tab === 'users' || tab === 'students') loadUsers()
+    if (tab === 'users' || tab === 'labusers') loadUsers()
     setSelectedIds(new Set())
   }, [tab, orgFilter])
 
@@ -1544,7 +1544,7 @@ export default function Admin() {
       if (orgFilter) q = q.eq('organization_id', orgFilter)
     } else {
       // Org admin sees their own org's users
-      if (tab === 'students') q = q.eq('role', 'lab_user')
+      if (tab === 'labusers') q = q.eq('role', 'lab_user')
       else q = q.in('role', ['user', 'admin'])
       q = q.eq('organization_id', myOrgId)
     }
@@ -1741,16 +1741,16 @@ export default function Admin() {
 
 
 
-      {/* ── USERS / STUDENTS (org admin only) ── */}
-      {!isSuperAdmin && (tab === 'users' || tab === 'students') && (
+      {/* ── USERS / LAB_USERS (org admin only) ── */}
+      {!isSuperAdmin && (tab === 'users' || tab === 'labusers') && (
         <div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ flex: 1, minWidth: 180 }} />
             <button className="btn btn-primary btn-sm" onClick={() => setUserModal('add')}>
-              + Add {tab === 'students' ? 'lab user' : 'lab manager'}
+              + Add {tab === 'labusers' ? 'lab user' : 'lab manager'}
             </button>
           </div>
-          {tab === 'students' && filteredUsers.length > 0 && (
+          {tab === 'labusers' && filteredUsers.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 10 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                 <input
@@ -1774,10 +1774,10 @@ export default function Admin() {
             <div className="empty-state"><div className="empty-icon">👤</div>No users found.</div>
           ) : (
             filteredUsers.map(u => (
-              <div key={u.id} className="card" style={{ padding: '12px 16px', marginBottom: 10, opacity: u.is_active ? 1 : 0.55, outline: tab === 'students' && selectedIds.has(u.id) ? '2px solid var(--accent)' : 'none', borderRadius: 12 }}>
+              <div key={u.id} className="card" style={{ padding: '12px 16px', marginBottom: 10, opacity: u.is_active ? 1 : 0.55, outline: tab === 'labusers' && selectedIds.has(u.id) ? '2px solid var(--accent)' : 'none', borderRadius: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {tab === 'students' && (
+                  {tab === 'labusers' && (
                     <input
                       type="checkbox"
                       checked={selectedIds.has(u.id)}
@@ -1986,7 +1986,7 @@ export default function Admin() {
           orgs={orgs}
           defaultOrgId={addAdminOrgId || (isSuperAdmin ? orgFilter : myOrgId)}
           isSuperAdmin={isSuperAdmin}
-          defaultRole={isSuperAdmin ? 'admin' : tab === 'students' ? 'lab_user' : 'user'}
+          defaultRole={isSuperAdmin ? 'admin' : tab === 'labusers' ? 'lab_user' : 'user'}
           onClose={() => { setUserModal(null); setAddAdminOrgId(null) }}
           onSaved={() => { loadUsers(); loadOrgs() }}
         />

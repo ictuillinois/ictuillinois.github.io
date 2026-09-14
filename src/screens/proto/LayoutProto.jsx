@@ -371,7 +371,7 @@ export default function LayoutProto() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 17, color: '#0C1140' }}>{modMeta.label}</div>
                   <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                    {subTabs.find(t => t.key === activeTab)?.label || ''} · Staff workspace
+                    {subTabs.find(t => t.key === activeTab)?.label || ''} · LabManager workspace
                   </div>
                 </div>
                 {/* Stat pills — only for training */}

@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react'
 import { sb } from '../lib/supabase'
 import { ALL_MODULES_META, PINNED_MODULES } from './DashboardIconPicker'
 
-export default function StudentIconManager({ student, orgId, onClose }) {
+export default function LabUserIconManager({ labUser, orgId, onClose }) {
   const [poolModules, setPoolModules] = useState(null) // module meta available for this org
   const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [existingRowIds, setExistingRowIds] = useState([]) // ALL rows found for this user_id — duplicates are a known issue
 
-  useEffect(() => { load() }, [student.id])
+  useEffect(() => { load() }, [labUser.id])
 
   async function load() {
     // Load org's lab user pool (the boundary for what can be assigned)
@@ -22,7 +22,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
     }
     const mods = pool
       ? ALL_MODULES_META.filter(m => pool.includes(m.key) || m.key === 'profile')
-      : ALL_MODULES_META.filter(m => !m.staffOnly && !m.adminOnly && !m.soloLocked)
+      : ALL_MODULES_META.filter(m => !m.labManagerOnly && !m.adminOnly && !m.soloLocked)
     setPoolModules(mods)
 
     // Load ALL rows for this user_id — this table has no created_at column (a query
@@ -31,8 +31,8 @@ export default function StudentIconManager({ student, orgId, onClose }) {
     // actually has allowed_modules populated rather than trusting row order.
     const { data: rows, error: loadErr } = await sb.from('user_dashboard_prefs')
       .select('id, allowed_modules')
-      .eq('user_id', student.id)
-    if (loadErr) console.error('[StudentIconManager] load failed:', loadErr)
+      .eq('user_id', labUser.id)
+    if (loadErr) console.error('[LabUserIconManager] load failed:', loadErr)
     setExistingRowIds((rows || []).map(r => r.id))
     const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
     setAllowed(new Set(bestRow?.allowed_modules?.length ? bestRow.allowed_modules : []))
@@ -63,20 +63,20 @@ export default function StudentIconManager({ student, orgId, onClose }) {
         .update({ allowed_modules: modules })
         .eq('id', keepId)
       if (updateErr) {
-        console.error('[StudentIconManager] update failed:', updateErr)
+        console.error('[LabUserIconManager] update failed:', updateErr)
         setSaveError(`Failed to save: ${updateErr.message}`)
         setSaving(false)
         return
       }
       if (extraIds.length) {
         const { error: delErr } = await sb.from('user_dashboard_prefs').delete().in('id', extraIds)
-        if (delErr) console.warn('[StudentIconManager] could not clean up duplicate rows:', delErr.message)
+        if (delErr) console.warn('[LabUserIconManager] could not clean up duplicate rows:', delErr.message)
       }
     } else {
       const { error: insertErr } = await sb.from('user_dashboard_prefs')
-        .insert({ user_id: student.id, organization_id: orgId || null, allowed_modules: modules })
+        .insert({ user_id: labUser.id, organization_id: orgId || null, allowed_modules: modules })
       if (insertErr) {
-        console.error('[StudentIconManager] insert failed:', insertErr)
+        console.error('[LabUserIconManager] insert failed:', insertErr)
         setSaveError(`Failed to save: ${insertErr.message}`)
         setSaving(false)
         return
@@ -86,7 +86,7 @@ export default function StudentIconManager({ student, orgId, onClose }) {
     onClose(true)
   }
 
-  const name = [student.email, student.name].filter(Boolean).join(' ')
+  const name = [labUser.email, labUser.name].filter(Boolean).join(' ')
   const selectedCount = allowed?.size ?? 0
   const totalCount = poolModules?.length ?? 0
 
@@ -101,12 +101,12 @@ export default function StudentIconManager({ student, orgId, onClose }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Dashboard icons for {name}</div>
               <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Select which icons this lab user is allowed to choose from on their dashboard.</div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--mono)' }}>user_id: {student.id}</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--mono)' }}>user_id: {labUser.id}</div>
             </div>
             <button onClick={() => onClose(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: '4px 8px' }}>✕</button>
           </div>
           <div style={{ background: '#e0f2fe', borderRadius: 8, padding: '8px 14px', marginTop: 14, fontSize: 12, color: '#0369a1', lineHeight: 1.5 }}>
-            ℹ️ Icons shown are within your organization's lab user pool. The student picks from <strong>only these icons</strong>. Profile is always visible.
+            ℹ️ Icons shown are within your organization's lab user pool. The labUser picks from <strong>only these icons</strong>. Profile is always visible.
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 14px' }}>
             <div style={{ fontSize: 12, color: 'var(--text3)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {totalCount} assigned</div>

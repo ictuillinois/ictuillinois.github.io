@@ -145,9 +145,9 @@ function SectionHeader({ title, count }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TAB 1 — FRESH STUDENT TRAINING
+// TAB 1 — FRESH LAB_USER TRAINING
 // ══════════════════════════════════════════════════════════════
-function FreshTraining({ students, session, hideChrome = false, onChanged }) {
+function FreshTraining({ labUsers, session, hideChrome = false, onChanged }) {
   const isSolo = session?.loginMode === 'solo'
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
@@ -165,11 +165,11 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedUserId, setSelectedUserId] = useState(null)   // card grid → detail panel
 
-  useEffect(() => { if (students.length > 0) load() }, [students])
+  useEffect(() => { if (labUsers.length > 0) load() }, [labUsers])
 
   useEffect(() => {
-    if (!students.length) return
-    const ids = students.map(s => s.id)
+    if (!labUsers.length) return
+    const ids = labUsers.map(s => s.id)
     const channel = sb.channel('fresh_training_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'training_fresh' }, payload => {
         if (ids.includes(payload.new?.user_id)) load()
@@ -179,11 +179,11 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       })
       .subscribe()
     return () => sb.removeChannel(channel)
-  }, [students])
+  }, [labUsers])
 
   async function load() {
     setLoading(true)
-    const ids = students.map(s => s.id)
+    const ids = labUsers.map(s => s.id)
     let q = sb.from('training_fresh').select('*')
     if (ids.length) q = q.in('user_id', ids)
     const { data } = await q
@@ -248,7 +248,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
               </tr>
             </thead>
             <tbody>
-              {students.map(u => {
+              {labUsers.map(u => {
                 const soloRecs = records.filter(r => r.user_id === u.id)
                 return (
                   <React.Fragment key={u.id}>
@@ -299,10 +299,10 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   const editable = canEdit(session)
 
   const allFiltered = search.trim()
-    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
-    : students
+    ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
+    : labUsers
 
-  const filteredStudents = allFiltered.filter(u => {
+  const filteredLabUsers = allFiltered.filter(u => {
     const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
     if (statusFilter === 'none')     return userRecs.length === 0
     if (statusFilter === 'pending')  return userRecs.some(r => !r.admin_approved)
@@ -325,13 +325,13 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
   ]
 
   // Card-grid selection: lab users land on their own panel; managers pick a card.
-  // hideChrome (hub panel mode): single student passed in — always selected.
-  const ownUser = filteredStudents.find(u => session.userId === u.id || session.username === u.name)
-  const effSelectedId = hideChrome ? students[0]?.id : (selectedUserId ?? (ownUser && !editable ? ownUser.id : null))
+  // hideChrome (hub panel mode): single labUser passed in — always selected.
+  const ownUser = filteredLabUsers.find(u => session.userId === u.id || session.username === u.name)
+  const effSelectedId = hideChrome ? labUsers[0]?.id : (selectedUserId ?? (ownUser && !editable ? ownUser.id : null))
 
   return (
     <div>
-      {!hideChrome && <SectionHeader title="Lab User Documents" count={students.length} />}
+      {!hideChrome && <SectionHeader title="Lab User Documents" count={labUsers.length} />}
       {!hideChrome && editable && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
@@ -350,14 +350,14 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
           </div>
         </div>
       )}
-      {!hideChrome && filteredStudents.length === 0 && (
+      {!hideChrome && filteredLabUsers.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12, padding: '24px 0', textAlign: 'center' }}>
           {search.trim() ? `No users match "${search}".` : 'No users in this category.'}
         </div>
       )}
       {/* ── User card grid (Supply-tab style) — click a card for details ── */}
       {!hideChrome && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
-        {filteredStudents.map(u => {
+        {filteredLabUsers.map(u => {
           const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
           const approvedCount = userRecs.filter(r => r.admin_approved).length
           const pct = userRecs.length ? Math.round((approvedCount / userRecs.length) * 100) : 0
@@ -383,12 +383,12 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
       </div>}
 
       {/* ── Detail panel: certs for the selected user ── */}
-      {!hideChrome && effSelectedId == null && filteredStudents.length > 0 && (
+      {!hideChrome && effSelectedId == null && filteredLabUsers.length > 0 && (
         <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text3)', padding: '8px 0 16px' }}>
           Select a lab user above to view their certifications.
         </div>
       )}
-      {(hideChrome ? students : filteredStudents).filter(u => u.id === effSelectedId).map(u => {
+      {(hideChrome ? labUsers : filteredLabUsers).filter(u => u.id === effSelectedId).map(u => {
         const isOwn = session.userId === u.id || session.username === u.name
         const canAdd = editable || isOwn
         const userRecs = records.filter(r => r.user_id === u.id && r.certificate_url)
@@ -504,7 +504,7 @@ function FreshTraining({ students, session, hideChrome = false, onChanged }) {
 // ══════════════════════════════════════════════════════════════
 // TAB 2 — VEHICLE TRAINING
 // ══════════════════════════════════════════════════════════════
-function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
+function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -513,11 +513,11 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
   const [form, setForm] = useState({ vehicleName: '', date: new Date().toISOString().split('T')[0], trainedBy: session?.username || '', trained: false })
   const [statusFilter, setStatusFilter] = useState('all')
 
-  useEffect(() => { if (students.length > 0) load() }, [students])
+  useEffect(() => { if (labUsers.length > 0) load() }, [labUsers])
 
   async function load() {
     setLoading(true)
-    const ids = students.map(s => s.id)
+    const ids = labUsers.map(s => s.id)
     let q = sb.from('training_golf_car').select('*')
     if (ids.length) q = q.in('user_id', ids)
     const { data } = await q
@@ -569,36 +569,36 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
   const searchFiltered = search.trim()
-    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
-    : students
-  const trainedCountMap = students.reduce((acc, u) => { acc[u.id] = getRecordsForUser(u.id).filter(r => r.trained).length; return acc }, {})
-  const totalTrained = students.filter(u => trainedCountMap[u.id] > 0).length
-  const filteredStudents = statusFilter === 'all' ? searchFiltered
+    ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
+    : labUsers
+  const trainedCountMap = labUsers.reduce((acc, u) => { acc[u.id] = getRecordsForUser(u.id).filter(r => r.trained).length; return acc }, {})
+  const totalTrained = labUsers.filter(u => trainedCountMap[u.id] > 0).length
+  const filteredLabUsers = statusFilter === 'all' ? searchFiltered
     : statusFilter === 'trained' ? searchFiltered.filter(u => trainedCountMap[u.id] > 0)
     : searchFiltered.filter(u => trainedCountMap[u.id] === 0)
 
   return (
     <div>
-      {!hideChrome && <SectionHeader title="Training Records" count={students.length} />}
+      {!hideChrome && <SectionHeader title="Training Records" count={labUsers.length} />}
       {!hideChrome && canEdit(session) && (
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
           style={{ marginBottom: 12, maxWidth: 280, fontSize: 13, padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
       )}
       {!hideChrome && <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
-          { key: 'all', label: `All (${students.length})` },
+          { key: 'all', label: `All (${labUsers.length})` },
           { key: 'trained', label: `✓ Trained (${totalTrained})` },
-          { key: 'none', label: `⚠ No training (${students.length - totalTrained})` },
+          { key: 'none', label: `⚠ No training (${labUsers.length - totalTrained})` },
         ].map(f => (
           <button key={f.key} onClick={() => setStatusFilter(f.key)}
             style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid', fontSize: 12, cursor: 'pointer', fontWeight: statusFilter === f.key ? 700 : 400, background: statusFilter === f.key ? 'var(--accent)' : 'transparent', color: statusFilter === f.key ? '#fff' : 'var(--text2)', borderColor: statusFilter === f.key ? 'var(--accent)' : 'var(--border)' }}
           >{f.label}</button>
         ))}
       </div>}
-      {!hideChrome && filteredStudents.length === 0 && (
+      {!hideChrome && filteredLabUsers.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
       )}
-      {(hideChrome ? students : filteredStudents).map((u, idx) => {
+      {(hideChrome ? labUsers : filteredLabUsers).map((u, idx) => {
         const userRecs = getRecordsForUser(u.id)
         const trainedCount = userRecs.filter(r => r.trained).length
         const headerBg = idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)'
@@ -703,8 +703,8 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
                 <input type="checkbox" checked={form.trained} onChange={e => setForm(f => ({ ...f, trained: e.target.checked }))} style={{ width: 'auto', flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: form.trained ? '#16a34a' : 'var(--text2)', fontWeight: form.trained ? 600 : 400 }}>
                   {form.trained
-                    ? `✓ I confirmed ${fullName(students.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`
-                    : `I confirm ${fullName(students.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`}
+                    ? `✓ I confirmed ${fullName(labUsers.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`
+                    : `I confirm ${fullName(labUsers.find(s => s.id === addingFor) || {})} has been trained for this vehicle.`}
                 </span>
               </label>
             </div>
@@ -722,7 +722,7 @@ function GolfCarTraining({ students, session, hideChrome = false, onChanged }) {
 // ══════════════════════════════════════════════════════════════
 // TAB 3 — EQUIPMENT TRAINING
 // ══════════════════════════════════════════════════════════════
-function EquipmentTraining({ students, session, hideChrome = false, onChanged }) {
+function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged }) {
   const isSolo = session?.loginMode === 'solo'
   const canManage = canEdit(session) || isSolo
   const { toast, setScreen } = useAppStore()
@@ -743,12 +743,12 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
   const [searchHistory, setSearchHistory] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  useEffect(() => { if (students.length > 0) load() }, [students])
+  useEffect(() => { if (labUsers.length > 0) load() }, [labUsers])
 
   // Poll + realtime: keep manager's review checklist fresh without manual page refresh
   useEffect(() => {
-    if (!students.length || !canManage) return
-    const ids = students.map(s => s.id)
+    if (!labUsers.length || !canManage) return
+    const ids = labUsers.map(s => s.id)
     const idSet = new Set(ids.map(String))
 
     async function refreshExamsAndProgress() {
@@ -787,14 +787,14 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
       .subscribe()
 
     return () => { clearInterval(interval); sb.removeChannel(examSub); sb.removeChannel(progSub) }
-  }, [students, canManage])
+  }, [labUsers, canManage])
 
   async function load() {
     setLoading(true)
     let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('nickname')
     if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('created_by', session.userId)
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
-    const ids = students.map(s => s.id)
+    const ids = labUsers.map(s => s.id)
     let recQuery = sb.from('training_equipment').select('*')
     if (ids.length) recQuery = recQuery.in('user_id', ids)
     let pendingQ = sb.from('retraining_requests').select('*').eq('status', 'pending')
@@ -846,7 +846,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
         {chip(!!exam, exam ? `Exam passed (${Math.round(exam.score / exam.total * 100)}%)` : 'Exam passed')}
         {!allDone && (
           <button onClick={async () => {
-            const ids = students.map(s => s.id)
+            const ids = labUsers.map(s => s.id)
             let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
             if (ids.length) examQ = examQ.in('user_id', ids)
             let progQ = sb.from('equipment_material_progress').select('*')
@@ -1038,7 +1038,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
 
   return (
     <div>
-      {!hideChrome && <SectionHeader title="Equipment Training" count={isSolo ? undefined : students.length} />}
+      {!hideChrome && <SectionHeader title="Equipment Training" count={isSolo ? undefined : labUsers.length} />}
       {!hideChrome && <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
         {[{ key: 'training', label: 'Training Records' }, { key: 'history', label: 'Equipment History' }].map(t => (
           <button key={t.key} onClick={() => setEquipSubTab(t.key)}
@@ -1126,7 +1126,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
           {canEdit(session) && !isSolo && (
             <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>📋 Training Requests</div>
-              <TrainingRequestsPanel session={session} forUserId={hideChrome ? students[0]?.id : null} compact />
+              <TrainingRequestsPanel session={session} forUserId={hideChrome ? labUsers[0]?.id : null} compact />
             </div>
           )}
           {!hideChrome && canEdit(session) && (
@@ -1138,14 +1138,14 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
             />
           )}
           {(() => {
-            const searchBase = search.trim() ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase())) : students
-            const passedMap = students.reduce((acc, u) => { acc[u.id] = getRecords(u.id).filter(r => r.passed_exam).length; return acc }, {})
-            const totalMap = students.reduce((acc, u) => { acc[u.id] = getRecords(u.id).length; return acc }, {})
-            const withRecords = students.filter(u => totalMap[u.id] > 0).length
-            const allPassed = students.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id]).length
-            const pending = students.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id]).length
-            const noRecs = students.filter(u => totalMap[u.id] === 0).length
-            const displayStudents = statusFilter === 'all' ? searchBase
+            const searchBase = search.trim() ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase())) : labUsers
+            const passedMap = labUsers.reduce((acc, u) => { acc[u.id] = getRecords(u.id).filter(r => r.passed_exam).length; return acc }, {})
+            const totalMap = labUsers.reduce((acc, u) => { acc[u.id] = getRecords(u.id).length; return acc }, {})
+            const withRecords = labUsers.filter(u => totalMap[u.id] > 0).length
+            const allPassed = labUsers.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id]).length
+            const pending = labUsers.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id]).length
+            const noRecs = labUsers.filter(u => totalMap[u.id] === 0).length
+            const displayLabUsers = statusFilter === 'all' ? searchBase
               : statusFilter === 'approved' ? searchBase.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id])
               : statusFilter === 'pending' ? searchBase.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id])
               : searchBase.filter(u => totalMap[u.id] === 0)
@@ -1153,7 +1153,7 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
               <>
                 {!hideChrome && <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                   {[
-                    { key: 'all', label: `All (${students.length})` },
+                    { key: 'all', label: `All (${labUsers.length})` },
                     { key: 'approved', label: `✓ All passed (${allPassed})` },
                     { key: 'pending', label: `⏳ Pending (${pending})` },
                     { key: 'none', label: `📭 No records (${noRecs})` },
@@ -1163,10 +1163,10 @@ function EquipmentTraining({ students, session, hideChrome = false, onChanged })
                     >{f.label}</button>
                   ))}
                 </div>}
-                {!hideChrome && displayStudents.length === 0 && (
+                {!hideChrome && displayLabUsers.length === 0 && (
                   <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
                 )}
-                {(hideChrome ? students : displayStudents).map((u, idx) => {
+                {(hideChrome ? labUsers : displayLabUsers).map((u, idx) => {
             const recs = getRecords(u.id)
             const passedCount = recs.filter(r => r.passed_exam).length
             const headerBg = idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)'
@@ -1457,7 +1457,7 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
 // ══════════════════════════════════════════════════════════════
 // TAB 4 — BUILDING ALARM
 // ══════════════════════════════════════════════════════════════
-function BuildingAlarm({ students, session, hideChrome = false, onChanged }) {
+function BuildingAlarm({ labUsers, session, hideChrome = false, onChanged }) {
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1466,11 +1466,11 @@ function BuildingAlarm({ students, session, hideChrome = false, onChanged }) {
   const [localPins, setLocalPins] = useState({})
   const [showPins, setShowPins] = useState({})
 
-  useEffect(() => { if (students.length > 0) load() }, [students])
+  useEffect(() => { if (labUsers.length > 0) load() }, [labUsers])
 
   async function load() {
     setLoading(true)
-    const ids = students.map(s => s.id)
+    const ids = labUsers.map(s => s.id)
     let q = sb.from('training_building_alarm').select('*')
     if (ids.length) q = q.in('user_id', ids)
     const { data } = await q
@@ -1507,16 +1507,16 @@ function BuildingAlarm({ students, session, hideChrome = false, onChanged }) {
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
   const searchFiltered = search.trim()
-    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
-    : students
-  const totalTrained = students.filter(u => getRecord(u.id)?.trained).length
-  const filteredStudents = statusFilter === 'all' ? searchFiltered
+    ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
+    : labUsers
+  const totalTrained = labUsers.filter(u => getRecord(u.id)?.trained).length
+  const filteredLabUsers = statusFilter === 'all' ? searchFiltered
     : statusFilter === 'trained' ? searchFiltered.filter(u => getRecord(u.id)?.trained)
     : searchFiltered.filter(u => !getRecord(u.id)?.trained)
 
   return (
     <div>
-      {!hideChrome && <SectionHeader title="Building Alarm Training" count={students.length} />}
+      {!hideChrome && <SectionHeader title="Building Alarm Training" count={labUsers.length} />}
       {!hideChrome && <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>Admin/RE enters the lab user's 4-digit alarm PIN and confirms training completion.</p>}
       {!hideChrome && canEdit(session) && (
         <input
@@ -1528,19 +1528,19 @@ function BuildingAlarm({ students, session, hideChrome = false, onChanged }) {
       )}
       {!hideChrome && <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
-          { key: 'all', label: `All (${students.length})` },
+          { key: 'all', label: `All (${labUsers.length})` },
           { key: 'trained', label: `✓ Trained (${totalTrained})` },
-          { key: 'none', label: `⚠ Not trained (${students.length - totalTrained})` },
+          { key: 'none', label: `⚠ Not trained (${labUsers.length - totalTrained})` },
         ].map(f => (
           <button key={f.key} onClick={() => setStatusFilter(f.key)}
             style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid', fontSize: 12, cursor: 'pointer', fontWeight: statusFilter === f.key ? 700 : 400, background: statusFilter === f.key ? 'var(--accent)' : 'transparent', color: statusFilter === f.key ? '#fff' : 'var(--text2)', borderColor: statusFilter === f.key ? 'var(--accent)' : 'var(--border)' }}
           >{f.label}</button>
         ))}
       </div>}
-      {!hideChrome && filteredStudents.length === 0 && (
+      {!hideChrome && filteredLabUsers.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
       )}
-      {(hideChrome ? students : filteredStudents).map((u, idx) => {
+      {(hideChrome ? labUsers : filteredLabUsers).map((u, idx) => {
         const rec = getRecord(u.id)
         const headerBg = idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)'
         return (
@@ -1619,13 +1619,13 @@ function BuildingAlarm({ students, session, hideChrome = false, onChanged }) {
 // ══════════════════════════════════════════════════════════════
 const TOTAL_LOCKERS = 15
 
-function StudentLocker({ session, panelUser = null, onChanged }) {
+function LabUserLocker({ session, panelUser = null, onChanged }) {
   const { toast } = useAppStore()
   const [lockers, setLockers] = useState([])
-  const [students, setStudents] = useState([])
+  const [labUsers, setLabUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState(null)
-  const [selectedStudent, setSelectedStudent] = useState('')
+  const [selectedLabUser, setSelectedLabUser] = useState('')
   const [notes, setNotes] = useState('')
 
   useEffect(() => { load() }, [])
@@ -1643,21 +1643,21 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
     } else {
       setLockers(lk)
     }
-    setStudents(st || [])
+    setLabUsers(st || [])
     setLoading(false)
   }
 
   async function assignLocker(lockerNumber) {
-    const targetId = panelUser?.id || selectedStudent
+    const targetId = panelUser?.id || selectedLabUser
     if (!targetId) { toast('Select a lab user.'); return }
-    const student = students.find(s => s.id === targetId) || panelUser
-    if (!student) return
+    const labUser = labUsers.find(s => s.id === targetId) || panelUser
+    if (!labUser) return
     const orgId = session?.organizationId
-    const displayName = firstName(student)
+    const displayName = firstName(labUser)
     const { error } = await sb.from('student_lockers').upsert({
       locker_number: lockerNumber,
       organization_id: orgId || null,
-      user_id: student.id,
+      user_id: labUser.id,
       user_name: displayName,
       assigned_by: session.username,
       assigned_at: new Date().toISOString(),
@@ -1666,7 +1666,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
     }, { onConflict: 'organization_id,locker_number' })
     if (error) { toast('Error: ' + error.message); return }
     toast(`Locker ${lockerNumber} assigned to ${displayName} ✓`)
-    setAssigning(null); setSelectedStudent(''); setNotes('')
+    setAssigning(null); setSelectedLabUser(''); setNotes('')
     load(); onChanged?.()
   }
 
@@ -1800,7 +1800,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
               return (
                 <div key={num}
                   style={{ borderRadius: 10, border: `2px solid ${borderColor}`, background: bgColor, padding: '12px 8px', textAlign: 'center', cursor: occupied || unavailable ? 'default' : 'pointer', transition: 'all 0.15s' }}
-                  onClick={() => { if (!occupied && !unavailable && !isAssigning) { setAssigning(num); setSelectedStudent(''); setNotes('') } }}
+                  onClick={() => { if (!occupied && !unavailable && !isAssigning) { setAssigning(num); setSelectedLabUser(''); setNotes('') } }}
                   onMouseEnter={e => { if (!occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--accent)' }}
                   onMouseLeave={e => { if (!occupied && !unavailable && !isAssigning) e.currentTarget.style.borderColor = 'var(--border)' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: occupied ? '#0369a1' : unavailable ? '#9ca3af' : 'var(--surface2)', color: occupied || unavailable ? '#fff' : 'var(--text)', fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
@@ -1833,9 +1833,9 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
               </div>
               <div className="field">
                 <label>Assign to lab user <span style={{ color: '#c84b2f' }}>*</span></label>
-                <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} autoFocus>
+                <select value={selectedLabUser} onChange={e => setSelectedLabUser(e.target.value)} autoFocus>
                   <option value="">— Select lab user —</option>
-                  {students.map(s => {
+                  {labUsers.map(s => {
                     const hasLocker = lockers.find(l => l.user_id === s.id)
                     return (
                       <option key={s.id} value={s.id} disabled={!!hasLocker}>
@@ -1850,7 +1850,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
                 <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. key given, combination shared…" />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary" onClick={() => assignLocker(assigning)} disabled={!selectedStudent}>Assign locker</button>
+                <button className="btn btn-primary" onClick={() => assignLocker(assigning)} disabled={!selectedLabUser}>Assign locker</button>
                 <button className="btn" onClick={() => setAssigning(null)}>Cancel</button>
               </div>
             </div>
@@ -1866,7 +1866,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
                 {Array.from({ length: TOTAL_LOCKERS }, (_, i) => {
                   const num = i + 1
                   const locker = lockerMap[num] || { locker_number: num, user_name: null }
-                  const student = locker.user_id ? students.find(s => s.id === locker.user_id) : null
+                  const labUser = locker.user_id ? labUsers.find(s => s.id === locker.user_id) : null
                   const isUnavailable = !!locker.is_unavailable && !locker.user_name
                   return (
                     <tr key={num} style={{ background: locker.user_name ? 'transparent' : isUnavailable ? '#f3f4f6' : 'var(--surface2)' }}>
@@ -1881,7 +1881,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
                             : <span style={{ fontSize: 12, color: 'var(--text3)' }}>Available</span>
                         }
                       </td>
-                      <td style={{ fontSize: 13, color: 'var(--text2)' }}>{student?.project_group || '—'}</td>
+                      <td style={{ fontSize: 13, color: 'var(--text2)' }}>{labUser?.project_group || '—'}</td>
                       <td style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>{locker.assigned_at ? new Date(locker.assigned_at).toLocaleDateString() : '—'}</td>
                       <td style={{ fontSize: 12, color: 'var(--text2)' }}>{locker.notes || '—'}</td>
                       <td>
@@ -1890,7 +1890,7 @@ function StudentLocker({ session, panelUser = null, onChanged }) {
                         ) : isUnavailable ? (
                           <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => toggleUnavailable(num)}>Mark available</button>
                         ) : (
-                          <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => { setAssigning(num); setSelectedStudent(''); setNotes('') }}>Assign</button>
+                          <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => { setAssigning(num); setSelectedLabUser(''); setNotes('') }}>Assign</button>
                         )}
                       </td>
                     </tr>
@@ -1923,7 +1923,7 @@ const HUB_TABS = [
   { key: 'locker',    label: 'Locker' },
 ]
 
-function UserTrainingHub({ students, session, subTab, setSubTab }) {
+function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [viewMode, setViewMode] = useState('user')     // 'user' | 'all' (audit)
   const [statuses, setStatuses] = useState(null)       // userId -> { fresh|golf|equipment|alarm|locker|safety: ok|pend|none }
@@ -1931,16 +1931,16 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
   const [search, setSearch] = useState('')
 
   const editable = canEdit(session)
-  const ownUser = students.find(u => session.userId === u.id || session.username === u.name)
+  const ownUser = labUsers.find(u => session.userId === u.id || session.username === u.name)
   const effSelectedId = selectedUserId ?? (ownUser && !editable ? ownUser.id : null)
-  const selectedUser = students.find(u => u.id === effSelectedId) || null
-  // stable single-element array so child useEffect([students]) doesn't loop
+  const selectedUser = labUsers.find(u => u.id === effSelectedId) || null
+  // stable single-element array so child useEffect([labUsers]) doesn't loop
   const selectedArr = useMemo(() => selectedUser ? [selectedUser] : [], [selectedUser?.id])
 
-  useEffect(() => { loadStatuses() }, [students])
+  useEffect(() => { loadStatuses() }, [labUsers])
 
   async function loadStatuses() {
-    const ids = students.map(s => s.id)
+    const ids = labUsers.map(s => s.id)
     if (!ids.length) { setStatuses({}); return }
     const [fresh, golf, equip, alarm, lockers, safetyRes] = await Promise.all([
       sb.from('training_fresh').select('user_id, admin_approved, certificate_url').in('user_id', ids),
@@ -1984,24 +1984,24 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
   }
 
   const searchFiltered = search.trim()
-    ? students.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
-    : students
+    ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
+    : labUsers
 
   function renderTabContent(mode) {
     const su = mode === 'user'
     // onChanged: children call this after any add/approve/delete so the
     // card badges, progress bars and tab status dots update without a reload
     const props = su
-      ? { students: selectedArr, session, hideChrome: true, onChanged: loadStatuses }
-      : { students, session, onChanged: loadStatuses }
+      ? { labUsers: selectedArr, session, hideChrome: true, onChanged: loadStatuses }
+      : { labUsers, session, onChanged: loadStatuses }
     switch (subTab) {
       case 'golf':      return <GolfCarTraining {...props} />
       case 'equipment': return <EquipmentTraining {...props} />
       case 'alarm':     return <BuildingAlarm {...props} />
       case 'locker':
         return su && selectedUser
-          ? <StudentLocker session={session} panelUser={selectedUser} onChanged={loadStatuses} />
-          : <StudentLocker session={session} onChanged={loadStatuses} />
+          ? <LabUserLocker session={session} panelUser={selectedUser} onChanged={loadStatuses} />
+          : <LabUserLocker session={session} onChanged={loadStatuses} />
       case 'safety':
         return mode === 'all'
           ? <SafetyTab asTab />
@@ -2045,7 +2045,7 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
 
       {/* ── Detail panel ── */}
       {!selectedUser ? (
-        students.length > 0 && (
+        labUsers.length > 0 && (
           <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text3)', padding: '8px 0 16px' }}>
             Select a lab user above to view their training profile.
           </div>
@@ -2093,7 +2093,7 @@ function UserTrainingHub({ students, session, subTab, setSubTab }) {
 
 export default function TrainingRecords() {
   const { session, toast, sidebarSubTab, setSidebarSubTab } = useAppStore()
-  const [students, setStudents] = useState([])
+  const [labUsers, setLabUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [expiryAlerts, setExpiryAlerts] = useState([])
 
@@ -2104,9 +2104,9 @@ export default function TrainingRecords() {
 
   const subTab = sidebarSubTab || 'fresh'
 
-  useEffect(() => { loadStudents() }, [])
+  useEffect(() => { loadLabUsers() }, [])
 
-  async function loadStudents() {
+  async function loadLabUsers() {
     setLoading(true)
     let data
     if (session?.loginMode === 'solo') {
@@ -2120,7 +2120,7 @@ export default function TrainingRecords() {
       const { data: d } = await q
       data = d || []
     }
-    setStudents(data)
+    setLabUsers(data)
     setLoading(false)
     checkExpiry(data.map(u => u.id))
   }
@@ -2145,7 +2145,7 @@ export default function TrainingRecords() {
           <div className="section-title">Training Records</div>
           <HelpPanel screen="training" />
         </div>
-        {!isSolo && <div style={{ fontSize: 13, color: 'var(--text2)' }}>{students.length} active lab user{students.length !== 1 ? 's' : ''}</div>}
+        {!isSolo && <div style={{ fontSize: 13, color: 'var(--text2)' }}>{labUsers.length} active lab user{labUsers.length !== 1 ? 's' : ''}</div>}
       </div>
 
       {expiryAlerts.length > 0 && (
@@ -2165,14 +2165,14 @@ export default function TrainingRecords() {
       {subTab !== 'exam' && (
         loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        ) : students.length === 0 ? (
+        ) : labUsers.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">👥</div>
             <div>No lab users yet. Add lab users in Admin → Lab Users.</div>
           </div>
         ) : (
           <UserTrainingHub
-            students={students}
+            labUsers={labUsers}
             session={session}
             subTab={HUB_TABS.some(t => t.key === subTab) ? subTab : 'fresh'}
             setSubTab={setSidebarSubTab}

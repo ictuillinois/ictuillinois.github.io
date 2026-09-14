@@ -68,8 +68,8 @@ function EquipmentInfo({ equipment, session }) {
 
   async function load() {
     setLoading(true)
-    const isStudent = session?.role === 'lab_user'
-    if (isStudent) {
+    const isLabUser = session?.role === 'lab_user'
+    if (isLabUser) {
       const { data: trainRecs } = await sb.from('training_equipment').select('passed_exam').eq('user_id', session.userId).eq('equipment_id', equipment.id)
       const hasPassed = trainRecs?.some(r => r.passed_exam)
       if (!hasPassed) {
@@ -415,7 +415,7 @@ function SOPNotes({ equipment, session }) {
 
 function TemporaryAccessPanel({ equipment, session }) {
   const { toast } = useAppStore()
-  const [students, setStudents] = useState([])
+  const [labUsers, setLabUsers] = useState([])
   const [tempAccesses, setTempAccesses] = useState([])
   const [trainedIds, setTrainedIds] = useState([])
   const [loading, setLoading] = useState(true)
@@ -429,7 +429,7 @@ function TemporaryAccessPanel({ equipment, session }) {
       sb.from('equipment_temp_access').select('*').eq('equipment_id', equipment.id),
       sb.from('training_equipment').select('user_id').eq('equipment_id', equipment.id).eq('passed_exam', true),
     ])
-    setStudents(studs || []); setTempAccesses(temps || []); setTrainedIds((trained || []).map(t => t.user_id)); setLoading(false)
+    setLabUsers(studs || []); setTempAccesses(temps || []); setTrainedIds((trained || []).map(t => t.user_id)); setLoading(false)
   }
   async function grantAccess() {
     if (!selectedUser) { toast('Select a lab user.'); return }
@@ -442,7 +442,7 @@ function TemporaryAccessPanel({ equipment, session }) {
     await sb.from('equipment_temp_access').delete().eq('user_id', userId).eq('equipment_id', equipment.id)
     toast('Access revoked.'); load()
   }
-  const untrainedStudents = students.filter(s => !trainedIds.includes(s.id))
+  const untrainedLabUsers = labUsers.filter(s => !trainedIds.includes(s.id))
   return (
     <div className="card" style={{ borderColor: 'var(--accent)' }}>
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>🔑 Temporary Access Management</div>
@@ -450,7 +450,7 @@ function TemporaryAccessPanel({ equipment, session }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} style={{ flex: 1, minWidth: 180 }}>
           <option value="">— Select lab user —</option>
-          {untrainedStudents.map(s => <option key={s.id} value={s.id}>{s.name}{s.project_group ? ` (${s.project_group})` : ''}</option>)}
+          {untrainedLabUsers.map(s => <option key={s.id} value={s.id}>{s.name}{s.project_group ? ` (${s.project_group})` : ''}</option>)}
         </select>
         <button className="btn btn-sm btn-primary" onClick={grantAccess} disabled={granting || !selectedUser}>{granting ? 'Granting…' : 'Grant 1-week access'}</button>
       </div>
@@ -460,13 +460,13 @@ function TemporaryAccessPanel({ equipment, session }) {
         <div>
           <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Active temporary access</div>
           {tempAccesses.map(ta => {
-            const student = students.find(s => s.id === ta.user_id)
+            const labUser = labUsers.find(s => s.id === ta.user_id)
             const expired = new Date(ta.expires_at) < new Date()
             const daysLeft = Math.ceil((new Date(ta.expires_at) - new Date()) / 86400000)
             return (
               <div key={ta.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface2)' }}>
                 <div>
-                  <div style={{ fontWeight: 500, fontSize: 13 }}>{student?.name || 'Unknown'}</div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{labUser?.name || 'Unknown'}</div>
                   <div style={{ fontSize: 11, color: expired ? 'var(--accent2)' : 'var(--text3)', fontFamily: 'var(--mono)' }}>{expired ? 'EXPIRED' : `${daysLeft}d left`} · Granted by {ta.granted_by} · Expires {new Date(ta.expires_at).toLocaleDateString()}</div>
                 </div>
                 <button className="btn btn-sm btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => revokeAccess(ta.user_id)}>Revoke</button>

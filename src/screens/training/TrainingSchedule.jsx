@@ -28,7 +28,7 @@ function fmtDT(d) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TRAINING REQUESTS PANEL (admin/staff view in Training Records)
+// TRAINING REQUESTS PANEL (admin/labManagers view in Training Records)
 // forUserId: only show requests from that user (hub Equipment tab,
 // "This user" mode). compact: small empty state instead of the big one.
 // ══════════════════════════════════════════════════════════════
@@ -255,7 +255,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
 }
 
 // ══════════════════════════════════════════════════════════════
-// USER SCHEDULE RESPONSE (student view)
+// USER SCHEDULE RESPONSE (labUser view)
 // ══════════════════════════════════════════════════════════════
 export function UserTrainingSchedule({ session }) {
   const { toast } = useAppStore()
@@ -564,7 +564,7 @@ export function ExamTab({ session }) {
   const [progress, setProgress] = useState(null)
   const [requiresExam, setRequiresExam] = useState(null)
 
-  const isAdminStaff = canEdit(session)
+  const isAdminLabManager = canEdit(session)
 
   useEffect(() => { loadEquipment() }, [])
   useEffect(() => { if (selectedEq) loadEquipmentData() }, [selectedEq])
@@ -669,7 +669,7 @@ export function ExamTab({ session }) {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
-  const myResults = isAdminStaff ? results : results.filter(r => r.user_id === session.userId)
+  const myResults = isAdminLabManager ? results : results.filter(r => r.user_id === session.userId)
   const latestResult = myResults[0]
 
   return (
@@ -686,7 +686,7 @@ export function ExamTab({ session }) {
       {selectedEq && (
         <div>
           {/* Admin: manage questions + see all results */}
-          {isAdminStaff && (
+          {isAdminLabManager && (
             <div>
               {/* Exam requirement toggle */}
               <div className="card" style={{ marginBottom: 16, background: requiresExam === false ? '#fefce8' : 'var(--surface)', borderColor: requiresExam === false ? '#fcd34d' : 'var(--border)' }}>
@@ -790,8 +790,8 @@ export function ExamTab({ session }) {
             </div>
           )}
 
-          {/* Student: material checklist + exam */}
-          {!isAdminStaff && (
+          {/* LabUser: material checklist + exam */}
+          {!isAdminLabManager && (
             <div>
               {/* Material progress checklist — hidden once exam is passed */}
               {!examMode && !submitted && !latestResult?.passed && (

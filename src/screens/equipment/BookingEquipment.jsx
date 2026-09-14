@@ -171,7 +171,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     purposeProjectId: saved.projectId,
     purposeOther: saved.other,
   })
-  const [students, setStudents] = useState([])
+  const [labUsers, setLabUsers] = useState([])
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState(null)
@@ -182,7 +182,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     if (canEdit(session)) {
       let q = sb.from('users').select('id, name').eq('is_active', true).neq('role', 'admin').order('name')
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
-      q.then(({ data }) => setStudents(data || []))
+      q.then(({ data }) => setLabUsers(data || []))
     }
     if (session?.userId) {
       const isSolo = session.loginMode === 'solo' || session.role === 'solo'
@@ -325,7 +325,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           <div className="field"><label>Book on behalf of (optional)</label>
             <select value={form.booked_on_behalf_of} onChange={e => setForm(f => ({ ...f, booked_on_behalf_of: e.target.value }))}>
               <option value="">— Myself —</option>
-              {students.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              {labUsers.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
           </div>
         )}
@@ -1887,7 +1887,7 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
         {/* Book on behalf of */}
         <div className="field">
           <label>Book on behalf of (optional)</label>
-          <input value={behalf} onChange={e => setBehalf(e.target.value)} placeholder="e.g. student name" />
+          <input value={behalf} onChange={e => setBehalf(e.target.value)} placeholder="e.g. labUser name" />
         </div>
 
         {/* Purpose */}
@@ -2220,11 +2220,11 @@ function BookingCalendar({ session }) {
   const [waiveModal, setWaiveModal] = useState(null)
   const [reviewModal, setReviewModal] = useState(null)
   const [reconsiderModal, setReconsiderModal] = useState(null)
-  const [filterStudent, setFilterStudent] = useState(null) // { id, name } | null — manager-only student filter
-  const [orgStudents, setOrgStudents] = useState([])
+  const [filterLabUser, setFilterLabUser] = useState(null) // { id, name } | null — manager-only labUser filter
+  const [orgLabUsers, setOrgLabUsers] = useState([])
 
   useEffect(() => { loadEquipment(); loadNotifications() }, [])
-  useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, calView, filterStudent])
+  useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, calView, filterLabUser])
   useEffect(() => { loadBookings() }, [])
 
   // Auto-select and open booking modal when arriving from a QR scan
@@ -2288,11 +2288,11 @@ function BookingCalendar({ session }) {
         .select('equipment_id').eq('user_id', session.userId).eq('passed_exam', true)
       setTrainedEquipmentIds(new Set((trained || []).map(t => t.equipment_id)))
     }
-    // Load org users for manager student-filter dropdown
+    // Load org users for manager labUser-filter dropdown
     if (canEdit(session) && session?.organizationId) {
       const { data: users } = await sb.from('users').select('id, name, role')
         .eq('organization_id', session.organizationId).eq('is_active', true).neq('role', 'admin').order('name')
-      setOrgStudents(users || [])
+      setOrgLabUsers(users || [])
     }
   }
 
@@ -2456,11 +2456,11 @@ function BookingCalendar({ session }) {
     const scopedIds = orgEqIdsRef.current
     if (scopedIds !== null && scopedIds.length === 0) { setBookings([]); return }
 
-    // Manager viewing a specific student — show all org equipment bookings for that student
-    if (filterStudent) {
+    // Manager viewing a specific labUser — show all org equipment bookings for that labUser
+    if (filterLabUser) {
       let q = sb.from('equipment_bookings').select(BOOKING_COLS)
         .gte('start_time', start).lt('start_time', end)
-        .eq('user_id', filterStudent.id).order('start_time')
+        .eq('user_id', filterLabUser.id).order('start_time')
       if (scopedIds && scopedIds.length > 0) q = q.in('equipment_id', scopedIds)
       if (selectedEq.length > 0) q = q.in('equipment_id', selectedEq)
       const { data, error } = await q
@@ -2478,7 +2478,7 @@ function BookingCalendar({ session }) {
       setBookings((data || []).filter(b => b.status !== 'cancelled'))
       return
     }
-    // No equipment selected and no student filter → empty calendar
+    // No equipment selected and no labUser filter → empty calendar
     setBookings([])
   }
 
@@ -2963,25 +2963,25 @@ function BookingCalendar({ session }) {
       {/* ── Calendar (full width on desktop, below selector on mobile) ── */}
       <div style={{ width: '100%' }}>
 
-        {/* Manager student filter — only for lab managers / org admins */}
-        {canEdit(session) && orgStudents.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, background: filterStudent ? 'var(--accent-light)' : 'var(--surface)', border: `1px solid ${filterStudent ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, padding: '8px 12px' }}>
-            <span style={{ fontSize: 12, color: filterStudent ? 'var(--accent)' : 'var(--text3)', fontWeight: 600, whiteSpace: 'nowrap' }}>👤 View lab user:</span>
+        {/* Manager labUser filter — only for lab managers / org admins */}
+        {canEdit(session) && orgLabUsers.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, background: filterLabUser ? 'var(--accent-light)' : 'var(--surface)', border: `1px solid ${filterLabUser ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, padding: '8px 12px' }}>
+            <span style={{ fontSize: 12, color: filterLabUser ? 'var(--accent)' : 'var(--text3)', fontWeight: 600, whiteSpace: 'nowrap' }}>👤 View lab user:</span>
             <select
-              value={filterStudent?.id || ''}
+              value={filterLabUser?.id || ''}
               onChange={e => {
                 const id = e.target.value
-                if (!id) { setFilterStudent(null); return }
-                const s = orgStudents.find(s => s.id === id)
-                if (s) setFilterStudent(s)
+                if (!id) { setFilterLabUser(null); return }
+                const s = orgLabUsers.find(s => s.id === id)
+                if (s) setFilterLabUser(s)
               }}
-              style={{ flex: 1, fontSize: 12, border: 'none', background: 'transparent', color: filterStudent ? 'var(--accent)' : 'var(--text)', fontWeight: filterStudent ? 600 : 400, outline: 'none', cursor: 'pointer' }}
+              style={{ flex: 1, fontSize: 12, border: 'none', background: 'transparent', color: filterLabUser ? 'var(--accent)' : 'var(--text)', fontWeight: filterLabUser ? 600 : 400, outline: 'none', cursor: 'pointer' }}
             >
               <option value="">— All lab users —</option>
-              {orgStudents.map(s => <option key={s.id} value={s.id}>{s.name}{s.role === 'lab_user' ? ' (lab user)' : ''}</option>)}
+              {orgLabUsers.map(s => <option key={s.id} value={s.id}>{s.name}{s.role === 'lab_user' ? ' (lab user)' : ''}</option>)}
             </select>
-            {filterStudent && (
-              <button onClick={() => setFilterStudent(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', fontWeight: 700, padding: '0 2px', flexShrink: 0 }}>✕</button>
+            {filterLabUser && (
+              <button onClick={() => setFilterLabUser(null)} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', fontWeight: 700, padding: '0 2px', flexShrink: 0 }}>✕</button>
             )}
           </div>
         )}
@@ -3132,7 +3132,7 @@ function BookingCalendar({ session }) {
                   onClose={() => { setShowBookingModal(false); setBookingDraft(null); setEditBooking(null) }}
                   initialSlot={bookingDraft}
                   photoRequired={photoRequired}
-                  defaultBehalfOf={filterStudent?.name || ''}
+                  defaultBehalfOf={filterLabUser?.name || ''}
                   panel
                 />
               </div>
@@ -3186,7 +3186,7 @@ function BookingCalendar({ session }) {
           onAdjustTime={!editBooking ? () => { setShowBookingModal(false); setEditBooking(null) } : undefined}
           initialSlot={bookingDraft}
           photoRequired={photoRequired}
-          defaultBehalfOf={filterStudent?.name || ''}
+          defaultBehalfOf={filterLabUser?.name || ''}
         />
       )}
 

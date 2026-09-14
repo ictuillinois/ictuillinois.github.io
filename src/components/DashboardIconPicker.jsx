@@ -4,24 +4,24 @@ import { useAppStore } from '../store/useAppStore'
 
 // ICT-Lab modules
 export const ALL_MODULES_META = [
-  // ── Staff-only (admin / lab manager) ──────────────────────────────────
+  // ── LabManager-only (admin / lab manager) ──────────────────────────────────
   { key: 'training',      screen: 'training',      label: 'Training Records',  sub: 'Certs, equipment & alarm training',  icon: '🎓', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
-  { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',    sub: 'Users & lab managers',               icon: '👥', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
-  { key: 'pm',            screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & deadlines',        icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team'], staffOnly: true },
-  { key: 'equipment',     screen: 'equipment',     label: 'Equipment & Maintenance', sub: 'Lab equipment inventory tracking',   icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team'], staffOnly: true },
-  { key: 'equipmenthub',  screen: 'equipmenthub',  label: 'Equipment SOP',     sub: 'SOPs, videos & standards',           icon: '📚', bg: '#E1F5EE', color: '#085041', roles: ['team'], staffOnly: true },
-  { key: 'remessages',    screen: 'remessages',    label: 'Lab Messages',      sub: 'Internal chat between lab managers & admin', icon: '💬', bg: '#e0f7fa', color: '#0891b2', roles: ['team'], staffOnly: true },
-  { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], staffOnly: true },
+  { key: 'labmanagement', screen: 'labmanagement', label: 'Lab Management',    sub: 'Users & lab managers',               icon: '👥', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], labManagerOnly: true },
+  { key: 'pm',            screen: 'pm',            label: 'Task Board',        sub: 'Tasks, meetings & deadlines',        icon: '📋', bg: '#fff3e0', color: '#ff6b00', roles: ['team'], labManagerOnly: true },
+  { key: 'equipment',     screen: 'equipment',     label: 'Equipment & Maintenance', sub: 'Lab equipment inventory tracking',   icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team'], labManagerOnly: true },
+  { key: 'equipmenthub',  screen: 'equipmenthub',  label: 'Equipment SOP',     sub: 'SOPs, videos & standards',           icon: '📚', bg: '#E1F5EE', color: '#085041', roles: ['team'], labManagerOnly: true },
+  { key: 'remessages',    screen: 'remessages',    label: 'Lab Messages',      sub: 'Internal chat between lab managers & admin', icon: '💬', bg: '#e0f7fa', color: '#0891b2', roles: ['team'], labManagerOnly: true },
+  { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], labManagerOnly: true },
   // ── All users ──────────────────────────────────────────────────────────
   { key: 'projects',  screen: 'projects',  label: 'Project & Material', sub: 'Material inventory & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
   { key: 'booking',   screen: 'booking',   label: 'Reserve Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
-  { key: 'barcodeqr', screen: 'barcodeqr', label: 'QR Labels',         sub: 'Generate & print QR codes',       icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team'], studentLocked: true },
+  { key: 'barcodeqr', screen: 'barcodeqr', label: 'QR Labels',         sub: 'Generate & print QR codes',       icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team'], labUserLocked: true },
   { key: 'mileage',   screen: null,        label: 'Mileage Form',      sub: 'Submit mileage reimbursement',    icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', roles: ['team'], external: true },
   { key: 'profile',   screen: 'profile',   label: 'Profile',           sub: 'Your info & settings',            icon: '👤', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
 ]
 
 export const PINNED_MODULES = ['profile']
-export const STAFF_PINNED_MODULES = []
+export const LAB_MANAGER_PINNED_MODULES = []
 
 function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restricted, soloLocked, lockReason }) {
   if (restricted) {
@@ -81,13 +81,13 @@ function ModuleToggleCard({ module, selected, onToggle, pinned, alwaysOn, restri
 
 export default function DashboardIconPicker({ session, loginMode, onDone }) {
   const { setActiveModules } = useAppStore()
-  const isStaff = session?.role === 'admin' || session?.role === 'user'
+  const isLabManager = session?.role === 'admin' || session?.role === 'user'
   // uiPinnedKeys: grayed out AND non-draggable (profile only)
   const uiPinnedKeys = PINNED_MODULES
-  // alwaysOnKeys: cannot be toggled off, but ARE draggable (labmanagement for staff)
-  const alwaysOnKeys = isStaff ? [...PINNED_MODULES, ...STAFF_PINNED_MODULES] : PINNED_MODULES
+  // alwaysOnKeys: cannot be toggled off, but ARE draggable (labmanagement for labManagers)
+  const alwaysOnKeys = isLabManager ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES] : PINNED_MODULES
   const pinnedKeys = alwaysOnKeys // keep for backward compat with selectNone/toggle gate
-  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
+  const baseAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
   const [available, setAvailable] = useState(baseAvailable)
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
@@ -100,8 +100,8 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
   // full feature set and know what to ask for.
   const [planLockedKeys, setPlanLockedKeys] = useState(() => new Set())
   const [restrictedKeys, setRestrictedKeys] = useState(() => {
-    if (isStaff) return new Set()
-    const locked = ALL_MODULES_META.filter(m => m.adminOnly || m.studentLocked).map(m => m.key)
+    if (isLabManager) return new Set()
+    const locked = ALL_MODULES_META.filter(m => m.adminOnly || m.labUserLocked).map(m => m.key)
     return new Set(locked)
   })
   const [saving, setSaving] = useState(false)
@@ -118,9 +118,9 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
     try {
       let savedModules = null
       let pool = null
-      // All users see all non-hideForStaff modules; adminOnly ones are locked for non-admins
-      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForStaff || !isStaff) && (!m.staffOnly || isStaff))
-      let localRestricted = new Set(isStaff ? [] : ALL_MODULES_META.filter(m => m.adminOnly || m.studentLocked).map(m => m.key))
+      // All users see all non-hideForLabManager modules; adminOnly ones are locked for non-admins
+      let localAvailable = ALL_MODULES_META.filter(m => (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
+      let localRestricted = new Set(isLabManager ? [] : ALL_MODULES_META.filter(m => m.adminOnly || m.labUserLocked).map(m => m.key))
       if (loginMode === 'solo') {
         ALL_MODULES_META.filter(m => m.soloLocked).forEach(m => localRestricted.add(m.key))
       }
@@ -150,7 +150,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         const queries = [
           sb.from('user_dashboard_prefs').select('active_modules, allowed_modules').eq('user_id', session.userId),
         ]
-        // For staff and students: also load which screens admin has granted them
+        // For labManagers and labUsers: also load which screens admin has granted them
         if (session?.role === 'user' || session?.role === 'lab_user') {
           queries.push(sb.from('user_screen_access').select('screen_key').eq('user_id', session.userId))
         }
@@ -196,7 +196,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
           // already excludes restricted keys from the count.
           const planLocked = new Set()
           localAvailable.forEach(m => {
-            const inPlan = effectivePool.includes(m.key) || m.key === 'profile' || (isStaff && m.staffOnly)
+            const inPlan = effectivePool.includes(m.key) || m.key === 'profile' || (isLabManager && m.labManagerOnly)
             if (!inPlan) { planLocked.add(m.key); localRestricted.add(m.key) }
           })
           setPlanLockedKeys(planLocked)
@@ -205,24 +205,24 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
         if (session?.role === 'lab_user') {
           pool = prefRow?.allowed_modules || []
           setAllowedPool(pool)
-          // Unlock studentLocked modules explicitly granted by admin via screen access
+          // Unlock labUserLocked modules explicitly granted by admin via screen access
           if (accessRes?.data?.length) {
             const grantedScreens = new Set(accessRes.data.map(r => r.screen_key))
-            ALL_MODULES_META.filter(m => m.studentLocked && m.screen && grantedScreens.has(m.screen))
+            ALL_MODULES_META.filter(m => m.labUserLocked && m.screen && grantedScreens.has(m.screen))
               .forEach(m => localRestricted.delete(m.key))
           }
-          // Also unlock studentLocked modules included in the admin-assigned allowed pool
-          // Unlock studentLocked modules granted either per-user by a lab
+          // Also unlock labUserLocked modules included in the admin-assigned allowed pool
+          // Unlock labUserLocked modules granted either per-user by a lab
           // manager OR org-wide by the admin's lab-user pool. Only the per-user
           // list was consulted, so an org-wide grant left the icon locked here
           // while the dashboard showed it.
           ALL_MODULES_META
-            .filter(m => m.studentLocked && (pool.includes(m.key) || effectivePool?.includes(m.key)))
+            .filter(m => m.labUserLocked && (pool.includes(m.key) || effectivePool?.includes(m.key)))
             .forEach(m => localRestricted.delete(m.key))
         } else if (session?.role === 'user') {
-          // Lab managers: adminOnly modules restricted unless explicitly granted; studentLocked modules are free
+          // Lab managers: adminOnly modules restricted unless explicitly granted; labUserLocked modules are free
           const accessKeys = new Set((accessRes?.data || []).map(r => r.screen_key))
-          localRestricted = new Set(ALL_MODULES_META.filter(m => m.adminOnly && !m.studentLocked && !accessKeys.has(m.screen)).map(m => m.key))
+          localRestricted = new Set(ALL_MODULES_META.filter(m => m.adminOnly && !m.labUserLocked && !accessKeys.has(m.screen)).map(m => m.key))
         }
         // admin (role === 'admin'): localRestricted stays empty
       } else {
@@ -309,7 +309,7 @@ export default function DashboardIconPicker({ session, loginMode, onDone }) {
     </div>
   )
 
-  // Student with no pool set yet
+  // LabUser with no pool set yet
   if (session?.role === 'lab_user' && allowedPool !== null && allowedPool.length === 0) return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: 'var(--surface)', borderRadius: 20, padding: '40px 32px', maxWidth: 400, textAlign: 'center', border: '1px solid var(--border)' }}>

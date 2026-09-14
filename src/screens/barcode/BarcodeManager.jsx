@@ -536,7 +536,7 @@ export default function BarcodeManager() {
   const [orgTypes, setOrgTypes] = useState(DEFAULT_TYPES)
   const tab = sidebarSubTab || 'equipment'
 
-  const isAdminOrStaff = session?.role === 'admin' || session?.role === 'user'
+  const isAdminOrLabManager = session?.role === 'admin' || session?.role === 'user'
   const { labels: typeLabels, colors: typeColors } = buildTypeMap(orgTypes)
 
   useEffect(() => { loadEquipment() }, [])
@@ -577,8 +577,8 @@ export default function BarcodeManager() {
 
       {tab === 'equipment' && <EquipmentBarcodeTab equipment={equipment} loading={loading} />}
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
-      {tab === 'summary'   && isAdminOrStaff && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
-      {tab === 'types'     && isAdminOrStaff && <MaterialTypesManager session={session} />}
+      {tab === 'summary'   && isAdminOrLabManager && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
+      {tab === 'types'     && isAdminOrLabManager && <MaterialTypesManager session={session} />}
     </div>
   )
 }

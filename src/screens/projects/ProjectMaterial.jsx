@@ -41,7 +41,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     setEditing(false)
   }, [project.id])
 
-  function toggleStudent(id) {
+  function toggleLabUser(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
@@ -122,7 +122,7 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
-  function toggleStudent(id) {
+  function toggleLabUser(id) {
     setForm(f => ({ ...f, student_ids: f.student_ids.includes(id) ? f.student_ids.filter(s => s !== id) : [...f.student_ids, id] }))
   }
 
@@ -2115,7 +2115,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 
   // Lab users can fully read/edit/add/remove materials on projects they're assigned to
   // (project.student_ids), but can only VIEW projects they're not assigned to — no
-  // editing, adding, or deleting. Staff (admin/user/lab manager) and solo users are
+  // editing, adding, or deleting. LabManager (admin/user/lab manager) and solo users are
   // unaffected. Standalone (non-project) materials are out of scope for this rule.
   const isLabUser = !isSolo && session?.dbRole === 'lab_user'
   function isProjectAssigned(project) {
