@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { formatLocation } from '../../components/FloorPlanPicker'
 import { typeLabel, typeAbbr, generateBarcodeId, buildScanUrl } from '../../lib/materialLabel'
+import MaterialLabel from '../../components/MaterialLabel'
 
 function IctLabLogo({ size }) {
   return (
@@ -32,21 +33,15 @@ function QRCode({ value, size = 180 }) {
 }
 
 function PrintLabel({ material, project, allMaterials }) {
+  // A reduction label names the material it came from, so the parent has to be
+  // resolved here. Passing `parent` without defining it printed an em-dash and
+  // reported no error.
+  const parent = allMaterials?.find(x => x.id === material.parent_material_id) || null
   const barcodeId = material.barcode_id || generateBarcodeId(project, material)
   const scanUrl   = buildScanUrl(material, project, allMaterials)
   const name      = material.name || typeLabel(material.material_type)
   return (
-    <div id="print-label" style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
-      <QRCode value={scanUrl} size={160} />
-      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{barcodeId}</div>
-      <div style={{ width: '100%', borderTop: '1px solid #ddd', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</div>
-        <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{name} · {typeLabel(material.material_type)}</div>
-        {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
-        {material.pi_name && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>PI: {material.pi_name}</div>}
-      </div>
-    </div>
+    <MaterialLabel id="print-label" material={material} project={project} parent={parent} scanUrl={scanUrl} barcodeId={barcodeId} />
   )
 }
 
@@ -309,6 +304,16 @@ export default function MaterialStorage({ project, readOnly = false }) {
 // ── Single-material storage tab — same UI as MaterialStorage but for one material ──
 export function SingleMaterialStorageTab({ material, onRefresh, readOnly = false }) {
   const { toast } = useAppStore()
+  // This tab is handed one material with no sibling list, so a reduction's
+  // parent has to be fetched before its label can name it.
+  const [parent, setParent] = useState(null)
+  useEffect(() => {
+    let alive = true
+    if (!material?.parent_material_id) { setParent(null); return }
+    sb.from('project_materials').select('*').eq('id', material.parent_material_id).maybeSingle()
+      .then(({ data, error }) => { if (alive && !error) setParent(data || null) })
+    return () => { alive = false }
+  }, [material?.parent_material_id])
   const [saving, setSaving] = useState(false)
   const [editingBarcode, setEditingBarcode] = useState(false)
   const [showPrint, setShowPrint] = useState(false)
@@ -428,17 +433,7 @@ export function SingleMaterialStorageTab({ material, onRefresh, readOnly = false
               <button className="btn btn-sm" onClick={() => setShowPrint(false)}>✕</button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20, background: 'var(--surface2)', padding: 20, borderRadius: 'var(--radius)' }}>
-              <div id="print-label-single" style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: 'Arial, sans-serif', gap: 10, boxSizing: 'border-box' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ICT-Lab — Material Storage</div>
-                <QRCode value={qrScanUrl} size={160} />
-                {material.barcode_id && <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{material.barcode_id}</div>}
-                <div style={{ width: '100%', borderTop: '1px solid #ddd', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#000', textAlign: 'center' }}>{matName}</div>
-                  {material.material_type && <div style={{ fontSize: 12, color: '#333', textAlign: 'center' }}>{typeLabel(material.material_type)}</div>}
-                  {material.sampling_date && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>Sampled: {material.sampling_date}</div>}
-                  {material.pi_name && <div style={{ fontSize: 11, color: '#666', textAlign: 'center' }}>PI: {material.pi_name}</div>}
-                </div>
-              </div>
+              <MaterialLabel id="print-label-single" material={material} project={material.projects || {}} parent={parent} scanUrl={qrScanUrl} barcodeId={material.barcode_id || generateBarcodeId(material.projects || {}, material)} />
             </div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 16, textAlign: 'center' }}>Make sure your Brother QL-1110NWB is connected and set to 4" tape.</div>
             <div style={{ display: 'flex', gap: 10 }}>

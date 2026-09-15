@@ -10,7 +10,8 @@ import MaterialSearch from '../../components/MaterialSearch'
 import MaterialReductionModal from '../../components/MaterialReductionModal'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
-import ProjectMaterials, { MaterialModal, PiSelect } from './ProjectMaterials'
+import ProjectMaterials, { MaterialModal, PiSelect, CharLimitHint } from './ProjectMaterials'
+import { FIELD_LIMITS } from '../../lib/materialLabel'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
   return (
     <Modal onClose={onClose}>
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>{isEdit ? 'Edit material' : requireProject ? "Add project's material" : 'Add material'}</div>
-      <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
+      <div className="field"><label>Material Name <span style={{ color: '#c84b2f' }}>*</span></label><input maxLength={FIELD_LIMITS.name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /><CharLimitHint value={form.name} max={FIELD_LIMITS.name} /></div>
       <div className="grid-2">
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value, storage_date: (!f.storage_date || f.storage_date === f.sampling_date) ? e.target.value : f.storage_date }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>

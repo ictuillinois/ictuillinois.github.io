@@ -2,7 +2,8 @@ import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicke
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
-import { generateBarcodeId, buildScanUrl, reductionLabelLines } from '../../lib/materialLabel'
+import { generateBarcodeId, buildScanUrl, FIELD_LIMITS } from '../../lib/materialLabel'
+import MaterialLabel from '../../components/MaterialLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import MaterialReductionModal from '../../components/MaterialReductionModal'
@@ -662,6 +663,21 @@ function typeBg(type) {
 }
 
 // ── Blank form factory ────────────────────────────────────────
+// Shows how much room is left before the value stops fitting one line of the
+// printed label. maxLength stops NEW text at the limit; values already in the
+// database may be longer, and are never truncated — the label wraps them
+// instead, because silently cutting an identifier off a physical container is
+// worse than a second line.
+export function CharLimitHint({ value, max }) {
+  const n = (value || '').length
+  const over = n > max
+  return (
+    <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: over ? '#c84b2f' : 'var(--text3)', marginTop: 4 }}>
+      {n} / {max}{over ? ' — longer than one line on the printed label; it will wrap' : ''}
+    </div>
+  )
+}
+
 function blankForm() {
   return {
     name: '', material_type: '', pi_name: '',
@@ -795,7 +811,8 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
     <>
       <div className="field">
         <label>Material Name / Label <span style={{ color: '#c84b2f' }}>*</span></label>
-        <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
+        <input required maxLength={FIELD_LIMITS.name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />
+        <CharLimitHint value={form.name} max={FIELD_LIMITS.name} />
       </div>
       <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} />
       {isSolo ? (
@@ -846,15 +863,6 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
 // from inside a project looked and behaved differently than the same
 // material printed from the project-level Material Storage tab. Fixed
 // Sept 2026 to eliminate that duplication.
-function IctLabQRLogo({ size }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" strokeWidth="28" strokeLinejoin="round"/>
-      <text x="256" y="290" textAnchor="middle" dominantBaseline="middle" fontFamily="Georgia, 'Times New Roman', serif" fontSize="96" fontWeight="700" fill="#F5F0DC">ICT-Lab</text>
-    </svg>
-  )
-}
-
 const ICT_LOGO_SVG = `<svg width="__SIZE__" height="__SIZE__" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
 <polygon points="256,10 460,128 460,372 256,490 52,372 52,128" fill="#0C1140" stroke="#FF6B1A" stroke-width="28" stroke-linejoin="round"/>
 <text x="256" y="290" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#F5F0DC">ICT-Lab</text>
@@ -862,98 +870,65 @@ const ICT_LOGO_SVG = `<svg width="__SIZE__" height="__SIZE__" viewBox="0 0 512 5
 
 function MaterialQRTab({ material, project, parent }) {
   const [showMap, setShowMap] = useState(false)
-  const matName = material.name || typeLabel(material.material_type) || 'Material'
   // Never fall back to the NAME. Two materials can share a name — two labels
   // must never share an identity. generateBarcodeId is derived from the
   // material's uuid, so it is unique and stable whether or not one was saved.
   const barcodeId = material.barcode_id || generateBarcodeId(project, material)
-  const redLines = reductionLabelLines(material, parent)
-  const qrPx = 160
-  // Keep the logo well under ECC-H's error-correction budget (see
-  // MaterialStorage.jsx QRCode) so cameras can still scan it reliably.
-  const logoPx = Math.round(qrPx * 0.22)
+  const scanUrl = buildScanUrl(material, project || {})
 
-  const qrData = buildScanUrl(material, project || {})
-  const qrUrl  = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
-
+  // Print the rendered node rather than rebuilding the label as a string. The
+  // string version was a fourth copy of this markup and had drifted from the
+  // others; MaterialLabel styles itself inline so outerHTML carries its
+  // appearance into the print window.
   function printLabel() {
-    const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
-    const logoSvg = ICT_LOGO_SVG.replace(/__SIZE__/g, String(logoPx))
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Material Label</title>
-<style>
-@page{size:4in 6in;margin:0}
-body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in;font-family:Arial,sans-serif;box-sizing:border-box}
-.label{width:4in;height:6in;background:#fff;border:1px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:10px;box-sizing:border-box}
-.hdr{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.1em;text-align:center}
-.qrwrap{position:relative;width:${qrPx}px;height:${qrPx}px} .qrwrap img{display:block}
-.logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:4px;padding:4px;line-height:0}
-.bc{font-size:13px;font-weight:700;font-family:monospace;letter-spacing:0.05em;color:#000}
-.info{width:100%;border-top:1px solid #ddd;padding-top:8px;display:flex;flex-direction:column;gap:4px}
-.pn{font-size:13px;font-weight:700;color:#000;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mt{font-size:12px;color:#333;text-align:center} .sd{font-size:11px;color:#666;text-align:center}
-</style></head><body>
-<div class="label">
-  <div class="hdr">${redLines.length ? 'ICT-Lab &mdash; Reduction Material' : 'ICT-Lab &mdash; Material Storage'}</div>
-  <div class="qrwrap"><img src="${imgUrl}" width="${qrPx}" height="${qrPx}" alt="QR"/><div class="logo">${logoSvg}</div></div>
-  <div class="bc">${barcodeId}</div>
-  <div class="info">
-    <div class="pn">${project?.name || '—'}</div>
-    <div class="mt">${matName}${typeLabel(material.material_type) ? ` &middot; ${typeLabel(material.material_type)}` : ''}</div>
-    ${redLines.map(l => `<div class="sd"><b>${l.label}:</b> ${l.value}</div>`).join('')}
-    ${material.sampling_date ? `<div class="sd">Sampled: ${material.sampling_date}</div>` : ''}
-    ${material.pi_name ? `<div class="sd">PI: ${material.pi_name}</div>` : ''}
-  </div>
-</div>
-<script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script>
-</body></html>`
-    const w = window.open('', '_blank', 'width=420,height=620')
-    w.document.write(html)
-    w.document.close()
+    const el = document.getElementById(`print-label-${material.id}`)?.outerHTML
+    if (!el) return
+    const css = '@page{size:4in 6in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in}*{box-sizing:border-box}'
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Material Label</title><style>${css}</style></head><body>${el}<script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script></body></html>`
+    const win = window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank', 'width=460,height=700')
+    if (!win) return
   }
 
   return (
     <div style={{ padding: 16 }}>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <div style={{ position: 'relative', width: qrPx, height: qrPx, flexShrink: 0 }}>
-            <img src={qrUrl} width={qrPx} height={qrPx} style={{ display: 'block', border: '1px solid var(--border)', borderRadius: 8 }} alt="QR Code" />
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <div style={{ background: '#fff', borderRadius: 4, padding: 4, lineHeight: 0 }}>
-                <IctLabQRLogo size={logoPx} />
-              </div>
-            </div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Label preview — actual size
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>{barcodeId}</div>
-          <button className="btn btn-sm btn-purple" onClick={printLabel}>🖨 Print Label (4"×6")</button>
+          {/* The node that gets printed. Shown as-is so what is on screen is
+              exactly what comes out of the printer. */}
+          <MaterialLabel id={`print-label-${material.id}`} material={material} project={project}
+            parent={parent} scanUrl={scanUrl} barcodeId={barcodeId} />
         </div>
-        <div style={{ flex: 1, minWidth: 160 }}>
-          <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Label Preview</div>
-          <div style={{ border: '2px solid var(--border)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{project?.name || '—'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{matName}{typeLabel(material.material_type) ? ` · ${typeLabel(material.material_type)}` : ''}</div>
-            {redLines.map(l => (
-              <div key={l.label} style={{ fontSize: 12, color: 'var(--text3)' }}><strong>{l.label}:</strong> {l.value}</div>
-            ))}
-            {material.sampling_date && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Sampled: {material.sampling_date}</div>}
-            {material.pi_name && <div style={{ fontSize: 12, color: 'var(--text3)' }}>PI: {material.pi_name}</div>}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 180 }}>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Barcode ID</div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>{barcodeId}</div>
           </div>
+          <button className="btn btn-sm btn-purple" onClick={printLabel}>🖨 Print Label (4"×6")</button>
+          {material.locations?.length > 0 && (
+            <button className="btn btn-sm" onClick={() => setShowMap(v => !v)}>
+              {showMap ? 'Hide floor map' : '📍 Show on floor map'}
+            </button>
+          )}
         </div>
       </div>
-      {material.locations?.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <button className="btn btn-sm" onClick={() => setShowMap(v => !v)}>{showMap ? 'Hide floor map' : '🗺️ View on floor map'}</button>
-          {showMap && (
-            <FloorPlanPicker viewOnly currentLocations={material.locations} onConfirm={() => {}} onClose={() => setShowMap(false)} />
-          )}
+
+      {showMap && material.locations?.length > 0 && (
+        <div style={{ marginTop: 16, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {material.locations.map((l, i) => (
+            <span key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 12px', fontSize: 12 }}>
+              {formatLocation(l) || l.location_id}
+            </span>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-// ══════════════════════════════════════════════════════════════
-// MAIN EXPORT
-// ══════════════════════════════════════════════════════════════
 const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other']
 
 
@@ -1104,11 +1079,13 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
         </div>
         <div className="field">
           <label>Material Name / Label <span style={{ color: '#c84b2f' }}>*</span></label>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <input maxLength={FIELD_LIMITS.name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <CharLimitHint value={form.name} max={FIELD_LIMITS.name} />
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
           <label>Project PI</label>
-          <input value={form.pi_name} onChange={e => setForm(f => ({ ...f, pi_name: e.target.value }))} />
+          <input maxLength={FIELD_LIMITS.pi_name} value={form.pi_name} onChange={e => setForm(f => ({ ...f, pi_name: e.target.value }))} />
+          <CharLimitHint value={form.pi_name} max={FIELD_LIMITS.pi_name} />
         </div>
       </Section>
 

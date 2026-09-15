@@ -55,17 +55,51 @@ export function buildScanUrl(material, project, allMaterials) {
   return `${base}?${params.toString()}`
 }
 
-// What a reduction label must say in print, so a fraction can be identified on
-// a shelf without scanning it.
-export function reductionLabelLines(material, parent) {
-  if (!material?.parent_material_id) return []
-  const out = []
-  if (parent?.name) out.push({ label: 'From', value: parent.name })
-  const method = material.reduction_method === 'fractionation' ? 'Fractionation'
-    : material.reduction_method === 'splitting' ? 'Splitting'
-    : material.reduction_method || null
-  if (method) out.push({ label: method, value: material.reduction_value || '—' })
-  else if (material.reduction_value) out.push({ label: 'Reduction', value: material.reduction_value })
-  if (material.reduction_date) out.push({ label: 'Reduced', value: material.reduction_date })
-  return out
+
+// Type sizes for the printed 4x6 label, chosen from a side-by-side specimen.
+// A label is read at arm's length on a shelf, often without picking the
+// container up, so it is set larger than screen type would be.
+export const LABEL_TYPE = { header: 17, barcode: 25, field: 20 }
+
+// How many characters each free-text field may hold. The label is 4in wide;
+// past these lengths a value wraps onto extra lines and pushes the rest of the
+// label down. Enforced on the FORM so the author sees the limit while typing,
+// rather than discovering it at the printer.
+export const FIELD_LIMITS = { name: 40, pi_name: 30 }
+
+const joinList = v => (Array.isArray(v) ? v.filter(Boolean).join(' \u00b7 ') : v) || '\u2014'
+
+// What goes on a label, in order. ONE definition: the label is rendered in
+// three places (project storage tab, single-material storage tab, and the
+// material's own label tab) and they had already drifted apart once.
+export function labelFields(material, project, parent) {
+  const t = material?.material_type
+  const F = []
+  F.push(['Project', project?.name || '\u2014'])
+
+  if (material?.parent_material_id) {
+    F.push(['Parent Material Label', parent?.name || '\u2014'])
+    if (t === 'aggregate')      F.push(['Parent Sieve Size', joinList(parent?.agg_sieve_sizes)])
+    if (t === 'asphalt_binder') F.push(['Parent PG Grade', parent?.ab_binder_pg || '\u2014'])
+    if (t === 'plant_mix')      F.push(['Parent PG Grade', parent?.pm_binder_pg || '\u2014'])
+
+    F.push(['Reduced Material Label', material.name || '\u2014'])
+    if (t === 'aggregate')       F.push(['Reduced Sieve Size', material.reduction_value || joinList(material.agg_sieve_sizes)])
+    else if (t === 'plant_mix')  F.push(['Samples', material.reduction_count ? String(material.reduction_count) : (material.reduction_value || '\u2014')])
+    else if (t === 'asphalt_binder') F.push(['Split Into', material.reduction_value || '\u2014'])
+    else                         F.push(['Reduction', material.reduction_value || '\u2014'])
+  } else {
+    F.push(['Material Label', material?.name || '\u2014'])
+    F.push(['Material Type', typeLabel(t) || '\u2014'])
+    if (t === 'aggregate')      F.push(['Sieve Size', joinList(material?.agg_sieve_sizes)])
+    if (t === 'asphalt_binder') F.push(['PG Grade', material?.ab_binder_pg || '\u2014'])
+    if (t === 'plant_mix') {
+      F.push(['PG Grade', material?.pm_binder_pg || '\u2014'])
+      if (material?.pm_nmas) F.push(['NMAS', material.pm_nmas])
+    }
+  }
+
+  if (material?.sampling_date) F.push(['Sampled', material.sampling_date])
+  if (material?.pi_name)       F.push(['PI', material.pi_name])
+  return F.map(([label, value]) => ({ label, value }))
 }
