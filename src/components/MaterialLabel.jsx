@@ -1,4 +1,4 @@
-import { labelFields, LABEL_TYPE } from '../lib/materialLabel'
+import { labelSections, LABEL_TYPE } from '../lib/materialLabel'
 
 function IctLabLogo({ size }) {
   return (
@@ -14,18 +14,18 @@ function IctLabLogo({ size }) {
 // This markup existed three times (project storage tab, single-material
 // storage tab, material label tab) with three different field sets, so the
 // same container could be labelled differently depending on which button was
-// pressed. Content comes from labelFields(), sizes from LABEL_TYPE.
+// pressed. Content comes from labelSections(), sizes from LABEL_TYPE.
 //
 // Styles are inline on purpose: two of the print paths copy this node's
 // outerHTML into a new window, where a stylesheet would not follow it.
 //
 // Colours are literal, not theme tokens. This is ink on paper.
-// qrSize 140, not 160: at 20px type a reduction label carries seven fields,
-// and the long prefixes ("Parent Material Label:") mean some values wrap to a
-// second line. 140px still prints at ~1.45in, comfortably scannable, and buys
-// the vertical room those wraps need.
-export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 140 }) {
-  const fields = labelFields(material, project, parent)
+// qrSize 132: three headings and three rules cost more vertical room than a
+// flat list did. At 140 a reduction label has no spare line for a value that
+// wraps, and a plant-mix reduction overflowed the label outright. 132 still
+// prints at about 1.37in, comfortably scannable.
+export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 132 }) {
+  const sections = labelSections(material, project, parent)
   const isReduction = !!material?.parent_material_id
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(scanUrl || '')}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
   // Keep the logo well under ECC-H's error-correction budget so cameras can
@@ -49,12 +49,20 @@ export default function MaterialLabel({ id, material, project, parent, scanUrl, 
 
       <div style={{ fontSize: LABEL_TYPE.barcode, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.05em', color: '#000' }}>{barcodeId}</div>
 
-      <div style={{ width: '100%', borderTop: '1px solid #ddd', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {fields.map(f => (
-          // overflowWrap, not nowrap+ellipsis: a value too long for the line
-          // wraps and stays readable rather than being silently cut off.
-          <div key={f.label} style={{ fontSize: LABEL_TYPE.field, fontWeight: 700, color: '#000', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-            {f.label}: {f.value}
+      {/* Grouped, with a grey rule above each group — the first sitting
+          directly under the barcode digits. Only the three titles are printed
+          as words; everything under them is the value as entered. */}
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+        {sections.map(sec => (
+          <div key={sec.title} style={{ borderTop: '1px solid #999', paddingTop: 5, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div style={{ fontSize: LABEL_TYPE.title, fontWeight: 700, color: '#000', textDecoration: 'underline', textUnderlineOffset: 2, lineHeight: 1.3 }}>
+              {sec.title}
+            </div>
+            {sec.values.map((v, k) => (
+              // overflowWrap, not nowrap+ellipsis: a value too long for the
+              // line wraps and stays readable rather than being cut off.
+              <div key={k} style={{ fontSize: LABEL_TYPE.field, fontWeight: 700, color: '#000', lineHeight: 1.3, overflowWrap: 'anywhere' }}>{v}</div>
+            ))}
           </div>
         ))}
       </div>

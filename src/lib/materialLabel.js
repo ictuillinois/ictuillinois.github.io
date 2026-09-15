@@ -59,47 +59,63 @@ export function buildScanUrl(material, project, allMaterials) {
 // Type sizes for the printed 4x6 label, chosen from a side-by-side specimen.
 // A label is read at arm's length on a shelf, often without picking the
 // container up, so it is set larger than screen type would be.
-export const LABEL_TYPE = { header: 17, barcode: 25, field: 20 }
+export const LABEL_TYPE = { header: 17, barcode: 25, title: 17, field: 20 }
 
 // How many characters each free-text field may hold. The label is 4in wide;
 // past these lengths a value wraps onto extra lines and pushes the rest of the
 // label down. Enforced on the FORM so the author sees the limit while typing,
 // rather than discovering it at the printer.
-export const FIELD_LIMITS = { name: 40, pi_name: 30 }
+// 30, not 40: a value now sits on its own line with no "Material Label:"
+// prefix in front of it, but 40 characters of 20px bold Arial is still wider
+// than a 4in label and wraps. 30 fits on one line.
+export const FIELD_LIMITS = { name: 30, pi_name: 30 }
 
 const joinList = v => (Array.isArray(v) ? v.filter(Boolean).join(' \u00b7 ') : v) || '\u2014'
 
-// What goes on a label, in order. ONE definition: the label is rendered in
+// What identifies a material of this type at a glance — the line that sits
+// between the label and the date. Aggregate is graded by sieve; binder and
+// plant mix by PG grade; the rest have nothing better than their type.
+function identifyingSpec(m, type) {
+  if (type === 'aggregate')      return joinList(m?.agg_sieve_sizes)
+  if (type === 'asphalt_binder') return m?.ab_binder_pg || '\u2014'
+  if (type === 'plant_mix')      return m?.pm_binder_pg || '\u2014'
+  return typeLabel(type) || '\u2014'
+}
+
+// The equivalent line for the reduced material: what the reduction produced.
+function reducedSpec(m, type) {
+  if (type === 'aggregate') return m.reduction_value || joinList(m.agg_sieve_sizes)
+  if (type === 'plant_mix') {
+    const n = m.reduction_count
+    return n ? `${n} sample${n === 1 ? '' : 's'}` : (m.reduction_value || '\u2014')
+  }
+  return m.reduction_value || '\u2014'
+}
+
+// What goes on a label, grouped. ONE definition: the label is rendered in
 // three places (project storage tab, single-material storage tab, and the
 // material's own label tab) and they had already drifted apart once.
-export function labelFields(material, project, parent) {
-  const t = material?.material_type
-  const F = []
-  F.push(['Project', project?.name || '\u2014'])
+//
+// Only the three section titles are printed as words. Everything under them is
+// the value the user typed, with no field name in front of it — a printed
+// label is read by someone who already knows what a project name looks like.
+export function labelSections(material, project, parent) {
+  const type = material?.material_type
+  const isReduction = !!material?.parent_material_id
+  // On a reduction the "original" is the parent it came from; on a plain
+  // material it is that material itself.
+  const original = isReduction ? parent : material
 
-  if (material?.parent_material_id) {
-    F.push(['Parent Material Label', parent?.name || '\u2014'])
-    if (t === 'aggregate')      F.push(['Parent Sieve Size', joinList(parent?.agg_sieve_sizes)])
-    if (t === 'asphalt_binder') F.push(['Parent PG Grade', parent?.ab_binder_pg || '\u2014'])
-    if (t === 'plant_mix')      F.push(['Parent PG Grade', parent?.pm_binder_pg || '\u2014'])
-
-    F.push(['Reduced Material Label', material.name || '\u2014'])
-    if (t === 'aggregate')       F.push(['Reduced Sieve Size', material.reduction_value || joinList(material.agg_sieve_sizes)])
-    else if (t === 'plant_mix')  F.push(['Samples', material.reduction_count ? String(material.reduction_count) : (material.reduction_value || '\u2014')])
-    else if (t === 'asphalt_binder') F.push(['Split Into', material.reduction_value || '\u2014'])
-    else                         F.push(['Reduction', material.reduction_value || '\u2014'])
-  } else {
-    F.push(['Material Label', material?.name || '\u2014'])
-    F.push(['Material Type', typeLabel(t) || '\u2014'])
-    if (t === 'aggregate')      F.push(['Sieve Size', joinList(material?.agg_sieve_sizes)])
-    if (t === 'asphalt_binder') F.push(['PG Grade', material?.ab_binder_pg || '\u2014'])
-    if (t === 'plant_mix') {
-      F.push(['PG Grade', material?.pm_binder_pg || '\u2014'])
-      if (material?.pm_nmas) F.push(['NMAS', material.pm_nmas])
-    }
+  const out = [
+    { title: 'Project info:', values: [project?.name || '\u2014', material?.pi_name || '\u2014'] },
+    { title: 'Original Material:', values: [
+        original?.name || '\u2014',
+        identifyingSpec(original, type),
+        original?.sampling_date || material?.sampling_date || '\u2014',
+      ] },
+  ]
+  if (isReduction) {
+    out.push({ title: 'Reduced Material:', values: [material.name || '\u2014', reducedSpec(material, type)] })
   }
-
-  if (material?.sampling_date) F.push(['Sampled', material.sampling_date])
-  if (material?.pi_name)       F.push(['PI', material.pi_name])
-  return F.map(([label, value]) => ({ label, value }))
+  return out
 }
