@@ -93,6 +93,18 @@ function QRLabel({ item, size }) {
         </div>
       </div>
 
+      {/* Barcode digits. A label with no readable id can only be told apart by
+          scanning it, which defeats the point of printing one. */}
+      {item.meta?.barcode && (
+        <div style={{
+          fontSize: is2x2 ? 9 : 16, fontWeight: 700, fontFamily: 'monospace',
+          letterSpacing: '0.05em', color: '#000', textAlign: 'center',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%',
+        }}>
+          {item.meta.barcode}
+        </div>
+      )}
+
       {/* SCAN ME */}
       <div style={{
         fontSize: is2x2 ? 8 : 14, fontWeight: 800,
@@ -130,8 +142,10 @@ function printLabels(items, size) {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(getScanUrl(item.id, item.type, item.name, item.meta || {}))}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
     const logoSvg = PRINT_LOGO_SVG(logoInQr)
     const name = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const bc = (item.meta?.barcode || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     return `<div class="label">
   <div class="qr-wrap"><img class="qr-img" src="${qrUrl}" alt="QR"/><div class="qr-logo">${logoSvg}</div></div>
+  ${bc ? `<div class="bc">${bc}</div>` : ''}
   <div class="scan-me">&#9664; SCAN ME &#9654;</div>
   <div class="eq-name">${name}</div>
 </div>`
@@ -155,6 +169,7 @@ function printLabels(items, size) {
   .qr-img  { display: block; width: ${qrPx}px; height: ${qrPx}px; }
   .qr-logo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
   .qr-logo > svg, .qr-logo > * { background: #fff; border-radius: 4px; padding: ${is2x2 ? 2 : 4}px; display: block; }
+  .bc { font-size: ${is2x2 ? 9 : 16}px; font-weight: 700; font-family: monospace; letter-spacing: 0.05em; color: #000; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
   .scan-me { font-size: ${is2x2 ? 8 : 14}px; font-weight: 800; color: #333; letter-spacing: 0.18em; text-transform: uppercase; text-align: center; }
   .eq-name { font-size: ${is2x2 ? 8 : 13}px; font-weight: 700; color: #111; text-align: center; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 </style></head><body>
@@ -202,7 +217,7 @@ function EquipmentBarcodeTab({ equipment, loading, canCreate, orgId }) {
 
   // Unified item for QR generation
   const activeItem = labelType === 'equipment'
-    ? (selected ? { id: selected.id, name: selected.equipment_name + (selected.nickname ? ` (${selected.nickname})` : ''), type: 'equipment' } : null)
+    ? (selected ? { id: selected.id, name: selected.equipment_name + (selected.nickname ? ` (${selected.nickname})` : ''), type: 'equipment', meta: { barcode: selected.ref_id || '' } } : null)
     : labelType === 'other'
       ? (otherReady ? { id: null, name: otherName.trim(), type: 'other', meta: { source: otherSource.trim(), mtype: otherMType.trim(), owner: otherOwner.trim(), storage: otherStorage.trim(), qty: otherQty.trim(), storedDate: otherDate.trim(), orgId } } : null)
       : (customName.trim() ? { id: null, name: customName.trim(), type: labelType } : null)
@@ -425,7 +440,7 @@ function RecordsTab({ equipment, loading }) {
   function exportSelected() {
     const list = equipment.filter(e => selected.has(e.id))
     if (!list.length) return
-    printLabels(list.map(e => ({ id: e.id, name: e.equipment_name + (e.nickname ? ` (${e.nickname})` : ''), type: 'equipment' })), exportSize)
+    printLabels(list.map(e => ({ id: e.id, name: e.equipment_name + (e.nickname ? ` (${e.nickname})` : ''), type: 'equipment', meta: { barcode: e.ref_id || '' } })), exportSize)
   }
 
   const selectedCount = [...selected].filter(id => equipment.some(e => e.id === id)).length
@@ -687,7 +702,7 @@ export default function BarcodeManager() {
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
-    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('category').order('equipment_name')
+    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, ref_id').eq('is_active', true).order('category').order('equipment_name')
     if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setEquipment(data || [])
