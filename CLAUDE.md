@@ -112,6 +112,16 @@ npm run ios            # build + sync + open iOS simulator
 
 ### Required SQL (run once in Supabase SQL Editor if not applied)
 ```sql
+-- Material Reduction (Sept 2026) — without these, saving a fraction fails with
+-- PGRST204 "Could not find the 'parent_material_id' column ... in the schema
+-- cache". Separate databases: run in BOTH the ICT-Lab and LabHive projects.
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS parent_material_id UUID;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_method   TEXT;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_value    TEXT;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_date     DATE;
+-- FK is ON DELETE SET NULL (see rls_phase1.sql) — never CASCADE.
+NOTIFY pgrst, 'reload schema';
+
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules JSONB DEFAULT NULL;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS module_images  JSONB DEFAULT NULL;
 ALTER TABLE users      ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase';
@@ -914,6 +924,72 @@ npx cap open android   # opens Android Studio
 Add a `manifest.json` and service worker to make the web app installable on iOS home screen without App Store review. Simpler but limited native API access and not listed in App Store.
 
 ---
+
+## Material Reduction (Sept 2026) — fractions live under their parent
+
+A material can be **reduced** into new materials — today that means
+fractionation, splitting an aggregate across sieves. Each selected size becomes
+its **own** `project_materials` row, because that is what fractionation
+physically produces: a separate container per fraction, each needing its own
+barcode, quantity, storage location and QR label.
+
+**Entry point:** `⚗️ Material Reduction` button beside `+ Non-Project Material`
+on the Projects & Materials screen → `src/components/MaterialReductionModal.jsx`
+(project → material → type → method → sieve sizes, coarse to Pan).
+
+**Schema** (`project_materials`, applied via `rls_phase1.sql`):
+
+| Column | Meaning |
+|---|---|
+| `parent_material_id` UUID | the material this was derived from; FK `ON DELETE SET NULL` |
+| `reduction_method` TEXT | `fractionation` today |
+| `reduction_value` TEXT | the sieve size this fraction is |
+| `reduction_date` DATE | date of fractionation |
+
+`ON DELETE SET NULL`, never CASCADE — deleting a parent must not destroy
+fractions that physically exist on a shelf.
+
+**Fractions are NOT top-level cards.** `ProjectMaterials.jsx` lists
+`materials.filter(m => !m.parent_material_id)`; fractionating into 13 sieves
+otherwise added 13 sibling rows. They are reached through the parent's
+**Material Reduction** tab. Consequences that must stay in sync:
+- the parent card shows a `⚗️ N reductions` badge, and the header reads
+  `N materials · N reductions` — the count is never silently hidden
+- `ProjectMaterial.jsx`'s project-card `matCount` also excludes fractions, and
+  its materials `select()` must include `parent_material_id` or that filter is
+  a silent no-op
+- a fraction reduced further gets a nested `Reduced into` sub-tab; without it a
+  grandchild is unreachable (hidden from the list, linked from nothing)
+
+**Reduction row sub-tabs:** `Info` · `Material` · `Reduction material label`.
+- `Material` = `ReductionMaterialForm`, NOT the main-material `MaterialModal`.
+  A fraction must not be asked Source Type / Name / Location again — those are
+  the parent's, and asking twice invites the two records to disagree.
+  It asks: reduction type, (aggregate) parent gradation shown read-only +
+  sieve size + date of fractionation, additional info, quantity, container
+  colour + count, location, photos.
+- `Info` is `MaterialInfoView` with `editHint`, which points at the Material
+  tab — shown only where an editable tab exists (`!readOnly`).
+
+**`MaterialInfoView` is shared** between the Material Info tab and the reduction
+rows. Do not duplicate that markup — a second copy drifts the moment a question
+is added to the material form.
+
+**`ReductionRow` is declared at module scope.** Defined inside
+`MaterialReductionTab` it would be a new component type on every render, so
+React remounts it and the expanded row + selected sub-tab reset on each parent
+re-render.
+
+**Not copied to a fraction** (`NOT_COPIED` in the modal): `barcode_id` (a unique
+index forbids duplicates and each fraction needs its own label), `locations` /
+storage fields (not stored yet), `photos` (they show the parent's container),
+and `organization_id` / `solo_owner_id` — those are **stamped from the session**,
+because a parent predating those columns has them NULL and the RLS `WITH CHECK`
+would reject the whole batch.
+
+**Materials are fetched by `project_id` alone** in the reduction modal, the same
+access path the Materials tab uses. Filtering by `organization_id` there instead
+silently hid every pre-column row, reading a full project as empty.
 
 ## Module visibility — ONE resolver, four layers (Sept 2026)
 
