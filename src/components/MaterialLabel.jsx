@@ -20,11 +20,13 @@ function IctLabLogo({ size }) {
 // outerHTML into a new window, where a stylesheet would not follow it.
 //
 // Colours are literal, not theme tokens. This is ink on paper.
-// qrSize 132: three headings and three rules cost more vertical room than a
-// flat list did. At 140 a reduction label has no spare line for a value that
-// wraps, and a plant-mix reduction overflowed the label outright. 132 still
-// prints at about 1.37in, comfortably scannable.
-export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 132 }) {
+// qrSize 120. Three headings and three rules already cost more vertical room
+// than a flat list, and restoring NMAS makes a plant-mix reduction four lines
+// under Original Material — the tallest label there is. At 120px that label
+// keeps one spare line for a value that wraps (a long project name is the
+// likely one, since project names are not length-capped). 120px prints at
+// 1.25in; at 300dpi that is still ~5 dots per QR module, comfortably scannable.
+export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120 }) {
   const sections = labelSections(material, project, parent)
   const isReduction = !!material?.parent_material_id
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(scanUrl || '')}&margin=4&color=000000&bgcolor=ffffff&ecc=H`

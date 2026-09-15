@@ -72,14 +72,23 @@ export const FIELD_LIMITS = { name: 30, pi_name: 30 }
 
 const joinList = v => (Array.isArray(v) ? v.filter(Boolean).join(' \u00b7 ') : v) || '\u2014'
 
-// What identifies a material of this type at a glance — the line that sits
-// between the label and the date. Aggregate is graded by sieve; binder and
-// plant mix by PG grade; the rest have nothing better than their type.
-function identifyingSpec(m, type) {
-  if (type === 'aggregate')      return joinList(m?.agg_sieve_sizes)
-  if (type === 'asphalt_binder') return m?.ab_binder_pg || '\u2014'
-  if (type === 'plant_mix')      return m?.pm_binder_pg || '\u2014'
-  return typeLabel(type) || '\u2014'
+// The Original Material block: label, then whatever identifies a material of
+// this type at a glance, then the date it was sampled. Aggregate is graded by
+// sieve; binder and plant mix by PG grade; the rest have nothing better than
+// their type. Plant mix also carries NMAS, which is why it is the one type
+// that can run to four lines.
+function originalValues(m, type, fallbackDate) {
+  const out = [m?.name || '\u2014']
+  if (type === 'aggregate')           out.push(joinList(m?.agg_sieve_sizes))
+  else if (type === 'asphalt_binder') out.push(m?.ab_binder_pg || '\u2014')
+  else if (type === 'plant_mix') {
+    out.push(m?.pm_binder_pg || '\u2014')
+    // Only when it is recorded — a plant mix without NMAS stays three lines.
+    if (m?.pm_nmas) out.push(m.pm_nmas)
+  }
+  else out.push(typeLabel(type) || '\u2014')
+  out.push(m?.sampling_date || fallbackDate || '\u2014')
+  return out
 }
 
 // The equivalent line for the reduced material: what the reduction produced.
@@ -108,11 +117,7 @@ export function labelSections(material, project, parent) {
 
   const out = [
     { title: 'Project info:', values: [project?.name || '\u2014', material?.pi_name || '\u2014'] },
-    { title: 'Original Material:', values: [
-        original?.name || '\u2014',
-        identifyingSpec(original, type),
-        original?.sampling_date || material?.sampling_date || '\u2014',
-      ] },
+    { title: 'Original Material:', values: originalValues(original, type, material?.sampling_date) },
   ]
   if (isReduction) {
     out.push({ title: 'Reduced Material:', values: [material.name || '\u2014', reducedSpec(material, type)] })
