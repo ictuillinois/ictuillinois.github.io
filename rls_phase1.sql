@@ -619,6 +619,7 @@ END $$;
 ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS parent_material_id UUID;
 ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_method   TEXT;
 ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_value    TEXT;
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS reduction_date     DATE;
 CREATE INDEX IF NOT EXISTS project_materials_parent_idx ON project_materials(parent_material_id);
 
 -- ON DELETE SET NULL, not CASCADE: deleting a parent must not silently destroy

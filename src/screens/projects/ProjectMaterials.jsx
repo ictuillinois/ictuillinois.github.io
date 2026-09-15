@@ -1,7 +1,7 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
-import { SIEVE_SIZES } from '../../lib/materialFields'
+import { SIEVE_SIZES, FRACTION_SIZES } from '../../lib/materialFields'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
@@ -959,12 +959,18 @@ const TEAM_TYPES = ['aggregate', 'asphalt_binder', 'plant_mix', 'cores', 'other'
 // The Material Info readout, extracted so the reduction tab can show the very
 // same fields for a parent or a derived material. Duplicating this markup
 // instead would let the two copies drift the moment a question is added.
-function MaterialInfoView({ m }) {
+function MaterialInfoView({ m, editHint = false }) {
   const isSoloMat = !TEAM_TYPES.includes(m.material_type)
   const soloSub = parseSoloSubfields(m.other_info)
   const soloSubEntries = Object.entries(soloSub).filter(([, v]) => v)
   const subDefs = SOLO_SUBFIELDS[m.material_type] || []
   return (
+    <>
+    {editHint && (
+      <div style={{ margin: '14px 16px 0', padding: '8px 12px', borderRadius: 8, background: 'var(--accent-light)', color: 'var(--accent)', fontSize: 12, fontWeight: 500 }}>
+        This is a summary. To change any of these details, open the <strong>Material</strong> tab.
+      </div>
+    )}
                     <div style={{ padding: '14px 16px', display: 'flex', gap: 20 }}>
                       <div style={{ flex: 1, maxWidth: 900, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoFlow: 'dense', gap: '10px 20px', alignContent: 'start' }}>
                         {m.pi_name && <div><div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Project PI</div><div style={{ fontWeight: 500 }}>{m.pi_name}</div></div>}
@@ -1020,6 +1026,185 @@ function MaterialInfoView({ m }) {
                         </div>
                       )}
                     </div>
+    </>
+  )
+}
+
+// The Material tab for a REDUCTION.
+//
+// A fraction is not filled in like a new material: everything about where it
+// came from was already answered on the parent, so this form shows the
+// inherited general answers and then asks only what is specific to the
+// fraction. Source Type / Name / Location are deliberately absent — they are
+// the parent's, and asking twice invites the two records to disagree.
+function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
+  const { toast } = useAppStore()
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState(() => ({
+    name:            material.name || '',
+    material_type:   material.material_type || '',
+    pi_name:         material.pi_name || '',
+    agg_sieve_sizes: Array.isArray(material.agg_sieve_sizes) ? material.agg_sieve_sizes : [],
+    other_info:      material.other_info || '',
+    qty_total:       material.qty_total || '',
+    container_type:  material.container_type || '',
+    container_color: material.container_color || '',
+    container_count: material.container_count || '',
+    container_other: material.container_other || '',
+    locations:       material.locations || [],
+    photos:          material.photos || [],
+    reduction_value: material.reduction_value || '',
+    reduction_date:  material.reduction_date || '',
+  }))
+
+  const isAgg = form.material_type === 'aggregate'
+  const parentSieves = Array.isArray(parent?.agg_sieve_sizes) ? parent.agg_sieve_sizes : []
+
+  async function save() {
+    if (!form.name.trim()) { toast('Material Name / Label is required.'); return }
+    setSaving(true)
+    const { error } = await sb.from('project_materials').update({
+      name: form.name.trim(),
+      material_type: form.material_type || null,
+      pi_name: form.pi_name.trim() || null,
+      // The fraction IS one size, so its sieve list mirrors the size chosen
+      // here rather than drifting into a second source of truth.
+      agg_sieve_sizes: isAgg && form.reduction_value ? [form.reduction_value] : form.agg_sieve_sizes,
+      other_info: form.other_info || null,
+      qty_total: form.qty_total ? parseFloat(form.qty_total) : null,
+      container_type: form.container_type || null,
+      container_color: form.container_color || null,
+      container_count: form.container_count ? parseInt(form.container_count) : null,
+      container_other: form.container_other || null,
+      locations: form.locations,
+      photos: form.photos,
+      reduction_value: form.reduction_value || null,
+      reduction_date: form.reduction_date || null,
+    }).eq('id', material.id)
+    setSaving(false)
+    if (error) { toast('Could not save: ' + (error.message || error.code), true); return }
+    toast('Reduction material saved.')
+    onSaved?.()
+  }
+
+  const capStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }
+
+  return (
+    <div style={{ padding: 16 }}>
+      <Section title="1 · General">
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+          Carried over from <strong>{parent?.name || 'the parent material'}</strong>. Change it here if this fraction differs.
+        </div>
+        <div className="field">
+          <label>Material Name / Label <span style={{ color: '#c84b2f' }}>*</span></label>
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Project PI</label>
+          <input value={form.pi_name} onChange={e => setForm(f => ({ ...f, pi_name: e.target.value }))} />
+        </div>
+      </Section>
+
+      <Section title="2 · Reduction Data">
+        <div className="field">
+          <label>Reduction Type</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {[['aggregate','Aggregate'],['asphalt_binder','Asphalt Binder'],['plant_mix','Plant Mix'],['cores','Cores'],['other','Other']].map(([k,label]) => {
+              const on = form.material_type === k
+              return (
+                <button key={k} type="button" onClick={() => setForm(f => ({ ...f, material_type: k }))}
+                  style={{ padding: '8px 16px', borderRadius: 99, border: `2px solid ${on ? 'var(--accent3)' : 'var(--border)'}`, background: on ? 'var(--accent3-light)' : 'var(--surface)', color: on ? 'var(--accent3)' : 'var(--text2)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {isAgg && (
+          <>
+            <div className="field">
+              <label>Parent Gradation</label>
+              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
+                <div style={{ ...capStyle, marginBottom: 6 }}>{parent?.name || 'Parent material'}</div>
+                {parentSieves.length ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {parentSieves.map(sz => (
+                      <span key={sz} style={{ background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 500 }}>{sz}</span>
+                    ))}
+                  </div>
+                ) : <div style={{ fontSize: 13, color: 'var(--text3)' }}>No sieve sizes recorded on the parent.</div>}
+                {parent?.agg_raw_or_rap && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8 }}>Condition: <strong>{parent.agg_raw_or_rap}</strong></div>
+                )}
+              </div>
+            </div>
+            <div className="field">
+              <label>Sieve Size</label>
+              <select value={form.reduction_value} onChange={e => setForm(f => ({ ...f, reduction_value: e.target.value }))} style={{ maxWidth: 240 }}>
+                <option value="">— Select size —</option>
+                {FRACTION_SIZES.map(sz => <option key={sz} value={sz}>{sz}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Date of Fractionation</label>
+              <input type="date" style={{ maxWidth: 240 }} value={form.reduction_date}
+                onChange={e => setForm(f => ({ ...f, reduction_date: e.target.value }))} />
+            </div>
+          </>
+        )}
+
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Additional Info</label>
+          <textarea rows={3} value={form.other_info}
+            onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))}
+            placeholder="Anything else about this fraction…" />
+        </div>
+      </Section>
+
+      <Section title="3 · Reduction Material Quantity">
+        <div className="field">
+          <label>Quantity</label>
+          <input type="number" step="any" min="0" value={form.qty_total}
+            onChange={e => setForm(f => ({ ...f, qty_total: e.target.value }))}
+            placeholder="e.g. 25" style={{ maxWidth: 240 }} />
+        </div>
+        <div className="field">
+          <label>Container Type</label>
+          <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
+            <option value="">— Select container type —</option>
+            {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </div>
+        {form.container_type === 'Other' && (
+          <div className="field">
+            <label>Container description</label>
+            <input value={form.container_other} onChange={e => setForm(f => ({ ...f, container_other: e.target.value }))} />
+          </div>
+        )}
+        <div className="grid-2" style={{ marginBottom: 0 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Container Color</label>
+            <input value={form.container_color} onChange={e => setForm(f => ({ ...f, container_color: e.target.value }))} placeholder="e.g. Red, Blue, Yellow" />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Number of Containers</label>
+            <input type="number" min="1" value={form.container_count} onChange={e => setForm(f => ({ ...f, container_count: e.target.value }))} placeholder="e.g. 3" />
+          </div>
+        </div>
+      </Section>
+
+      <LocationForm form={form} setForm={setForm} projectId={project?.id} projectName={project?.name}
+        materialId={material.id} materialType={form.material_type} isSolo={isSolo} />
+
+      <PhotosForm form={form} setForm={setForm} materialId={material.id} />
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save reduction material'}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -1029,7 +1214,7 @@ function MaterialInfoView({ m }) {
 // component's body is a brand-new type on every render, so React unmounts and
 // remounts it — the expanded state and the selected sub-tab would reset each
 // time the parent re-rendered.
-function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, onChanged, onOpen, depth = 0 }) {
+function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, isSolo, onChanged, onOpen, depth = 0 }) {
   const { toast } = useAppStore()
   const [open, setOpen] = useState(false)
   const [sub, setSub] = useState('info')
@@ -1038,9 +1223,9 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, on
   const kids = allMaterials.filter(x => x.parent_material_id === item.id)
 
   const TABS = [
-    { key: 'info',    label: 'Info' },
-    { key: 'storage', label: 'Storage & label' },
-    ...(readOnly ? [] : [{ key: 'edit', label: 'Edit' }]),
+    { key: 'info',     label: 'Info' },
+    ...(readOnly ? [] : [{ key: 'material', label: 'Material' }]),
+    { key: 'storage',  label: 'Reduction material label' },
     // Only when this fraction has been reduced further. Without it a
     // grandchild would be unreachable: it is hidden from the material list
     // (it has a parent) and nothing else links to it.
@@ -1101,21 +1286,20 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, on
               </button>
             ))}
           </div>
-          {sub === 'info'    && <MaterialInfoView m={item} />}
+          {sub === 'info'    && <MaterialInfoView m={item} editHint={!readOnly} />}
           {sub === 'storage' && <MaterialQRTab material={item} project={project} />}
-          {sub === 'edit' && !readOnly && (
-            <MaterialModal
-              inline
-              projectId={project?.id}
-              projectName={project?.name}
+          {sub === 'material' && !readOnly && (
+            <ReductionMaterialForm
               material={item}
-              onClose={() => setSub('info')}
+              parent={allMaterials.find(x => x.id === item.parent_material_id) || null}
+              project={project}
+              isSolo={isSolo}
               onSaved={() => { onChanged?.(); setSub('info') }}
             />
           )}
           {sub === 'reduction' && (
             <MaterialReductionTab material={item} allMaterials={allMaterials} project={project}
-              readOnly={readOnly} onChanged={onChanged} depth={depth + 1} />
+              readOnly={readOnly} isSolo={isSolo} onChanged={onChanged} depth={depth + 1} />
           )}
         </div>
       )}
@@ -1123,7 +1307,7 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, on
   )
 }
 
-function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnly, onChanged, depth = 0 }) {
+function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnly, isSolo, onChanged, depth = 0 }) {
   const parent = material.parent_material_id
     ? allMaterials.find(x => x.id === material.parent_material_id)
     : null
@@ -1134,7 +1318,7 @@ function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnl
     + (x.reduction_value ? ` \u00b7 ${x.reduction_value}` : '')
 
   const capStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }
-  const rowProps = { allMaterials, project, readOnly, onChanged, depth }
+  const rowProps = { allMaterials, project, readOnly, isSolo, onChanged, depth }
 
   if (!parent && !children.length) return (
     <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
@@ -1300,7 +1484,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   </div>
 
                   {/* Tab 1: Material Info */}
-                  {matTab === 'info' && <MaterialInfoView m={m} />}
+                  {matTab === 'info' && <MaterialInfoView m={m} editHint={!readOnly} />}
 
                   {/* Tab 2: Edit form inline */}
                   {matTab === 'edit' && !readOnly && (
@@ -1319,7 +1503,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   {/* Tab 4: reduction — shows BOTH directions: what this
                       material was derived from, and what has been derived
                       from it. */}
-                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} project={project} readOnly={readOnly} onChanged={load} />}
+                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} project={project} readOnly={readOnly} isSolo={isSoloUser} onChanged={load} />}
                 </div>
               )
               })()}
