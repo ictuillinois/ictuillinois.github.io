@@ -44,6 +44,7 @@ export const MATERIAL_COLUMNS = [
   { label: 'Source Type',          width: 16, get: m => m.source_type || '' },
   { label: 'Source Location',      width: 24, get: m => m.source_location || '' },
 
+  { label: 'Additional Info',      width: 34, get: m => m.additional_info || '' },
   { label: 'Container Type',       width: 22, get: m => m.container_type || '' },
   { label: 'Container Other',      width: 18, get: m => m.container_other || '' },
   { label: 'Container Quantity',   width: 18, get: m => (m.container_count ?? '') },

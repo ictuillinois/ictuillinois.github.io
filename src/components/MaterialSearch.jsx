@@ -77,7 +77,7 @@ function haystack(m) {
   return [
     m.name, m.barcode_id, m.pi_name, TYPE_LABEL[m.material_type] || m.material_type,
     m.source_name, m.source_type, m.source_location,
-    m.container_type, m.container_other, m.container_color, m.qty_total, m.other_info,
+    m.container_type, m.container_other, m.container_color, m.qty_total, m.other_info, m.additional_info,
     m.agg_raw_or_rap, m.idot_gradation_cat, m.idot_gradation_grade,
     Array.isArray(m.agg_sieve_sizes) ? m.agg_sieve_sizes.join(' ') : '',
     m.ab_binder_pg, m.ab_polymer_info, m.ab_mix_design, m.ab_other_additives,
