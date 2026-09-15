@@ -46,9 +46,8 @@ export const MATERIAL_COLUMNS = [
 
   { label: 'Container Type',       width: 22, get: m => m.container_type || '' },
   { label: 'Container Other',      width: 18, get: m => m.container_other || '' },
-  { label: 'Container Count',      width: 15, get: m => (m.container_count ?? '') },
+  { label: 'Container Quantity',   width: 18, get: m => (m.container_count ?? '') },
   { label: 'Container Color',      width: 15, get: m => m.container_color || '' },
-  { label: 'Total Quantity',       width: 15, get: m => m.qty_total || '' },
 
   // Aggregate
   { label: 'Condition (Raw/RAP)',  width: 18, get: m => m.agg_raw_or_rap || '' },

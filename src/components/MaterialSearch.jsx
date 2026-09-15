@@ -289,7 +289,7 @@ export default function MaterialSearch({ session, isSolo, viewingWorkspaceOwnerI
             <thead>
               <tr>
                 <th>Material</th><th>Type</th><th>Project</th><th>Source</th>
-                <th>Quantity</th><th>Container</th><th>Storage location</th><th>Barcode</th>
+                <th>Container</th><th>Container Qty</th><th>Storage location</th><th>Barcode</th>
               </tr>
             </thead>
             <tbody>
@@ -299,8 +299,8 @@ export default function MaterialSearch({ session, isSolo, viewingWorkspaceOwnerI
                   <td>{TYPE_LABEL[m.material_type] || m.material_type || '—'}</td>
                   <td>{m.projects?.name || <span style={{ color: 'var(--text3)' }}>No project</span>}</td>
                   <td>{m.source_name || '—'}{m.source_location ? <div style={{ fontSize: 11, color: 'var(--text3)' }}>{m.source_location}</div> : null}</td>
-                  <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{m.qty_total || '—'}</td>
-                  <td>{m.container_type || '—'}{m.container_count ? ` · ${m.container_count}` : ''}</td>
+                  <td>{m.container_type || '—'}</td>
+                  <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{m.container_count ?? '—'}</td>
                   <td style={{ fontSize: 12 }}>{locList(m).join(' | ') || '—'}</td>
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{m.barcode_id || '—'}</td>
                 </tr>

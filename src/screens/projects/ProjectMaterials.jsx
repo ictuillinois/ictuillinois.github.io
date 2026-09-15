@@ -1026,7 +1026,6 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
     pi_name:         material.pi_name || '',
     agg_sieve_sizes: Array.isArray(material.agg_sieve_sizes) ? material.agg_sieve_sizes : [],
     other_info:      material.other_info || '',
-    qty_total:       material.qty_total || '',
     container_type:  material.container_type || '',
     container_color: material.container_color || '',
     container_count: material.container_count || '',
@@ -1052,7 +1051,6 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
       // here rather than drifting into a second source of truth.
       agg_sieve_sizes: isAgg && form.reduction_value ? [form.reduction_value] : form.agg_sieve_sizes,
       other_info: form.other_info || null,
-      qty_total: form.qty_total ? parseFloat(form.qty_total) : null,
       container_type: form.container_type || null,
       container_color: form.container_color || null,
       container_count: form.container_count ? parseInt(form.container_count) : null,
@@ -1183,13 +1181,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
         </div>
       </Section>
 
-      <Section title="3 · Reduction Material Quantity">
-        <div className="field">
-          <label>Quantity</label>
-          <input type="number" step="any" min="0" value={form.qty_total}
-            onChange={e => setForm(f => ({ ...f, qty_total: e.target.value }))}
-            placeholder="e.g. 25" style={{ maxWidth: 240 }} />
-        </div>
+      <Section title="3 · Reduction Material Containers">
         {form.material_type !== 'asphalt_binder' && (
           <>
             <div className="field">
