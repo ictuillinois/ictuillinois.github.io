@@ -33,17 +33,22 @@ const TYPE_LABEL = {
   plant_mix: 'Plant Mix', cores: 'Cores', other: 'Other',
 }
 
-export default function MaterialReductionModal({ session, isSolo, viewingWorkspaceOwnerId, onClose, onCreated }) {
+// `parentMaterial` opens this with the parent already chosen — the "+ Add
+// Reduction" tab on a material. Same component rather than a second one: the
+// create path carries the NOT_COPIED rules and the session scope-stamping, and
+// a copy of that is a copy that drifts.
+export default function MaterialReductionModal({ session, isSolo, viewingWorkspaceOwnerId, onClose, onCreated, inline = false, parentMaterial = null, parentProject = null }) {
   const { toast } = useAppStore()
-  const [projects, setProjects] = useState([])
-  const [materials, setMaterials] = useState([])
-  const [loading, setLoading] = useState(true)
+  const fixed = !!parentMaterial
+  const [projects, setProjects] = useState(parentProject ? [parentProject] : [])
+  const [materials, setMaterials] = useState(parentMaterial ? [parentMaterial] : [])
+  const [loading, setLoading] = useState(!fixed)
   const [matLoading, setMatLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [projectId, setProjectId] = useState('')
-  const [materialId, setMaterialId] = useState('')
-  const [type, setType] = useState('')
+  const [projectId, setProjectId] = useState(parentProject?.id || '')
+  const [materialId, setMaterialId] = useState(parentMaterial?.id || '')
+  const [type, setType] = useState(parentMaterial?.material_type || '')
   const [method, setMethod] = useState('')
   const [sizes, setSizes] = useState([])
   const [contType, setContType] = useState('')
@@ -51,7 +56,7 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
   const [note, setNote] = useState('')
   const [err, setErr] = useState('')
 
-  useEffect(() => { loadProjects() }, [])
+  useEffect(() => { if (!fixed) loadProjects() }, [fixed])
 
   async function loadProjects() {
     // Scope the PROJECT list the same way the Projects screen does. Materials
@@ -97,6 +102,14 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
   }, [parent?.id])
 
   const methods = REDUCTION_METHODS[type] || []
+
+  // Every type currently offers exactly one method, so making the user pick it
+  // from a one-option dropdown is a step that teaches them nothing.
+  useEffect(() => {
+    const list = REDUCTION_METHODS[type] || []
+    if (list.length === 1) setMethod(list[0].key)
+  }, [type])
+
   const activeMethod = methods.find(x => x.key === method) || null
 
   function toggleSize(s) {
@@ -184,24 +197,18 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
 
   const box = { background: 'var(--surface2)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 14 }
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto' }}
-      onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 620, width: '100%', marginTop: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>⚗️ Material Reduction</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 18, lineHeight: 1.6 }}>
-          Split an existing material into new ones. Each selected size becomes its own material in the same
-          project, with the parent's details copied over — you can edit any of them afterwards.
-        </div>
+  // A plain element, NOT a component defined in the body. `const Shell = ({children}) => …`
+  // is a new component type on every render, so React would unmount and
+  // remount everything inside it — the count and note inputs would lose focus
+  // after each keystroke.
+  const content = (
+    <>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : (
           <>
+            {!fixed && (
             <div style={box}>
               <div className="field">
                 <label>Project <span style={{ color: '#c84b2f' }}>*</span></label>
@@ -231,6 +238,7 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
                 </div>
               )}
             </div>
+            )}
 
             {parent && (
               <div style={box}>
@@ -341,7 +349,7 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
             )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={onClose}>Cancel</button>
+              {!inline && <button className="btn" onClick={onClose}>Cancel</button>}
               <button className="btn btn-primary" onClick={create}
                 disabled={saving || !kind || (kind === 'sizes' && !sizes.length)}>
                 {saving ? 'Creating…'
@@ -352,6 +360,31 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
             </div>
           </>
         )}
+    </>
+  )
+
+  return inline ? (
+    <div style={{ padding: 16 }}>
+      <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 14, lineHeight: 1.6 }}>
+        Reduce <strong>{parentMaterial?.name || 'this material'}</strong>. The new material keeps this one's
+        details — you can edit them on its own Material tab afterwards.
+      </div>
+      {content}
+    </div>
+  ) : (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto' }}
+      onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 620, width: '100%', marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>⚗️ Material Reduction</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text3)', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 18, lineHeight: 1.6 }}>
+          Split an existing material into new ones. Each selected size becomes its own material in the same
+          project, with the parent's details copied over — you can edit any of them afterwards.
+        </div>
+        {content}
       </div>
     </div>
   )

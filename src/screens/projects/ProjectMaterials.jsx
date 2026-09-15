@@ -5,6 +5,7 @@ import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/material
 import { generateBarcodeId, buildScanUrl, reductionLabelLines } from '../../lib/materialLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
+import MaterialReductionModal from '../../components/MaterialReductionModal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
 import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
@@ -1404,7 +1405,7 @@ function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnl
 }
 
 export default function ProjectMaterials({ project, readOnly = false }) {
-  const { toast, session } = useAppStore()
+  const { toast, session, viewingWorkspaceOwnerId } = useAppStore()
   const isSoloUser = session?.loginMode === 'solo'
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1514,12 +1515,18 @@ export default function ProjectMaterials({ project, readOnly = false }) {
 
               {/* Expanded — 3-tab panel */}
               {isOpen && (() => {
+                // The reduction tab appears only once there is a reduction to
+                // show — either this material came from one, or something came
+                // from it. Numbering is derived, so adding the first reduction
+                // shifts "+ Add Reduction" from 4 to 5 on its own.
+                const hasReduction = !!m.parent_material_id || materials.some(x => x.parent_material_id === m.id)
                 const MAT_TABS = [
-                  { key: 'info',    label: '1 · Material Info' },
-                  ...(readOnly ? [] : [{ key: 'edit', label: '2 · Material' }]),
-                  { key: 'storage', label: readOnly ? '2 · Material Storage' : '3 · Material Storage' },
-                  { key: 'reduction', label: readOnly ? '3 · Material Reduction' : '4 · Material Reduction' },
-                ]
+                  { key: 'info',    label: 'Material Info' },
+                  ...(readOnly ? [] : [{ key: 'edit', label: 'Material' }]),
+                  { key: 'storage', label: 'Material Storage' },
+                  ...(hasReduction ? [{ key: 'reduction', label: 'Material Reduction' }] : []),
+                  ...(readOnly ? [] : [{ key: 'addreduction', label: '+ Add Reduction' }]),
+                ].map((t, i) => ({ ...t, label: `${i + 1} · ${t.label}` }))
                 return (
                 <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
                   {/* Tab bar */}
@@ -1553,6 +1560,22 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                       material was derived from, and what has been derived
                       from it. */}
                   {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} project={project} readOnly={readOnly} isSolo={isSoloUser} onChanged={load} />}
+                  {/* Tab 5: create a reduction from this material. Same
+                      component as the top-of-page modal, with the parent fixed
+                      — a second implementation of the create path would drift
+                      from the NOT_COPIED rules and the scope stamping. */}
+                  {matTab === 'addreduction' && !readOnly && (
+                    <MaterialReductionModal
+                      inline
+                      parentMaterial={m}
+                      parentProject={project}
+                      session={session}
+                      isSolo={isSoloUser}
+                      viewingWorkspaceOwnerId={viewingWorkspaceOwnerId}
+                      onClose={() => setMatTab('info')}
+                      onCreated={() => { load(); setMatTab('reduction') }}
+                    />
+                  )}
                 </div>
               )
               })()}
