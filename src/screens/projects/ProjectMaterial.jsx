@@ -2168,7 +2168,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
 
   async function loadAllMaterials() {
-    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, projects(id, name, project_id, lab_user_ids)').order('created_at', { ascending: false })
+    let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, parent_material_id, projects(id, name, project_id, lab_user_ids)').order('created_at', { ascending: false })
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     setAllMaterials(data || [])
@@ -2465,7 +2465,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
           {projects.map(p => {
             const isActive = activeProjectId === p.id
-            const matCount = allMaterials.filter(m => m.project_id === p.id).length
+            // Top-level only, so this agrees with the Materials tab. Fractions
+            // are counted there as reductions of the material they came from.
+            const matCount = allMaterials.filter(m => m.project_id === p.id && !m.parent_material_id).length
             return (
               <div key={p.id} className="manage-card"
                 onClick={() => { if (isActive) { setActiveProjectId(null); setActiveProject(null) } else { setActiveProjectId(p.id); setSubTab('info') } }}

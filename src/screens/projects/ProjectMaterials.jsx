@@ -1023,9 +1023,107 @@ function MaterialInfoView({ m }) {
   )
 }
 
-function MaterialReductionTab({ material, allMaterials, onOpen }) {
-  const [open, setOpen] = useState(null)
+// One row in the reduction tab.
+//
+// Declared at module scope on purpose. A component defined inside another
+// component's body is a brand-new type on every render, so React unmounts and
+// remounts it — the expanded state and the selected sub-tab would reset each
+// time the parent re-rendered.
+function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, onChanged, onOpen, depth = 0 }) {
+  const { toast } = useAppStore()
+  const [open, setOpen] = useState(false)
+  const [sub, setSub] = useState('info')
+  const [busy, setBusy] = useState(false)
 
+  const kids = allMaterials.filter(x => x.parent_material_id === item.id)
+
+  const TABS = [
+    { key: 'info',    label: 'Info' },
+    { key: 'storage', label: 'Storage & label' },
+    ...(readOnly ? [] : [{ key: 'edit', label: 'Edit' }]),
+    // Only when this fraction has been reduced further. Without it a
+    // grandchild would be unreachable: it is hidden from the material list
+    // (it has a parent) and nothing else links to it.
+    ...(kids.length && depth < 4 ? [{ key: 'reduction', label: `Reduced into (${kids.length})` }] : []),
+  ]
+
+  async function remove() {
+    if (kids.length) {
+      toast(`"${item.name}" has been reduced into ${kids.length} material${kids.length !== 1 ? 's' : ''}. Delete those first.`, true)
+      return
+    }
+    if (!confirm(`Delete "${item.name || 'this material'}"? This cannot be undone.`)) return
+    setBusy(true)
+    const { error } = await sb.from('project_materials').delete().eq('id', item.id)
+    setBusy(false)
+    if (error) { toast('Could not delete: ' + error.message, true); return }
+    toast('Material deleted.')
+    onChanged?.()
+  }
+
+  return (
+    <div style={{ borderRadius: 10, background: 'var(--surface)', border: `1px solid ${open ? 'var(--accent)' : 'var(--border)'}`, marginBottom: 8, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}
+        onClick={() => setOpen(!open)}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name || 'Material'}</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+            {caption}{item.barcode_id ? ` \u00b7 ${item.barcode_id}` : ''}
+          </div>
+        </div>
+        {onOpen && (
+          <button className="btn btn-sm" style={{ flexShrink: 0 }}
+            onClick={e => { e.stopPropagation(); onOpen(item.id) }}>Open</button>
+        )}
+        {!readOnly && (
+          <button className="btn btn-sm" title="Delete this material" disabled={busy}
+            onClick={e => { e.stopPropagation(); remove() }}
+            style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <IconTrash size={15} />
+          </button>
+        )}
+        <span style={{ fontSize: 12, color: 'var(--text3)', width: 14, textAlign: 'center', flexShrink: 0 }}>
+          {open ? '\u25be' : '\u25b8'}
+        </span>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
+          <div style={{ display: 'flex', gap: 6, padding: '10px 14px 0', flexWrap: 'wrap' }}>
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setSub(t.key)}
+                style={{ padding: '5px 12px', borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: `1px solid ${sub === t.key ? 'var(--accent)' : 'var(--border)'}`,
+                  background: sub === t.key ? 'var(--accent)' : 'var(--surface)',
+                  color: sub === t.key ? '#fff' : 'var(--text2)' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {sub === 'info'    && <MaterialInfoView m={item} />}
+          {sub === 'storage' && <MaterialQRTab material={item} project={project} />}
+          {sub === 'edit' && !readOnly && (
+            <MaterialModal
+              inline
+              projectId={project?.id}
+              projectName={project?.name}
+              material={item}
+              onClose={() => setSub('info')}
+              onSaved={() => { onChanged?.(); setSub('info') }}
+            />
+          )}
+          {sub === 'reduction' && (
+            <MaterialReductionTab material={item} allMaterials={allMaterials} project={project}
+              readOnly={readOnly} onChanged={onChanged} depth={depth + 1} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnly, onChanged, depth = 0 }) {
   const parent = material.parent_material_id
     ? allMaterials.find(x => x.id === material.parent_material_id)
     : null
@@ -1036,37 +1134,7 @@ function MaterialReductionTab({ material, allMaterials, onOpen }) {
     + (x.reduction_value ? ` \u00b7 ${x.reduction_value}` : '')
 
   const capStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }
-
-  // Each row expands in place to the full Material Info readout, so the
-  // answers inherited from the parent can be checked without leaving the tab.
-  // "Open" still jumps to the material itself, which is where they are edited.
-  function Row({ item, caption, icon }) {
-    const isOpen = open === item.id
-    return (
-      <div style={{ borderRadius: 10, background: 'var(--surface)', border: `1px solid ${isOpen ? 'var(--accent)' : 'var(--border)'}`, marginBottom: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}
-          onClick={() => setOpen(isOpen ? null : item.id)}>
-          <span style={{ fontSize: 18 }}>{icon}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name || 'Material'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-              {caption}{item.barcode_id ? ` \u00b7 ${item.barcode_id}` : ''}
-            </div>
-          </div>
-          <button className="btn btn-sm" onClick={e => { e.stopPropagation(); onOpen?.(item.id) }}
-            style={{ flexShrink: 0 }}>Open</button>
-          <span style={{ fontSize: 12, color: 'var(--text3)', width: 14, textAlign: 'center', flexShrink: 0 }}>
-            {isOpen ? '\u25be' : '\u25b8'}
-          </span>
-        </div>
-        {isOpen && (
-          <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
-            <MaterialInfoView m={item} />
-          </div>
-        )}
-      </div>
-    )
-  }
+  const rowProps = { allMaterials, project, readOnly, onChanged, depth }
 
   if (!parent && !children.length) return (
     <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
@@ -1082,14 +1150,20 @@ function MaterialReductionTab({ material, allMaterials, onOpen }) {
       {parent && (
         <div style={{ marginBottom: children.length ? 20 : 0 }}>
           <div style={capStyle}>Derived from</div>
-          <Row item={parent} icon="⚗️" caption={methodLabel(material)} />
+          {/* onOpen only here: the parent is a top-level card in the material
+              list, so jumping to it works. Fractions are not — they live in
+              this tab, which is why they have no Open button. */}
+          <ReductionRow {...rowProps} item={parent} icon="⚗️"
+            caption={methodLabel(material)} onOpen={onOpen} readOnly />
         </div>
       )}
 
       {children.length > 0 && (
         <div>
           <div style={capStyle}>Reduced into ({children.length})</div>
-          {children.map(c => <Row key={c.id} item={c} icon="📦" caption={methodLabel(c)} />)}
+          {children.map(c => (
+            <ReductionRow {...rowProps} key={c.id} item={c} icon="📦" caption={methodLabel(c)} />
+          ))}
         </div>
       )}
     </div>
@@ -1123,24 +1197,33 @@ export default function ProjectMaterials({ project, readOnly = false }) {
     toast('Material deleted.')
   }
 
+  // Fractions are not top-level cards: they belong to the material they came
+  // from and are reached through its Material Reduction tab. Listing them as
+  // siblings turned one material into fourteen rows.
+  const topLevel = materials.filter(m => !m.parent_material_id)
+  const fractionCount = materials.length - topLevel.length
+
   if (loading) return <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{materials.length} material{materials.length !== 1 ? 's' : ''} in this project</div>
+        <div style={{ fontSize: 14, color: 'var(--text2)' }}>
+          {topLevel.length} material{topLevel.length !== 1 ? 's' : ''} in this project
+          {fractionCount > 0 && <span style={{ color: 'var(--text3)' }}> \u00b7 {fractionCount} reduction{fractionCount !== 1 ? 's' : ''}</span>}
+        </div>
         {!readOnly && (
           <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
         )}
       </div>
 
-      {materials.length === 0 ? (
+      {topLevel.length === 0 ? (
         <div className="empty-state" style={{ padding: 40 }}>
           <div className="empty-icon">🧪</div>
           <div>No materials yet. Add your first material.</div>
         </div>
       ) : (
-        materials.map((m, idx) => {
+        topLevel.map((m, idx) => {
           const isOpen = expanded === m.id
           const firstPhoto = m.photos?.[0]
           return (
@@ -1162,6 +1245,14 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                     <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: typeBg(m.material_type), color: typeColor(m.material_type) }}>
                       {typeLabel(m.material_type)}
                     </span>
+                    {(() => {
+                      const n = materials.filter(x => x.parent_material_id === m.id).length
+                      return n > 0 ? (
+                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                          ⚗️ {n} reduction{n !== 1 ? 's' : ''}
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
@@ -1228,7 +1319,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   {/* Tab 4: reduction — shows BOTH directions: what this
                       material was derived from, and what has been derived
                       from it. */}
-                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} />}
+                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} project={project} readOnly={readOnly} onChanged={load} />}
                 </div>
               )
               })()}
