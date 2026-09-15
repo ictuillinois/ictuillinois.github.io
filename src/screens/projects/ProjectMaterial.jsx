@@ -11,7 +11,7 @@ import MaterialReductionModal from '../../components/MaterialReductionModal'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 import Modal from '../../components/Modal'
 import ProjectMaterials, { MaterialModal, PiSelect, CharLimitHint } from './ProjectMaterials'
-import { FIELD_LIMITS } from '../../lib/materialLabel'
+import { FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -72,6 +72,11 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 
   async function save() {
     if (!form.name.trim()) { toast('Project name is required.'); return }
+    // The project name prints on every material label in the project, so the
+    // cap is enforced on save too — maxLength alone cannot stop a name that
+    // was saved before the limit existed from being carried forward.
+    const nameTooLong = overLimit('Project name', form.name, FIELD_LIMITS.project_name)
+    if (nameTooLong) { toast(nameTooLong); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
     const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, lab_user_ids: form.lab_user_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
     const { error } = await sb.from('projects').update(payload).eq('id', project.id)
@@ -91,7 +96,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         </div>
       </div>
       <div className="grid-2">
-        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input maxLength={FIELD_LIMITS.project_name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /><CharLimitHint value={form.name} max={FIELD_LIMITS.project_name} /></div>
         <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
       </div>
       <div className="grid-2">
@@ -156,6 +161,8 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
   async function create() {
     setErrMsg('')
     if (!form.name.trim()) { setErrMsg('Project name is required.'); return }
+    const nameTooLong = overLimit('Project name', form.name, FIELD_LIMITS.project_name)
+    if (nameTooLong) { setErrMsg(nameTooLong); return }
     if (!form.project_id.trim()) { setErrMsg('Project title is required.'); return }
     setSaving(true)
     const payload = {
@@ -182,7 +189,7 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
     <Modal onClose={onClose}>
       <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 20 }}>New project</div>
       <div className="grid-2">
-        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /></div>
+        <div className="field"><label>Project Name <span style={{ color: '#c84b2f' }}>*</span></label><input maxLength={FIELD_LIMITS.project_name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} autoFocus /><CharLimitHint value={form.name} max={FIELD_LIMITS.project_name} /></div>
         <div className="field"><label>Project Title <span style={{ color: '#c84b2f' }}>*</span></label><input value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))} /></div>
       </div>
       <div className="grid-2">
@@ -245,6 +252,8 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
   async function save() {
     setErrMsg('')
     if (!form.name.trim()) { setErrMsg('Material name is required.'); return }
+    const tooLong = overLimit('Material Name', form.name, FIELD_LIMITS.name)
+    if (tooLong) { setErrMsg(tooLong); return }
     if (requireProject && !form.project_id) { setErrMsg('Please select a project.'); return }
     setSaving(true)
     const payload = {

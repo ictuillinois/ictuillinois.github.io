@@ -2,7 +2,7 @@ import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicke
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
-import { generateBarcodeId, buildScanUrl, FIELD_LIMITS } from '../../lib/materialLabel'
+import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
 import MaterialLabel from '../../components/MaterialLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
@@ -673,7 +673,7 @@ export function CharLimitHint({ value, max }) {
   const over = n > max
   return (
     <div style={{ fontSize: 11, fontFamily: 'var(--mono)', color: over ? '#c84b2f' : 'var(--text3)', marginTop: 4 }}>
-      {n} / {max}{over ? ' — longer than one line on the printed label; it will wrap' : ''}
+      {n} / {max} max{over ? ' — too long to save; shorten it' : (n === max ? ' — limit reached' : '')}
     </div>
   )
 }
@@ -697,6 +697,11 @@ function blankForm() {
 // ── Validate form ─────────────────────────────────────────────
 function validate(form, toast, isSolo) {
   if (!form.name?.trim()) { toast('Material Name / Label is required.'); return false }
+  // Checked here as well as via maxLength: a value saved before the limit
+  // existed is still in the box when the form opens, and must not survive
+  // another save unchanged.
+  const tooLong = overLimit('Material Name / Label', form.name, FIELD_LIMITS.name)
+  if (tooLong) { toast(tooLong); return false }
   if (!form.material_type?.trim()) { toast('Please select a material type.'); return false }
   if (!form.pi_name?.trim()) { toast('Project PI is required.'); return false }
   if (isSolo) return true
@@ -1042,6 +1047,13 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
 
   async function save() {
     if (!form.name.trim()) { toast('Material Name / Label is required.'); return }
+    for (const [label, val, max] of [
+      ['Material Name / Label', form.name, FIELD_LIMITS.name],
+      ['Project PI', form.pi_name, FIELD_LIMITS.pi_name],
+    ]) {
+      const msg = overLimit(label, val, max)
+      if (msg) { toast(msg, true); return }
+    }
     setSaving(true)
     const { error } = await sb.from('project_materials').update({
       name: form.name.trim(),

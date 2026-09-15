@@ -68,7 +68,18 @@ export const LABEL_TYPE = { header: 17, barcode: 25, title: 17, field: 20 }
 // 30, not 40: a value now sits on its own line with no "Material Label:"
 // prefix in front of it, but 40 characters of 20px bold Arial is still wider
 // than a 4in label and wraps. 30 fits on one line.
-export const FIELD_LIMITS = { name: 30, pi_name: 30 }
+// Hard caps, not advice: the inputs refuse further typing and the save is
+// rejected, because a value that does not fit is only discovered at the
+// printer otherwise. project_name may run to 40 — it is the one value the
+// label has room to wrap onto a second line.
+export const FIELD_LIMITS = { name: 30, pi_name: 30, project_name: 40 }
+
+// Returns an error string when a value is over its limit, or null. Used on
+// save so a value that predates the limit cannot be carried forward unchanged.
+export function overLimit(label, value, max) {
+  const n = (value || '').length
+  return n > max ? `${label} is ${n} characters. The printed label fits ${max} — please shorten it.` : null
+}
 
 const joinList = v => (Array.isArray(v) ? v.filter(Boolean).join(' \u00b7 ') : v) || '\u2014'
 
