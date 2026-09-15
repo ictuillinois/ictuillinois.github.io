@@ -1,7 +1,8 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
-import { SIEVE_SIZES, FRACTION_SIZES } from '../../lib/materialFields'
+import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
+import { generateBarcodeId, buildScanUrl, reductionLabelLines } from '../../lib/materialLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
@@ -32,7 +33,6 @@ const IDOT_GRADATIONS = {
 }
 const PG_GRADES    = ['PG 52-28','PG 58-22','PG 58-28','PG 64-22','PG 64-28','PG 70-22','PG 70-28','PG 76-22','PG 76-28','PG 82-22','Other']
 const LOCATIONS    = ['ICT-High Bay A','ICT-High Bay C','Shed','MFF - Soil Hall','MFF - Aggregate Hall','MFF - Saw Room','Other']
-const CONTAINER_TYPES = ['Metal Bucket','Plastic Bucket','5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
 const PM_NMAS = ['N50','N70','N90','4.75mm','9.5mm','12.5mm','19.0mm','25.0mm','37.5mm']
 
 // ── Solo material types & sub-fields ──────────────────────────
@@ -859,20 +859,20 @@ const ICT_LOGO_SVG = `<svg width="__SIZE__" height="__SIZE__" viewBox="0 0 512 5
 <text x="256" y="290" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" fill="#F5F0DC">ICT-Lab</text>
 </svg>`
 
-function MaterialQRTab({ material, project }) {
+function MaterialQRTab({ material, project, parent }) {
   const [showMap, setShowMap] = useState(false)
   const matName = material.name || typeLabel(material.material_type) || 'Material'
-  const barcodeId = material.barcode_id || matName
+  // Never fall back to the NAME. Two materials can share a name — two labels
+  // must never share an identity. generateBarcodeId is derived from the
+  // material's uuid, so it is unique and stable whether or not one was saved.
+  const barcodeId = material.barcode_id || generateBarcodeId(project, material)
+  const redLines = reductionLabelLines(material, parent)
   const qrPx = 160
   // Keep the logo well under ECC-H's error-correction budget (see
   // MaterialStorage.jsx QRCode) so cameras can still scan it reliably.
   const logoPx = Math.round(qrPx * 0.22)
 
-  const params = new URLSearchParams({ item: matName, type: 'material', mtype: material.material_type || '', barcode: barcodeId })
-  if (material.sampling_date) params.set('sampled', material.sampling_date)
-  if (project?.name) params.set('project', project.name)
-  const base = window.location.hostname === 'localhost' ? 'https://ictlab.labhive.app/' : window.location.origin + '/'
-  const qrData = `${base}?${params.toString()}`
+  const qrData = buildScanUrl(material, project || {})
   const qrUrl  = `https://api.qrserver.com/v1/create-qr-code/?size=${qrPx * 2}x${qrPx * 2}&data=${encodeURIComponent(qrData)}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
 
   function printLabel() {
@@ -892,12 +892,13 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
 .mt{font-size:12px;color:#333;text-align:center} .sd{font-size:11px;color:#666;text-align:center}
 </style></head><body>
 <div class="label">
-  <div class="hdr">ICT-Lab &mdash; Material Storage</div>
+  <div class="hdr">${redLines.length ? 'ICT-Lab &mdash; Reduction Material' : 'ICT-Lab &mdash; Material Storage'}</div>
   <div class="qrwrap"><img src="${imgUrl}" width="${qrPx}" height="${qrPx}" alt="QR"/><div class="logo">${logoSvg}</div></div>
   <div class="bc">${barcodeId}</div>
   <div class="info">
     <div class="pn">${project?.name || '—'}</div>
     <div class="mt">${matName}${typeLabel(material.material_type) ? ` &middot; ${typeLabel(material.material_type)}` : ''}</div>
+    ${redLines.map(l => `<div class="sd"><b>${l.label}:</b> ${l.value}</div>`).join('')}
     ${material.sampling_date ? `<div class="sd">Sampled: ${material.sampling_date}</div>` : ''}
     ${material.pi_name ? `<div class="sd">PI: ${material.pi_name}</div>` : ''}
   </div>
@@ -929,6 +930,9 @@ body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;w
           <div style={{ border: '2px solid var(--border)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>{project?.name || '—'}</div>
             <div style={{ fontSize: 12, color: 'var(--text2)' }}>{matName}{typeLabel(material.material_type) ? ` · ${typeLabel(material.material_type)}` : ''}</div>
+            {redLines.map(l => (
+              <div key={l.label} style={{ fontSize: 12, color: 'var(--text3)' }}><strong>{l.label}:</strong> {l.value}</div>
+            ))}
             {material.sampling_date && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Sampled: {material.sampling_date}</div>}
             {material.pi_name && <div style={{ fontSize: 12, color: 'var(--text3)' }}>PI: {material.pi_name}</div>}
           </div>
@@ -1055,6 +1059,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
     photos:          material.photos || [],
     reduction_value: material.reduction_value || '',
     reduction_date:  material.reduction_date || '',
+    reduction_count: material.reduction_count || '',
   }))
 
   const isAgg = form.material_type === 'aggregate'
@@ -1080,6 +1085,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
       photos: form.photos,
       reduction_value: form.reduction_value || null,
       reduction_date: form.reduction_date || null,
+      reduction_count: form.reduction_count ? parseInt(form.reduction_count) : null,
     }).eq('id', material.id)
     setSaving(false)
     if (error) { toast('Could not save: ' + (error.message || error.code), true); return }
@@ -1146,13 +1152,50 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
                 {FRACTION_SIZES.map(sz => <option key={sz} value={sz}>{sz}</option>)}
               </select>
             </div>
+          </>
+        )}
+
+        {/* Binder splits into containers, so "splitting to?" IS the container
+            type and count. They bind to the same columns the Quantity section
+            uses, which is why that section hides them for this type — two
+            controls editing one field is how they end up disagreeing. */}
+        {form.material_type === 'asphalt_binder' && (
+          <>
             <div className="field">
-              <label>Date of Fractionation</label>
-              <input type="date" style={{ maxWidth: 240 }} value={form.reduction_date}
-                onChange={e => setForm(f => ({ ...f, reduction_date: e.target.value }))} />
+              <label>Splitting to?</label>
+              <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
+                <option value="">— Select container type —</option>
+                {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+            {form.container_type === 'Other' && (
+              <div className="field">
+                <label>Container description</label>
+                <input value={form.container_other} onChange={e => setForm(f => ({ ...f, container_other: e.target.value }))} />
+              </div>
+            )}
+            <div className="field">
+              <label>Number of Containers</label>
+              <input type="number" min="1" style={{ maxWidth: 200 }} value={form.container_count}
+                onChange={e => setForm(f => ({ ...f, container_count: e.target.value }))} placeholder="e.g. 5" />
             </div>
           </>
         )}
+
+        {form.material_type === 'plant_mix' && (
+          <div className="field">
+            <label>Splitting to how many samples?</label>
+            <input type="number" min="1" style={{ maxWidth: 200 }} value={form.reduction_count}
+              onChange={e => setForm(f => ({ ...f, reduction_count: e.target.value }))} placeholder="e.g. 3" />
+          </div>
+        )}
+
+        {/* Every type records when it was reduced; only the wording differs. */}
+        <div className="field">
+          <label>{isAgg ? 'Date of Fractionation' : 'Date of Splitting'}</label>
+          <input type="date" style={{ maxWidth: 240 }} value={form.reduction_date}
+            onChange={e => setForm(f => ({ ...f, reduction_date: e.target.value }))} />
+        </div>
 
         <div className="field" style={{ marginBottom: 0 }}>
           <label>Additional Info</label>
@@ -1169,28 +1212,34 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
             onChange={e => setForm(f => ({ ...f, qty_total: e.target.value }))}
             placeholder="e.g. 25" style={{ maxWidth: 240 }} />
         </div>
-        <div className="field">
-          <label>Container Type</label>
-          <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
-            <option value="">— Select container type —</option>
-            {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        </div>
-        {form.container_type === 'Other' && (
-          <div className="field">
-            <label>Container description</label>
-            <input value={form.container_other} onChange={e => setForm(f => ({ ...f, container_other: e.target.value }))} />
-          </div>
+        {form.material_type !== 'asphalt_binder' && (
+          <>
+            <div className="field">
+              <label>Container Type</label>
+              <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
+                <option value="">— Select container type —</option>
+                {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+            {form.container_type === 'Other' && (
+              <div className="field">
+                <label>Container description</label>
+                <input value={form.container_other} onChange={e => setForm(f => ({ ...f, container_other: e.target.value }))} />
+              </div>
+            )}
+          </>
         )}
         <div className="grid-2" style={{ marginBottom: 0 }}>
           <div className="field" style={{ marginBottom: 0 }}>
             <label>Container Color</label>
             <input value={form.container_color} onChange={e => setForm(f => ({ ...f, container_color: e.target.value }))} placeholder="e.g. Red, Blue, Yellow" />
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Number of Containers</label>
-            <input type="number" min="1" value={form.container_count} onChange={e => setForm(f => ({ ...f, container_count: e.target.value }))} placeholder="e.g. 3" />
-          </div>
+          {form.material_type !== 'asphalt_binder' && (
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Number of Containers</label>
+              <input type="number" min="1" value={form.container_count} onChange={e => setForm(f => ({ ...f, container_count: e.target.value }))} placeholder="e.g. 3" />
+            </div>
+          )}
         </div>
       </Section>
 
@@ -1287,7 +1336,7 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, is
             ))}
           </div>
           {sub === 'info'    && <MaterialInfoView m={item} editHint={!readOnly} />}
-          {sub === 'storage' && <MaterialQRTab material={item} project={project} />}
+          {sub === 'storage' && <MaterialQRTab material={item} project={project} parent={allMaterials.find(x => x.id === item.parent_material_id) || null} />}
           {sub === 'material' && !readOnly && (
             <ReductionMaterialForm
               material={item}
@@ -1499,7 +1548,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                   )}
 
                   {/* Tab 3: QR label */}
-                  {matTab === 'storage' && <MaterialQRTab material={m} project={project} />}
+                  {matTab === 'storage' && <MaterialQRTab material={m} project={project} parent={materials.find(x => x.id === m.parent_material_id) || null} />}
                   {/* Tab 4: reduction — shows BOTH directions: what this
                       material was derived from, and what has been derived
                       from it. */}

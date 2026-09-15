@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
-import { REDUCTION_METHODS } from '../lib/materialFields'
+import { REDUCTION_METHODS, CONTAINER_TYPES } from '../lib/materialFields'
 
 // Material reduction: derive new materials from an existing one.
 //
@@ -46,6 +46,9 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
   const [type, setType] = useState('')
   const [method, setMethod] = useState('')
   const [sizes, setSizes] = useState([])
+  const [contType, setContType] = useState('')
+  const [count, setCount] = useState('')
+  const [note, setNote] = useState('')
   const [err, setErr] = useState('')
 
   useEffect(() => { loadProjects() }, [])
@@ -100,18 +103,21 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
     setSizes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
   }
 
+  const kind = activeMethod?.kind || null
+
   async function create() {
     setErr('')
     if (!parent) { setErr('Select a project and a material.'); return }
     if (!activeMethod) { setErr('Select a reduction method.'); return }
-    if (!sizes.length) { setErr('Select at least one sieve size.'); return }
+    if (kind === 'sizes'      && !sizes.length)         { setErr('Select at least one sieve size.'); return }
+    if (kind === 'containers' && !contType)             { setErr('Select a container type.'); return }
+    if (kind === 'containers' && !(parseInt(count) > 0)) { setErr('Enter how many containers.'); return }
+    if (kind === 'samples'    && !(parseInt(count) > 0)) { setErr('Enter how many samples.'); return }
     setSaving(true)
 
     // Copy every parent field except the per-container ones above, then stamp
-    // the reduction. Ordered by the canonical list so the rows read
-    // coarse-to-fine rather than in click order.
-    const ordered = activeMethod.sizes.filter(s => sizes.includes(s))
-    const rows = ordered.map(size => {
+    // the reduction.
+    const base = () => {
       const copy = {}
       for (const [k, v] of Object.entries(parent)) {
         if (NOT_COPIED.has(k) || k === 'projects') continue
@@ -125,15 +131,48 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
         // batch would fail with a policy violation.
         organization_id: isSolo ? null : (session?.organizationId || null),
         solo_owner_id: isSolo ? (viewingWorkspaceOwnerId || session?.userId || null) : null,
+        parent_material_id: parent.id,
+        reduction_method: activeMethod.key,
+      }
+    }
+
+    let rows
+    if (kind === 'sizes') {
+      // Ordered by the canonical list so the rows read coarse-to-fine rather
+      // than in click order.
+      rows = activeMethod.sizes.filter(x => sizes.includes(x)).map(size => ({
+        ...base(),
         name: `${parent.name || 'Material'} — ${size}`,
         // The fraction IS this size, so its sieve list is just that size
         // rather than the parent's full set.
-        ...(type === 'aggregate' ? { agg_sieve_sizes: [size] } : {}),
-        parent_material_id: parent.id,
-        reduction_method: activeMethod.key,
+        agg_sieve_sizes: [size],
         reduction_value: size,
-      }
-    })
+      }))
+    } else if (kind === 'containers') {
+      const n = parseInt(count)
+      rows = [{
+        ...base(),
+        name: `${parent.name || 'Material'} — Split`,
+        container_type: contType,
+        container_count: n,
+        reduction_value: `${n} × ${contType}`,
+      }]
+    } else if (kind === 'samples') {
+      const n = parseInt(count)
+      rows = [{
+        ...base(),
+        name: `${parent.name || 'Material'} — Split`,
+        reduction_count: n,
+        reduction_value: `${n} sample${n !== 1 ? 's' : ''}`,
+      }]
+    } else {
+      rows = [{
+        ...base(),
+        name: `${parent.name || 'Material'} — Reduction`,
+        other_info: note || null,
+        reduction_value: null,
+      }]
+    }
 
     const { data, error } = await sb.from('project_materials').insert(rows).select('id')
     setSaving(false)
@@ -217,24 +256,24 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
               </div>
             )}
 
-            {activeMethod && (
+            {kind === 'sizes' && (
               <div style={box}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                   Sieve sizes — coarse to pan
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
-                  One new material is created per size selected.
+                  One new material is created per size selected — a #8 fraction is not the same material as a 3/4" one.
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {activeMethod.sizes.map(s => {
-                    const on = sizes.includes(s)
+                  {activeMethod.sizes.map(sz => {
+                    const on = sizes.includes(sz)
                     return (
-                      <button key={s} type="button" onClick={() => toggleSize(s)}
+                      <button key={sz} type="button" onClick={() => toggleSize(sz)}
                         style={{ padding: '6px 14px', borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                           border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
                           background: on ? 'var(--accent)' : 'var(--surface)',
                           color: on ? '#fff' : 'var(--text2)' }}>
-                        {s}
+                        {sz}
                       </button>
                     )
                   })}
@@ -242,9 +281,56 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
                 {sizes.length > 0 && (
                   <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text2)' }}>
                     Will create <strong>{sizes.length}</strong> material{sizes.length !== 1 ? 's' : ''}:{' '}
-                    {activeMethod.sizes.filter(s => sizes.includes(s)).map(s => `${parent.name} — ${s}`).join(', ')}
+                    {activeMethod.sizes.filter(x => sizes.includes(x)).map(x => `${parent.name} — ${x}`).join(', ')}
                   </div>
                 )}
+              </div>
+            )}
+
+            {kind === 'containers' && (
+              <div style={box}>
+                <div className="field">
+                  <label>Splitting to? <span style={{ color: '#c84b2f' }}>*</span></label>
+                  <select value={contType} onChange={e => setContType(e.target.value)}>
+                    <option value="">— Select container type —</option>
+                    {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Number of containers <span style={{ color: '#c84b2f' }}>*</span></label>
+                  <input type="number" min="1" style={{ maxWidth: 200 }} value={count}
+                    onChange={e => setCount(e.target.value)} placeholder="e.g. 5" />
+                </div>
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
+                  Creates <strong>one</strong> reduction material. Splitting a drum into several containers
+                  does not change what the binder is — it is the same material, in more containers.
+                </div>
+              </div>
+            )}
+
+            {kind === 'samples' && (
+              <div style={box}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Splitting to how many samples? <span style={{ color: '#c84b2f' }}>*</span></label>
+                  <input type="number" min="1" style={{ maxWidth: 200 }} value={count}
+                    onChange={e => setCount(e.target.value)} placeholder="e.g. 3" />
+                </div>
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
+                  Creates <strong>one</strong> reduction material recording how many samples it was split into.
+                </div>
+              </div>
+            )}
+
+            {kind === 'note' && (
+              <div style={box}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Reduction note</label>
+                  <textarea rows={4} value={note} onChange={e => setNote(e.target.value)}
+                    placeholder="Describe how this material was reduced…" />
+                </div>
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text3)' }}>
+                  Creates <strong>one</strong> reduction material. You can fill in the rest on its Material tab.
+                </div>
               </div>
             )}
 
@@ -256,8 +342,12 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="btn" onClick={onClose}>Cancel</button>
-              <button className="btn btn-primary" onClick={create} disabled={saving || !sizes.length}>
-                {saving ? 'Creating…' : `Create ${sizes.length || ''} material${sizes.length === 1 ? '' : 's'}`}
+              <button className="btn btn-primary" onClick={create}
+                disabled={saving || !kind || (kind === 'sizes' && !sizes.length)}>
+                {saving ? 'Creating…'
+                  : kind === 'sizes'
+                    ? `Create ${sizes.length || ''} material${sizes.length === 1 ? '' : 's'}`
+                    : 'Create reduction material'}
               </button>
             </div>
           </>
