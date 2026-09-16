@@ -37,14 +37,19 @@ function getModules(role, loginMode, activeModules) {
 }
 
 function getAllModulesForLabUser() {
-  return [
-    { key: 'projects',   screen: 'projects',   label: 'Project & Material', sub: 'Inventory, results & workspace',   icon: '🧪', bg: '#EEEDFE', color: '#534AB7' },
-    { key: 'booking',    screen: 'booking',    label: 'Reserve Equipment', sub: 'Reserve lab equipment',            icon: '📅', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'training',   screen: 'training',   label: 'Training Records',  sub: 'Safety steps & certifications',    icon: '🎓', bg: '#e0f2fe', color: '#0369a1' },
-    { key: 'mileage',    screen: null,         label: 'Mileage Form',      sub: 'Submit mileage reimbursement',     icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', external: true },
-    { key: 'barcodeqr',  screen: 'barcodeqr',  label: 'QR Labels',         sub: 'Equipment QR code management',     icon: '🔲', bg: '#f0f4ff', color: '#1a56db', locked: true },
-    { key: 'profile',    screen: 'profile',    label: 'Profile',           sub: 'Your info & settings',             icon: '👤', bg: '#EEEDFE', color: '#534AB7' },
-  ]
+  // Derived from ALL_MODULES_META, never a fixed list.
+  //
+  // This was a hardcoded array of six keys, which meant a module the org admin
+  // granted and the lab user then ticked STILL could not appear on their home
+  // screen — it simply was not in the array, and every grant below it could
+  // only narrow. Equipment SOP was granted end-to-end and rendered nothing.
+  // A fixed list also had to be hand-edited for every new module.
+  //
+  // labUserLocked (QR Labels) keeps its `locked` flag so the existing
+  // granted-by-admin check below still governs it.
+  return ALL_MODULES_META
+    .filter(m => m.roles?.includes('team') && !m.adminOnly && !m.neverLabUser)
+    .map(m => ({ ...m, locked: !!m.labUserLocked }))
 }
 
 function ExternalLinkModal({ url, onConfirm, onCancel }) {
@@ -149,7 +154,10 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
     // Restrict to lab manager's per-user assignment first (allowed_modules, level #3)
     const assignedMods = (labUserAllowedPool && labUserAllowedPool.size > 0)
       ? allMods.filter(m => labUserAllowedPool.has(m.key))
-      : allMods
+      // No per-user assignment yet: fall back to what a lab user gets by
+      // default, which is what the old fixed list held. Falling back to
+      // everything would hand an unassigned lab user the manager-only set.
+      : allMods.filter(m => !m.labManagerOnly)
     // Then apply labUser's personal visibility toggle (active_modules, level #4)
     const visibleMods = activeModules === null || activeModules === undefined
       ? assignedMods
