@@ -1,7 +1,65 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { sb } from '../lib/supabase'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from './DashboardIconPicker'
 import { orgPoolForRole } from '../lib/modulePools'
+import { buildEmailHtml } from '../lib/emailTemplate'
+
+
+// Tell the user what they were just given, and turn it on for them.
+//
+// A grant that only widens what they COULD pick is invisible: nothing changes
+// on their home screen until they happen to open the icon picker. So newly
+// granted modules are appended to active_modules as well — added, never
+// removed, so this can't undo a choice they made.
+const ICON_NOTIF_TYPE = 'icons_granted'
+
+async function announceGrant(targetUser, addedKeys) {
+  if (!addedKeys.length) return
+  const names = addedKeys
+    .map(k => ALL_MODULES_META.find(m => m.key === k)?.label || k)
+    .join(', ')
+  const title = addedKeys.length === 1 ? `New icon added: ${names}` : `${addedKeys.length} new icons added`
+  const body  = `${names} ${addedKeys.length === 1 ? 'is' : 'are'} now on your home screen. `
+              + 'You can add or remove icons any time from Profile → Dashboard Icons.'
+
+  // Reading the recipient's prefs needs notification_prefs_select_org
+  // (rls_phase1.sql) — without it the sender always sees null and no email
+  // is ever queued.
+  const { data: prefs } = await sb.from('notification_prefs')
+    .select('*').eq('user_id', targetUser.id).maybeSingle()
+
+  // In-app: on unless explicitly turned off.
+  if (!prefs || prefs[ICON_NOTIF_TYPE] !== false) {
+    const { error } = await sb.from('notifications')
+      .insert({ user_id: targetUser.id, type: ICON_NOTIF_TYPE, title, body, read: false })
+    if (error) console.warn('[LabUserIconManager] notification insert failed:', error.message)
+  }
+
+  // Email: opt-in only.
+  if (prefs?.[`email_${ICON_NOTIF_TYPE}`] === true) {
+    const { data: recipient } = await sb.from('users')
+      .select('phone, email, organization_id').eq('id', targetUser.id).maybeSingle()
+    const to = recipient?.phone || recipient?.email
+    if (to) {
+      let orgContact = null
+      if (recipient?.organization_id) {
+        const { data: org } = await sb.from('organizations')
+          .select('contact_name, contact_email').eq('id', recipient.organization_id).maybeSingle()
+        orgContact = org
+      }
+      const htmlBody = buildEmailHtml({
+        title, body,
+        ctaLabel: 'Open ICT-Lab →',
+        ctaUrl: 'https://ictlab.app/?screen=profile',
+        prefsUrl: 'https://ictlab.app/?screen=profile',
+        orgContact,
+      })
+      const { error } = await sb.from('email_notifications_queue')
+        .insert({ to_email: to, subject: title, body, html_body: htmlBody, user_id: targetUser.id, type: ICON_NOTIF_TYPE })
+      if (error) console.warn('[LabUserIconManager] email queue insert failed:', error.message)
+    }
+  }
+}
 
 const ROLE_LABEL = { lab_user: 'Lab User', user: 'Lab Manager', admin: 'Org Admin' }
 
@@ -10,6 +68,9 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
   const [poolModules, setPoolModules] = useState(null) // module meta available for this org
   const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
+  // What this role already had, captured at load, so save can tell which
+  // modules are genuinely new rather than re-announcing every existing one.
+  const prevAllowedRef = useRef(new Set())
   // One person can hold several users rows — Login links every row sharing an
   // email to the same account. Each row has its OWN icon pool, so editing the
   // lab user card silently left the same person's lab manager icons untouched
@@ -71,6 +132,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
     if (loadErr) console.error('[LabUserIconManager] load failed:', loadErr)
     setExistingRowIds((rows || []).map(r => r.id))
     const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
+    prevAllowedRef.current = new Set(bestRow?.allowed_modules || [])
     setAllowed(new Set(bestRow?.allowed_modules?.length ? bestRow.allowed_modules : []))
   }
 
@@ -81,6 +143,32 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
+  }
+
+  // Runs after the pool is written: turn the new modules on for the user and
+  // tell them. Only for a lab user — a lab manager editing their own pool does
+  // not need notifying about it.
+  async function afterGrant(modules) {
+    const added = modules.filter(k => !prevAllowedRef.current.has(k) && !pinned.includes(k))
+    prevAllowedRef.current = new Set(modules)
+    if (!added.length || activeRole.role !== 'lab_user') return
+
+    // Append to what they already show, never replace: this must not undo a
+    // module they deliberately hid.
+    const { data: rows } = await sb.from('user_dashboard_prefs')
+      .select('id, active_modules').eq('user_id', activeRole.id)
+    const row = (rows || []).find(r => r.active_modules?.length) || rows?.[0] || null
+    if (row) {
+      const current = row.active_modules || []
+      const next = [...current, ...added.filter(k => !current.includes(k))]
+      if (next.length !== current.length) {
+        const { error } = await sb.from('user_dashboard_prefs')
+          .update({ active_modules: next }).eq('id', row.id)
+        if (error) console.warn('[LabUserIconManager] could not auto-enable:', error.message)
+      }
+    }
+
+    await announceGrant(activeRole, added)
   }
 
   async function save() {
@@ -118,6 +206,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
         return
       }
     }
+    await afterGrant(modules)
     setSaving(false)
     onClose(true)
   }

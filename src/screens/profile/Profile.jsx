@@ -976,6 +976,9 @@ function NotificationPrefsPanel({ userId, role }) {
     { title: '🤝 Project Team', desc: 'Notifications about project team invites.', roles: ['lab_user', 'user', 'admin'], events: [
       { key: 'team_invite', label: 'Project team invite received or accepted' },
     ]},
+    { title: '🎛️ Dashboard Icons', desc: 'When a lab manager gives you access to a new module.', roles: ['lab_user'], events: [
+      { key: 'icons_granted', label: 'New icon added to my dashboard' },
+    ]},
     { title: '🔧 Equipment Maintenance', desc: 'Reminders when equipment you are responsible for is coming due.', roles: ['user', 'admin', 'solo'], events: [
       { key: 'maintenance_reminder', label: 'Maintenance due — reminder 2 weeks before and 1 week before due date' },
     ]},

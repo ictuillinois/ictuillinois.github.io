@@ -144,6 +144,36 @@ function gridMaxHeight(count) {
   return rows * CARD_MAX_H + (rows - 1) * GRID_GAP
 }
 
+// Shown once per lab user: a granted icon simply appears, so without this the
+// first thing they know is that their home screen changed by itself.
+function IconHint() {
+  // Reads the store rather than taking a prop: CardGridView has no session
+  // prop, and referencing an undeclared `session` there is a ReferenceError,
+  // not an undefined — it would take the whole dashboard down.
+  const { session } = useAppStore()
+  const key = `ilab_icon_hint_${session?.userId || 'anon'}`
+  const [show, setShow] = useState(() => {
+    try { return localStorage.getItem(key) !== 'done' } catch { return false }
+  })
+  if (!show) return null
+  const dismiss = () => {
+    try { localStorage.setItem(key, 'done') } catch {}
+    setShow(false)
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      background: 'var(--accent-light)', border: '1px solid var(--border)', borderRadius: 10,
+      padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--accent-ink, #085041)' }}>
+      <span style={{ fontSize: 16 }}>💡</span>
+      <span style={{ flex: 1, minWidth: 200 }}>
+        Your lab manager decides which icons you can use. You can add or remove them yourself
+        under <strong>Profile → Dashboard Icons</strong>.
+      </span>
+      <button onClick={dismiss} className="btn btn-sm" style={{ flexShrink: 0 }}>Got it</button>
+    </div>
+  )
+}
+
 function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, onEditUrl, moduleImages, isLabUser, activeModules, labUserAccess, labUserAllowedPool, customLinks = [], onReorder }) {
   const [confirmExternal, setConfirmExternal] = useState(null)
   const [dragSrc, setDragSrc] = useState(null)
@@ -164,6 +194,7 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       : assignedMods.filter(m => activeModules.includes(m.key))
     return (
       <>
+        <IconHint />
         <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(visibleMods.length) }}>
           {visibleMods.map(m => {
             const grantedByAdmin = m.locked && ((m.screen && labUserAccess?.has(m.screen)) || labUserAllowedPool?.has(m.key))
