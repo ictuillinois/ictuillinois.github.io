@@ -81,6 +81,7 @@ function getScreenTabs(screen, session) {
     ...(!isSolo ? [{ key: 'alarm', icon: '🔔', label: 'Building Alarm' }] : []),
     ...(!isSolo ? [{ key: 'locker', icon: '🗄️', label: 'Lab User Locker' }] : []),
     ...(!isSolo ? [{ key: 'exam',   icon: '📝', label: 'Exam' }] : []),
+    ...(!isSolo ? [{ key: 'sds',    icon: '🧯', label: 'SDS' }] : []),
   ]
 
   if (screen === 'labmanagement') return [

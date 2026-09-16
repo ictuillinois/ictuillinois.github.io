@@ -1221,6 +1221,45 @@ CREATE TABLE IF NOT EXISTS team_workspace_members (
 CREATE INDEX IF NOT EXISTS team_workspace_members_owner_idx  ON team_workspace_members(owner_id);
 CREATE INDEX IF NOT EXISTS team_workspace_members_member_idx ON team_workspace_members(member_id);
 
+-- Safety Data Sheets shown under Training Records. Org-wide reference
+-- material: everyone in the lab reads the same sheets, so the whole org can
+-- SELECT, while only lab managers and admins write. The write restriction is
+-- enforced in the UI and here — a lab user who called the API directly would
+-- otherwise be able to delete the lab's SDS library.
+CREATE TABLE IF NOT EXISTS sds_documents (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title           TEXT NOT NULL,
+  kind            TEXT NOT NULL DEFAULT 'file',
+  file_url        TEXT,
+  file_path       TEXT,
+  file_name       TEXT,
+  file_size       BIGINT,
+  link_url        TEXT,
+  organization_id UUID,
+  created_by      UUID,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS sds_documents_org_idx ON sds_documents(organization_id);
+
+SELECT _apply_rls('sds_documents', 'sds_documents_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+)
+WITH CHECK (
+  is_super_admin()
+  OR (
+    organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+    AND EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+        AND u.role IN ('admin', 'user')
+    )
+  )
+)
+$b$);
+
 SELECT _apply_rls('team_workspace_invites', 'team_workspace_invites_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1314,6 +1353,7 @@ DECLARE
     'account_deletion_policy','email_queue_insert','email_queue_select',
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',
     'team_workspace_invites_policy','team_workspace_members_policy',
+    'sds_documents_policy',
     'legacy_lockdown_policy'
   ];
 BEGIN

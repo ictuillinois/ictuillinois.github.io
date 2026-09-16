@@ -10,6 +10,7 @@ import { AvatarDisplay } from '../../components/Avatars'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
 import { buildEmailHtml } from '../../lib/emailTemplate'
+import SDSTab from './SDSTab'
 
 async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
   if (!orgId) return
@@ -2183,8 +2184,11 @@ export default function TrainingRecords() {
       )}
 
       {subTab === 'exam' && <ExamTab session={session} />}
+      {/* Lab users read; lab managers and admins curate. canEdit is the
+          same gate the rest of this screen uses. */}
+      {subTab === 'sds' && <SDSTab session={session} readOnly={!canEdit(session)} />}
 
-      {subTab !== 'exam' && (
+      {subTab !== 'exam' && subTab !== 'sds' && (
         loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : labUsers.length === 0 ? (
