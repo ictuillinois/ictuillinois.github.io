@@ -426,9 +426,16 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
     const toSave = (order || availKeys).filter(k => selected.has(k) && availKeys.includes(k))
     const mustKeep = poolModules.filter(m => m.alwaysOn).map(m => m.key)
     mustKeep.forEach(k => { if (!toSave.includes(k)) toSave.push(k) })
-    const { error } = await sb.from('organizations').update({ [poolKey]: toSave }).eq('id', orgId)
-    if (error) toast('Error saving: ' + error.message)
-    else toast(`${label} icon pool saved ✓`)
+    // Same zero-row trap as OrgModulesModal: a blocked update is not an error.
+    const { data: rows, error } = await sb.from('organizations')
+      .update({ [poolKey]: toSave }).eq('id', orgId).select('id')
+    if (error) {
+      toast('Error saving: ' + error.message)
+    } else if (!rows?.length) {
+      toast('Nothing was saved — this account is not allowed to change this organization.')
+    } else {
+      toast(`${label} icon pool saved ✓`)
+    }
     setSaving(false)
   }
 
@@ -1303,8 +1310,17 @@ function OrgModulesModal({ org, onClose, onSaved }) {
     // modules locked in the org's own panel, with every checkbox showing
     // enabled. What is ticked is now what is granted.
     const toSave = selectedKeys
-    const { error } = await sb.from('organizations').update({ allowed_modules: toSave }).eq('id', org.id)
+    // .select() so we can see how many rows were actually written. An update
+    // matching zero rows is NOT an error — it returns 200 with an empty body —
+    // so a write blocked by RLS toasted "saved" and changed nothing, which is
+    // indistinguishable from success until someone checks the result.
+    const { data: rows, error } = await sb.from('organizations')
+      .update({ allowed_modules: toSave }).eq('id', org.id).select('id')
     if (error) { toast('Error saving: ' + error.message); setSaving(false); return }
+    if (!rows?.length) {
+      toast('Nothing was saved — this account is not allowed to change that organization.', true)
+      setSaving(false); return
+    }
     toast(`Icon access saved for ${org.name}`)
     onSaved(); onClose()
   }
