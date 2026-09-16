@@ -1,7 +1,8 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
-import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES, materialIcon } from '../../lib/materialFields'
+import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
+import MaterialIcon from '../../components/MaterialIcon'
 import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
 import MaterialLabel from '../../components/MaterialLabel'
 import { useAppStore } from '../../store/useAppStore'
@@ -1475,7 +1476,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                 <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {firstPhoto
                     ? <img src={firstPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 22 }}>{materialIcon(m.material_type)}</span>
+                    : <MaterialIcon type={m.material_type} size={30} />
                   }
                 </div>
                 {/* Info */}
