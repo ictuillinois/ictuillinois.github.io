@@ -1,28 +1,64 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../lib/supabase'
-import { ALL_MODULES_META, PINNED_MODULES } from './DashboardIconPicker'
+import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from './DashboardIconPicker'
+import { orgPoolForRole } from '../lib/modulePools'
+
+const ROLE_LABEL = { lab_user: 'Lab User', user: 'Lab Manager', admin: 'Org Admin' }
+
 
 export default function LabUserIconManager({ labUser, orgId, onClose }) {
   const [poolModules, setPoolModules] = useState(null) // module meta available for this org
   const [allowed, setAllowed] = useState(null)         // currently assigned keys (Set)
   const [saving, setSaving] = useState(false)
+  // One person can hold several users rows — Login links every row sharing an
+  // email to the same account. Each row has its OWN icon pool, so editing the
+  // lab user card silently left the same person's lab manager icons untouched
+  // and there was nowhere to see them.
+  const [roles, setRoles] = useState([labUser])
+  const [activeRoleId, setActiveRoleId] = useState(labUser.id)
   const [saveError, setSaveError] = useState(null)
   const [existingRowIds, setExistingRowIds] = useState([]) // ALL rows found for this user_id — duplicates are a known issue
 
-  useEffect(() => { load() }, [labUser.id])
+  const activeRole = roles.find(r => r.id === activeRoleId) || labUser
+  // Lab managers keep their own pinned module on top of the shared ones.
+  const pinnedFor = role => role === 'lab_user'
+    ? PINNED_MODULES
+    : [...new Set([...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES])]
+  const pinned = pinnedFor(activeRole.role)
+
+  useEffect(() => { loadRoles() }, [labUser.id])
+  useEffect(() => { load() }, [activeRoleId, roles.length])
+
+  async function loadRoles() {
+    setActiveRoleId(labUser.id)
+    const email = (labUser.email || '').trim()
+    if (!email || !orgId) { setRoles([labUser]); return }
+    const { data, error } = await sb.from('users')
+      .select('id, name, last_name, nick_name, email, role')
+      .eq('organization_id', orgId)
+      .ilike('email', email)
+    if (error) { console.error('[LabUserIconManager] roles lookup failed:', error); setRoles([labUser]); return }
+    // Only other roles that actually have a dashboard of their own.
+    const others = (data || []).filter(u => u.id !== labUser.id && (u.role === 'user' || u.role === 'admin'))
+    setRoles([labUser, ...others])
+  }
 
   async function load() {
     // Load org's lab user pool (the boundary for what can be assigned)
     let pool = null
     if (orgId) {
       const { data } = await sb.from('organizations')
-        .select('allowed_modules, allowed_modules_labusers')
+        .select('allowed_modules, allowed_modules_labusers, allowed_modules_labmanagers')
         .eq('id', orgId).maybeSingle()
-      pool = data?.allowed_modules_labusers ?? data?.allowed_modules
+      // orgPoolForRole picks the right column for the role — never compose
+      // pools inline (src/lib/modulePools.js owns that rule).
+      pool = orgPoolForRole(activeRole.role, data)
     }
     const mods = pool
-      ? ALL_MODULES_META.filter(m => pool.includes(m.key) || m.key === 'profile')
-      : ALL_MODULES_META.filter(m => !m.labManagerOnly && !m.adminOnly && !m.soloLocked)
+      ? ALL_MODULES_META.filter(m => pool.includes(m.key) || pinned.includes(m.key))
+      : ALL_MODULES_META.filter(m => activeRole.role === 'lab_user'
+          ? (!m.labManagerOnly && !m.adminOnly && !m.soloLocked)
+          : (!m.adminOnly && !m.soloLocked))
     setPoolModules(mods)
 
     // Load ALL rows for this user_id — this table has no created_at column (a query
@@ -31,7 +67,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
     // actually has allowed_modules populated rather than trusting row order.
     const { data: rows, error: loadErr } = await sb.from('user_dashboard_prefs')
       .select('id, allowed_modules')
-      .eq('user_id', labUser.id)
+      .eq('user_id', activeRole.id)
     if (loadErr) console.error('[LabUserIconManager] load failed:', loadErr)
     setExistingRowIds((rows || []).map(r => r.id))
     const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
@@ -39,7 +75,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
   }
 
   function toggle(key) {
-    if (PINNED_MODULES.includes(key)) return
+    if (pinned.includes(key)) return
     setAllowed(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
@@ -50,7 +86,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
   async function save() {
     setSaving(true)
     setSaveError(null)
-    const modules = [...PINNED_MODULES, ...Array.from(allowed).filter(k => !PINNED_MODULES.includes(k))]
+    const modules = [...pinned, ...Array.from(allowed).filter(k => !pinned.includes(k))]
 
     if (existingRowIds.length > 0) {
       // Update the specific row we already confirmed exists (by primary key, not by
@@ -74,7 +110,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
       }
     } else {
       const { error: insertErr } = await sb.from('user_dashboard_prefs')
-        .insert({ user_id: labUser.id, organization_id: orgId || null, allowed_modules: modules })
+        .insert({ user_id: activeRole.id, organization_id: orgId || null, allowed_modules: modules })
       if (insertErr) {
         console.error('[LabUserIconManager] insert failed:', insertErr)
         setSaveError(`Failed to save: ${insertErr.message}`)
@@ -100,13 +136,36 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
             <div style={{ width: 42, height: 42, borderRadius: 12, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎛️</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text)' }}>Dashboard icons for {name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>Select which icons this lab user is allowed to choose from on their dashboard.</div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--mono)' }}>user_id: {labUser.id}</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                Select which icons this {(ROLE_LABEL[activeRole.role] || 'user').toLowerCase()} is allowed to choose from on their dashboard.
+                {roles.length > 1 && ' This person holds more than one role — each has its own set.'}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, fontFamily: 'var(--mono)' }}>user_id: {activeRole.id}</div>
             </div>
             <button onClick={() => onClose(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text3)', padding: '4px 8px' }}>✕</button>
           </div>
+          {/* Only when this person actually holds more than one role. A single
+              tab would just be chrome telling them something they know. */}
+          {roles.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+              {roles.map(r => {
+                const on = r.id === activeRoleId
+                return (
+                  <button key={r.id} type="button" onClick={() => setActiveRoleId(r.id)}
+                    style={{ padding: '7px 16px', borderRadius: 99, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+                      background: on ? 'var(--accent)' : 'var(--surface)',
+                      color: on ? '#fff' : 'var(--text2)' }}>
+                    {ROLE_LABEL[r.role] || r.role}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div style={{ background: '#e0f2fe', borderRadius: 8, padding: '8px 14px', marginTop: 14, fontSize: 12, color: '#0369a1', lineHeight: 1.5 }}>
-            ℹ️ Icons shown are within your organization's lab user pool. The labUser picks from <strong>only these icons</strong>. Profile is always visible.
+            ℹ️ Icons shown are within your organization's {activeRole.role === 'lab_user' ? 'lab user' : activeRole.role === 'user' ? 'lab manager' : 'admin'} pool.
+            They pick from <strong>only these icons</strong>. Profile is always visible.
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 14px' }}>
             <div style={{ fontSize: 12, color: 'var(--text3)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {totalCount} assigned</div>
@@ -124,18 +183,18 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10, paddingBottom: 20 }}>
               {poolModules.map(m => {
-                const pinned = PINNED_MODULES.includes(m.key)
-                const sel = pinned || allowed.has(m.key)
+                const isPinned = pinned.includes(m.key)
+                const sel = isPinned || allowed.has(m.key)
                 return (
                   <div key={m.key} onClick={() => toggle(m.key)}
-                    style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '12px 12px 10px', cursor: pinned ? 'default' : 'pointer', position: 'relative', transition: 'all 0.15s', opacity: pinned ? 0.75 : 1, userSelect: 'none' }}>
+                    style={{ borderRadius: 12, border: sel ? `2px solid ${m.color}` : '2px solid var(--border)', background: sel ? `${m.color}12` : 'var(--surface)', padding: '12px 12px 10px', cursor: isPinned ? 'default' : 'pointer', position: 'relative', transition: 'all 0.15s', opacity: isPinned ? 0.75 : 1, userSelect: 'none' }}>
                     <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%', background: sel ? m.color : 'var(--surface2)', border: `2px solid ${sel ? m.color : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                       {sel && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                     </div>
                     <div style={{ fontSize: 24, marginBottom: 6, pointerEvents: 'none' }}>{m.icon}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: sel ? m.color : 'var(--text)', marginBottom: 2, paddingRight: 20, pointerEvents: 'none' }}>{m.label}</div>
                     <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4, pointerEvents: 'none' }}>{m.sub}</div>
-                    {pinned && <div style={{ marginTop: 4, fontSize: 9, color: m.color, fontWeight: 700, pointerEvents: 'none' }}>Always visible</div>}
+                    {isPinned && <div style={{ marginTop: 4, fontSize: 9, color: m.color, fontWeight: 700, pointerEvents: 'none' }}>Always visible</div>}
                   </div>
                 )
               })}
@@ -147,7 +206,9 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
           <div style={{ margin: '0 24px', padding: '8px 12px', background: '#fef2f2', color: '#c84b2f', fontSize: 12, borderRadius: 8 }}>{saveError}</div>
         )}
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Lab user picks their visible icons from this assigned list.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+            {ROLE_LABEL[activeRole.role] || 'User'} picks their visible icons from this assigned list.
+          </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn" onClick={() => onClose(false)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
