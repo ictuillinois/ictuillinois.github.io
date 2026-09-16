@@ -43,3 +43,33 @@ export function reductionKind(materialType, methodKey) {
 // Container types, shared by the material form and the reduction modal so the
 // two cannot offer different lists for the same question.
 export const CONTAINER_TYPES = ['Metal Bucket','Plastic Bucket','5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
+
+// Default thumbnail for a material with no photo, by type.
+//
+// Covers both the team types (aggregate, asphalt_binder, ...) and the solo
+// ones, which are free-text keys like 'Chemical / Reagent'. Anything
+// unrecognised — including a custom type an org added in Equipment settings —
+// falls back to the beaker, so a new type never renders blank.
+const MATERIAL_ICONS = {
+  aggregate: '\u{1FAA8}',            // rock
+  asphalt_binder: '\u{1F6E2}\uFE0F', // oil drum
+  plant_mix: '\u{1F6E3}\uFE0F',      // motorway
+  cores: '\u{1F9F1}',                // brick
+  other: '\u{1F4E6}',                // package
+
+  'Chemical / Reagent': '\u{1F9EA}',
+  'Biological Sample': '\u{1F9EC}',
+  'Aggregate': '\u{1FAA8}',
+  'Soil / Rock': '\u{1F30D}',
+  'Metal': '\u{1F529}',
+  'Polymer / Plastic': '\u{1F9F4}',
+  'Ceramic / Composite': '\u{1F3FA}',
+  'Liquid': '\u{1F4A7}',
+  'Powder': '\u{1F9C2}',
+  'Fiber / Textile': '\u{1F9F5}',
+  'Electronic Component': '\u{1F50C}',
+}
+
+export function materialIcon(type) {
+  return MATERIAL_ICONS[type] || '\u{1F9EA}'
+}

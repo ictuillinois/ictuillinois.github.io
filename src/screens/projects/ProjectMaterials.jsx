@@ -1,7 +1,7 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
-import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
+import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES, materialIcon } from '../../lib/materialFields'
 import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
 import MaterialLabel from '../../components/MaterialLabel'
 import { useAppStore } from '../../store/useAppStore'
@@ -1450,7 +1450,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>
           {topLevel.length} material{topLevel.length !== 1 ? 's' : ''} in this project
-          {fractionCount > 0 && <span style={{ color: 'var(--text3)' }}> \u00b7 {fractionCount} reduction{fractionCount !== 1 ? 's' : ''}</span>}
+          {fractionCount > 0 && <span style={{ color: 'var(--text3)' }}> · {fractionCount} reduction{fractionCount !== 1 ? 's' : ''}</span>}
         </div>
         {!readOnly && (
           <button className="btn btn-sm btn-purple" onClick={() => { setEditMaterial(null); setShowModal(true) }}>+ Add material</button>
@@ -1475,7 +1475,7 @@ export default function ProjectMaterials({ project, readOnly = false }) {
                 <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {firstPhoto
                     ? <img src={firstPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 22 }}>🧪</span>
+                    : <span style={{ fontSize: 22 }}>{materialIcon(m.material_type)}</span>
                   }
                 </div>
                 {/* Info */}
