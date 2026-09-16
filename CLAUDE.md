@@ -112,6 +112,20 @@ npm run ios            # build + sync + open iOS simulator
 
 ### Required SQL (run once in Supabase SQL Editor if not applied)
 ```sql
+-- Session Sept 2026 — run in BOTH projects, they are separate databases:
+ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS additional_info TEXT;
+ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS icons_granted       BOOLEAN DEFAULT TRUE;
+ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS email_icons_granted BOOLEAN DEFAULT FALSE;
+NOTIFY pgrst, 'reload schema';
+
+-- ICT-Lab ONLY — these columns never existed here. Without the role columns,
+-- OrgPoolEditor's SELECT fails entirely and every icon pool reads as empty:
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules             JSONB;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labusers    JSONB;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labmanagers JSONB;
+-- SDS tab: create sds_documents via rls_phase1.sql (it carries the policy too).
+NOTIFY pgrst, 'reload schema';
+
 -- Material Reduction (Sept 2026) — without these, saving a fraction fails with
 -- PGRST204 "Could not find the 'parent_material_id' column ... in the schema
 -- cache". Separate databases: run in BOTH the ICT-Lab and LabHive projects.
@@ -1029,6 +1043,148 @@ Each layer **narrows** the one above. One documented exception: a per-org grant
   early return. `loadDashboardPrefs()` returns early when `activeModules` is set
   and again for demo accounts, which is why the pool moved to
   `loadLabUserGate()`.
+
+# Session — September 2026
+
+## Printed material labels — ONE renderer (Sept 2026)
+
+`src/lib/materialLabel.js` + `src/components/MaterialLabel.jsx` own everything
+about a printed 4×6 material label. This markup previously existed **three**
+times (project storage tab, single-material storage tab, material label tab)
+with three different field sets, so the same container could be labelled
+differently depending on which button was pressed.
+
+| Export | Purpose |
+|---|---|
+| `labelSections(material, project, parent)` | what goes on the label, grouped |
+| `LABEL_TYPE` | type sizes — header 17, barcode 25, title 17, field 20 |
+| `FIELD_LIMITS` | `name` 30, `pi_name` 30, `project_name` 40 |
+| `generateBarcodeId(project, material)` | uuid-derived, unique and stable |
+| `buildScanUrl(material, project)` | the QR target |
+| `overLimit(label, value, max)` | save-time guard |
+
+**Layout:** three groups, each with a grey rule above it and an underlined
+title — `Project info:` / `Original Material:` / `Reduced Material:` (the last
+only on a reduction). Only those three titles are printed as words; everything
+under them is the value as entered. Arial, every line bold.
+
+- On a reduction, *Original Material* is the **parent**; on a plain material it
+  is that material itself.
+- Non-aggregate types substitute their identifying spec in the sieve slot: PG
+  grade for binder and plant mix, plus NMAS for plant mix, and Split Into /
+  Samples on the reduced side.
+- **QR is 120px.** Three headings and three rules cost real height, and a
+  plant-mix reduction (four lines under Original Material) is the tallest label
+  there is. At 132 it had no spare line for a value that wraps; a long project
+  name is the likely one, since project names get 40 characters. Do the
+  arithmetic before adding a line.
+
+**Never fall back to the material NAME for a barcode.** Two materials can share
+a name; two labels must never share an identity. Both storage tabs used to,
+which meant two containers could carry the same QR.
+
+**Character limits are hard limits, enforced twice:** `maxLength` on the input
+AND `overLimit()` on save. The save check is not redundant — a value stored
+before the limit existed is still in the box when the form opens and would
+otherwise be carried forward unchanged.
+
+## Material type icons
+
+`src/components/MaterialIcon.jsx` draws the five team types (aggregate = a pile
+of crushed stone, other = a white 5-gallon bucket, binder = a drum, plant mix =
+a road, cores = a cut cylinder). Emoji could not carry these: there is one rock
+glyph and it reads as a pebble, and no emoji is a 5-gallon bucket. They are
+coloured rather than inheriting `currentColor` like `Icons.jsx`, because they
+stand in for a photo rather than being UI chrome. The eleven solo types keep
+their emoji (`materialIcon()` in `materialFields.js`); an unknown type falls
+back to the beaker.
+
+## Icon hierarchy — what changed (Sept 2026)
+
+- **`labManagerOnly` is a DEFAULT, not a wall.** An org admin may grant those
+  modules to lab users, and every downstream filter honours an explicit grant:
+  the dashboard card, the sidebar entry, the icon picker's available list,
+  Profile's icon panel, and the per-lab-user icon manager. Changing only the
+  admin panel makes the checkbox a lie — it saves, and the icon never appears.
+- **`neverLabUser`** is the wall. Only `labmanagement` carries it: it is the
+  console for managing users, so granting it to a lab user is a privilege
+  escalation rather than a feature toggle.
+- **The org grant saves an explicit list, never `null`.** `null` does not mean
+  "grant everything" — it means "inherit the global app pool", which is
+  normally narrower. Ticking Select all used to save `null`, so the org admin
+  still saw those icons locked with every checkbox showing enabled.
+- **`LabUserIconManager` is role-aware.** One person can hold several `users`
+  rows (Login links every row sharing an email), each with its own pool. The
+  modal offers a Lab User / Lab Manager switch and saves to the selected role's
+  row. Pools come from `orgPoolForRole()`, never composed inline.
+- **A write that saves nothing now says so.** Both org icon saves `.select()`
+  the updated rows: an update matching zero rows returns 200 with an empty
+  body, so an RLS-blocked write used to toast "saved" and change nothing.
+
+## Granting an icon notifies the lab user
+
+Saving an icon pool for a **lab user** appends the newly granted keys to their
+`active_modules` (appends only — it must never undo a module they hid), then
+sends an in-app notification and an opt-in email via
+`notification_prefs` → `email_notifications_queue`. Only genuinely new keys are
+announced: the pool held at load is captured in a ref. A one-time dismissible
+hint on the lab user home screen points at Profile → Dashboard Icons.
+
+Needs `notification_prefs.icons_granted` / `email_icons_granted`.
+
+## ICT-Lab-only icon rules
+
+**The org grant is the ONLY authority.** `orgCapabilityPool()` in
+`src/lib/modulePools.js` deliberately ignores `appPool`
+(`settings.app_allowed_modules`). That is LabHive's global default across many
+orgs; ICT-Lab is one organisation and the super admin already says what it gets
+in that org's Icons modal.
+
+Keeping both was not merely redundant — it was unfixable from the UI. The
+global modal has **no entry point**: `setAppModulesOpen(true)` is never called
+anywhere in this app. So the row could not be edited, yet a leftover narrow
+value still won whenever the org grant was `null`, and icons the super admin
+had granted showed as "contact us to enable" in the org admin's own panel.
+
+**`organizations` needs all three pool columns here** — `allowed_modules`,
+`allowed_modules_labusers`, `allowed_modules_labmanagers`. The role columns
+never existed on this database, and `OrgPoolEditor` SELECTs
+`allowed_modules, <poolKey>` in one query: PostgREST fails the **whole** request
+when one named column is missing, so the org grant came back empty on every
+load and every icon outside the fallback locked itself, silently. That load now
+reads its `error`.
+
+**Lab user cards derive from `ALL_MODULES_META`.**
+`getAllModulesForLabUser()` was a hardcoded array of six keys, and the lab user
+card grid *starts* from it, so every grant below could only narrow. A module
+granted by the org admin, assigned by the lab manager and ticked by the lab
+user still rendered nothing. With no per-user assignment the fallback excludes
+`labManagerOnly`, which resolves to exactly the six keys the old array held.
+
+## SDS tab (Training Records)
+
+`src/screens/training/SDSTab.jsx`, sidebar key `sds`, sits under Exam. Lab
+managers and admins upload PDFs, Word documents and video, or add a link; lab
+users get the same list read-only.
+
+- Files go to the **`project-files`** bucket directly, NOT through
+  `StorageService`. These are org content — everyone reads the same sheets — and
+  the per-user provider would put a manager's upload in their own Drive.
+- **There is no `lab-files` bucket on this project.** It is named in
+  `LabMessage.jsx` and nowhere else, and uploads there fail with "Bucket not
+  found" — which that screen swallowed, sending messages with the attachment
+  silently missing.
+- Writes are restricted to `admin`/`user` in the **policy** as well as the UI,
+  so a lab user calling the API cannot delete the lab's SDS library.
+- Deletion removes the row first and the stored file second.
+
+Needs the `sds_documents` table (see `rls_phase1.sql`).
+
+## Safety training steps
+
+Approving a step now shows a bar naming the next one, on every step but the
+last. Progress here is an object with a `completed` flag (LabHive's is a plain
+boolean) — a truthy test lights the bar on every step.
 
 ## Silent-failure classes seen in this codebase — check for these
 
