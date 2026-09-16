@@ -218,11 +218,18 @@ function NewConvModal({ session, labManagers, orgName, onSent, onClose }) {
     if (file) {
       const ext = file.name.split('.').pop()
       const path = `re_messages/${Date.now()}_${session.userId}.${ext}`
-      const { error } = await sb.storage.from('lab-files').upload(path, file)
-      if (!error) {
-        const { data: url } = sb.storage.from('lab-files').getPublicUrl(path)
-        fileUrl = url.publicUrl; fileName = file.name
+      // project-files, not lab-files: there is no lab-files bucket on this
+      // project, so every attachment upload here failed with "Bucket not
+      // found" — and the error was swallowed, so the message sent with the
+      // file silently missing and no one was told.
+      const { error } = await sb.storage.from('project-files').upload(path, file)
+      if (error) {
+        setSending(false)
+        toast('Could not attach ' + file.name + ': ' + error.message, true)
+        return
       }
+      const { data: url } = sb.storage.from('project-files').getPublicUrl(path)
+      fileUrl = url.publicUrl; fileName = file.name
     }
 
     const isBroadcast = ids.length === 0
@@ -479,11 +486,18 @@ export default function LabMessage() {
     if (replyFile) {
       const ext = replyFile.name.split('.').pop()
       const path = `re_messages/${Date.now()}_${session.userId}.${ext}`
-      const { error } = await sb.storage.from('lab-files').upload(path, replyFile)
-      if (!error) {
-        const { data: url } = sb.storage.from('lab-files').getPublicUrl(path)
-        fileUrl = url.publicUrl; fileName = replyFile.name
+      // project-files, not lab-files: there is no lab-files bucket on this
+      // project, so every attachment upload here failed with "Bucket not
+      // found" — and the error was swallowed, so the message sent with the
+      // file silently missing and no one was told.
+      const { error } = await sb.storage.from('project-files').upload(path, replyFile)
+      if (error) {
+        setSendingReply(false)
+        toast('Could not attach ' + replyFile.name + ': ' + error.message, true)
+        return
       }
+      const { data: url } = sb.storage.from('project-files').getPublicUrl(path)
+      fileUrl = url.publicUrl; fileName = replyFile.name
     }
     const otherId = selectedConv.sender_id === session?.userId
       ? selectedConv.receiver_id

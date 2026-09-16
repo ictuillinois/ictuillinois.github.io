@@ -8,7 +8,11 @@ import { useAppStore } from '../../store/useAppStore'
 // these go straight to Supabase storage rather than through StorageService's
 // per-user provider. A lab user who had picked Google Drive would otherwise
 // upload into their own Drive, where nobody else could open it.
-const BUCKET = 'lab-files'
+//
+// project-files, not lab-files: this project has no lab-files bucket. It is
+// named in LabMessage.jsx and nowhere else, and uploads there fail with
+// "Bucket not found".
+const BUCKET = 'project-files'
 
 const KINDS = {
   pdf:   { icon: '📄', label: 'PDF' },
