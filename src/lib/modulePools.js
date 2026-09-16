@@ -25,8 +25,21 @@ const nonEmpty = a => (Array.isArray(a) && a.length ? a : null)
  * pool (not an intersection). Returns an array, or null for unrestricted.
  */
 export function orgCapabilityPool({ appPool, orgOuterPool, orgRolePool } = {}) {
-  const org = nonEmpty(orgRolePool) ?? nonEmpty(orgOuterPool)
-  return org ?? nonEmpty(appPool)
+  // ICT-Lab is a single-organization deployment, so `appPool`
+  // (settings.app_allowed_modules) is NOT consulted. It is LabHive's global
+  // default across many orgs; here the super admin already says what the one
+  // org gets, in the org's own Icons modal.
+  //
+  // Keeping both was actively harmful: the global modal has no entry point in
+  // this app's super admin panel — setAppModulesOpen(true) is never called —
+  // so the row could not be edited, yet a leftover narrow value still won
+  // whenever the org grant was null. Icons the super admin had granted showed
+  // as "contact us to enable" with no control anywhere that could change it.
+  //
+  // appPool stays in the signature so call sites match LabHive's and this
+  // stays a one-line difference rather than a fork.
+  void appPool
+  return nonEmpty(orgRolePool) ?? nonEmpty(orgOuterPool)
 }
 
 /**
