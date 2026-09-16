@@ -1272,14 +1272,21 @@ function OrgModulesModal({ org, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    sb.from('organizations').select('allowed_modules').eq('id', org.id).maybeSingle()
-      .then(({ data }) => {
-        if (data?.allowed_modules) {
-          setSelected(new Set(data.allowed_modules))
-        } else {
-          setSelected(new Set(ORG_CONFIGURABLE_MODULES.map(m => m.key)))
-        }
-      })
+    // An org with no grant of its own inherits the global app pool, so that is
+    // what to show — pre-ticking everything would claim access the org does
+    // not have until this is saved.
+    Promise.all([
+      sb.from('organizations').select('allowed_modules').eq('id', org.id).maybeSingle(),
+      sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
+    ]).then(([orgRes, appRes]) => {
+      if (orgRes?.data?.allowed_modules?.length) {
+        setSelected(new Set(orgRes.data.allowed_modules))
+        return
+      }
+      let appPool = null
+      try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
+      setSelected(new Set(appPool?.length ? appPool : ORG_CONFIGURABLE_MODULES.map(m => m.key)))
+    })
   }, [org.id])
 
   function toggle(key) {
@@ -1290,7 +1297,12 @@ function OrgModulesModal({ org, onClose, onSaved }) {
     setSaving(true)
     const allKeys = ORG_CONFIGURABLE_MODULES.map(m => m.key)
     const selectedKeys = allKeys.filter(k => selected.has(k))
-    const toSave = selectedKeys.length === allKeys.length ? null : selectedKeys
+    // Save the explicit list, never null. Collapsing "everything ticked" to
+    // null did not mean "grant everything" — null means "inherit the global
+    // app pool", which is usually NARROWER. So ticking Select all could leave
+    // modules locked in the org's own panel, with every checkbox showing
+    // enabled. What is ticked is now what is granted.
+    const toSave = selectedKeys
     const { error } = await sb.from('organizations').update({ allowed_modules: toSave }).eq('id', org.id)
     if (error) { toast('Error saving: ' + error.message); setSaving(false); return }
     toast(`Icon access saved for ${org.name}`)
