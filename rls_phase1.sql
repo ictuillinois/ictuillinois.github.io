@@ -190,6 +190,16 @@ WITH CHECK (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
 
 
+-- Per-role icon pools (layer 2 of the icon hierarchy). These never existed on
+-- this database, and their absence broke far more than saving: OrgPoolEditor
+-- SELECTs `allowed_modules, allowed_modules_labusers`, and PostgREST fails the
+-- WHOLE request when one named column is missing. The org grant therefore came
+-- back empty on every load, so icons the super admin HAD granted rendered as
+-- "contact us to enable" in the org admin's own panel, with no error shown.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules             JSONB;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labusers    JSONB;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labmanagers JSONB;
+
 -- ────────────────────────────────────────────────────────────────
 -- STEP 5: users
 -- ────────────────────────────────────────────────────────────────

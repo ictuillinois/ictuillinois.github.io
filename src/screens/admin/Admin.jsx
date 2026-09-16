@@ -379,6 +379,14 @@ function OrgPoolEditor({ orgId, poolKey, label, kind }) {
       sb.from('organizations').select(`allowed_modules, ${poolKey}`).eq('id', orgId).maybeSingle(),
       sb.from('settings').select('value').eq('key', 'app_allowed_modules').maybeSingle(),
     ])
+    // Read the error. PostgREST fails the whole SELECT when any named column is
+    // missing, and this one names a column that did not exist on ICT-Lab for
+    // months — the org grant silently came back empty and every icon outside
+    // the fallback locked itself, with nothing anywhere saying why.
+    if (orgRes?.error) {
+      console.error('[OrgPoolEditor] org load failed:', orgRes.error)
+      toast('Could not load this organization\u2019s icon pool: ' + orgRes.error.message, true)
+    }
     let appPool = null
     try { appPool = appRes?.data?.value ? JSON.parse(appRes.data.value) : null } catch {}
     // Layer 1 via the shared resolver: what the SUPER admin granted this org.
