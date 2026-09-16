@@ -15,7 +15,10 @@ function getModules(role, loginMode, activeModules) {
     // org admin granted and needed hand-editing for every new module.
     if (m.adminOnly && !isLabManager) return false
     if (m.hideForLabManager && isLabManager) return false
-    if (m.labManagerOnly && !isLabManager) return false
+    // Granted wins: activeModules is already the resolved pool ∩ the user's
+    // own picks, so a module the org admin put in the lab user pool shows.
+    if (m.labManagerOnly && !isLabManager && !(activeModules || []).includes(m.key)) return false
+    if (m.neverLabUser && !isLabManager) return false
     if (m.soloLocked && loginMode === 'solo') return false
     return true
   })

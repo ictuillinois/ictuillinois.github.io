@@ -250,7 +250,8 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     if (!m.screen && !m.external) return false
     if (!m.roles || !m.roles.includes(roleKey)) return false
     if (m.soloLocked && loginMode === 'solo') return false
-    if (m.labManagerOnly && !isLabManager) return false
+    if (m.labManagerOnly && !isLabManager && !(activeModules || []).includes(m.key)) return false
+    if (m.neverLabUser && !isLabManager) return false
     if (loginMode === 'solo' && soloPool !== null && !m.external && !soloPool.includes(m.key) && m.key !== 'profile') return false
     return true
   })

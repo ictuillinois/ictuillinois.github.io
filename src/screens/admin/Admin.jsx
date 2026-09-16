@@ -353,7 +353,11 @@ function modulesForPoolRole(kind) {
   return ALL_MODULES_META.filter(m => {
     if (!m.roles.includes('team')) return false
     if (m.adminOnly) return false
-    if (kind === 'labusers' && m.labManagerOnly) return false
+    // labManagerOnly is a DEFAULT, not a wall: the org admin may grant these
+    // to lab users, and every downstream filter honours an explicit grant.
+    // neverLabUser is the wall — Lab Management is the console for managing
+    // users, so handing it to a lab user is a privilege escalation.
+    if (kind === 'labusers' && m.neverLabUser) return false
     return true
   })
 }

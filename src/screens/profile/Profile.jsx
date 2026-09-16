@@ -521,7 +521,7 @@ function DashboardIconsPanel({ session }) {
   const isLabManager = session?.role === 'admin' || session?.role === 'user'
   const pinnedKeys = isLabManager ? [...PINNED_MODULES, ...LAB_MANAGER_PINNED_MODULES] : PINNED_MODULES
   const uiPinnedKeys = PINNED_MODULES // grayed-out + non-draggable (profile only)
-  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager))
+  const available = ALL_MODULES_META.filter(m => m.roles.includes(roleKey) && (!m.hideForLabManager || !isLabManager) && (!m.labManagerOnly || isLabManager || !m.neverLabUser))
 
   const [selected, setSelected] = useState(null)
   const [displayOrder, setDisplayOrder] = useState(null)
