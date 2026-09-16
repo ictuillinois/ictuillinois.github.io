@@ -1686,6 +1686,34 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
         )
       })}
 
+      {/* Nudge to the next step once this one is approved. Without it the step
+          just turns green and nothing tells the user there is more to do — the
+          only cue was a tab colour change they had no reason to look for.
+          Hidden on the last step, which has the completion banner below.
+          Note the `.completed` check: progress here is an object per step, not
+          a boolean, so a truthy test would light this up for every step. */}
+      {!allApproved && (() => {
+        const cur  = STEPS.find(x => x.number === activeStep)
+        const next = STEPS.find(x => x.number === activeStep + 1)
+        if (!cur || !next || !userProg[cur.number]?.completed) return null
+        return (
+          <div style={{ borderTop: '1px solid #9FE1CB', padding: '14px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>✓ {cur.title} approved</div>
+              <div style={{ fontSize: 12, color: '#085041', marginTop: 2 }}>
+                {isLabManager
+                  ? `Next up for ${user.nick_name?.trim() || user.name}: ${next.title} — ${next.description}.`
+                  : `Next: ${next.title} — ${next.description}.`}
+              </div>
+            </div>
+            <button onClick={() => setActiveStep(next.number)}
+              style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Go to {next.title} →
+            </button>
+          </div>
+        )
+      })()}
+
       {allApproved && (
         <div style={{ borderTop: '1px solid #9FE1CB', padding: '16px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
