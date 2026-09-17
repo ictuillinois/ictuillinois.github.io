@@ -810,10 +810,20 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage, maxPages }) {
         const res = await fetch(pdfPath)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.arrayBuffer()
+        // A missing file does NOT arrive as a 404: the SPA fallback serves
+        // index.html for any unknown path, so the fetch succeeds and PDF.js
+        // fails on HTML — which used to be reported as a connection problem.
+        // Every PDF starts with the bytes %PDF.
+        const magic = new TextDecoder().decode(new Uint8Array(data.slice(0, 5)))
+        if (magic !== '%PDF-') throw new Error(`NOT_A_PDF:${pdfPath}`)
         const doc = await pdfjsLib.getDocument({ data }).promise
         if (!cancelled) { setPdfDoc(doc); setTotalPages(doc.numPages) }
       } catch (e) {
-        if (!cancelled) setPdfError('Failed to load PDF. Please check your connection and try again.')
+        console.error('[SimplePDFViewer] load failed:', pdfPath, e)
+        if (!cancelled) setPdfError(
+          String(e?.message || '').startsWith('NOT_A_PDF')
+            ? `This document has not been uploaded yet (${pdfPath}). Ask your lab manager to add it.`
+            : 'Failed to load PDF. Please check your connection and try again.')
       }
       if (!cancelled) setLoading(false)
     }
