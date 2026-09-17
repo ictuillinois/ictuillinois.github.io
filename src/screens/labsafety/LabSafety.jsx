@@ -901,7 +901,7 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage, maxPages }) {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
           >
             <span style={{ fontSize: 18 }}>📄</span>
-            {done ? 'Review Document Again' : `Open Safety Rules PDF (${maxPages || totalPages || 5} pages)`}
+            {done ? 'Review Document Again' : `Open Document${(maxPages || totalPages) ? ` (${maxPages || totalPages} pages)` : ''}`}
           </button>
         </div>
       ) : (
@@ -1117,7 +1117,6 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
             pdfPath="/laboratory-safety-guide.pdf"
             localKey={`ictlab_step2_guide_${user?.id}`}
             onLastPage={() => setGuideAtEnd(true)}
-            maxPages={17}
           />
           {(guideAtEnd || guideRead) && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: '#E1F5EE', border: '1px solid #9FE1CB', cursor: guideRead ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: '#085041' }}>
