@@ -1053,7 +1053,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
     return (
       <div>
         <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
-          Lab users must: (1) read the <strong>ICT Safety Rules 2026</strong> document, (2) digitally sign and submit the <strong>compliance form</strong> (Appendix D), and (3) complete two online DRS training modules and upload their completion certificates.
+          Lab users must: (1) read the <strong>Laboratory Safety Guide</strong> in full and confirm it, and (2) complete both online DRS training modules and upload their completion certificates.
         </div>
         {!hasAny ? (
           <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, border: '2px dashed var(--border)', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
@@ -1133,7 +1133,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       <div style={{ border: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', background: (ext1Url && ext2Url) ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: (ext1Url && ext2Url) ? '#1D9E75' : '#E1F5EE', border: `2px solid ${(ext1Url && ext2Url) ? '#1D9E75' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: (ext1Url && ext2Url) ? '#fff' : '#9ca3af', flexShrink: 0 }}>
-            {(ext1Url && ext2Url) ? '✓' : '3'}
+            {(ext1Url && ext2Url) ? '✓' : '2'}
           </div>
           <div style={{ fontWeight: 700, fontSize: 14, color: (ext1Url && ext2Url) ? '#085041' : 'var(--text)' }}>Complete DRS Online Safety Training</div>
         </div>
@@ -1209,7 +1209,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       {/* Progress summary */}
       {!isSubmitted && (
         <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', paddingBottom: 4 }}>
-          {[guideRead, !!ext1Url, !!ext2Url].filter(Boolean).length} / 3 items submitted
+          {[guideRead, (!!ext1Url && !!ext2Url)].filter(Boolean).length} / 2 items submitted
           {allDone ? ' — step will be marked as submitted' : ''}
         </div>
       )}
