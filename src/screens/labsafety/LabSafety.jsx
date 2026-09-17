@@ -60,9 +60,12 @@ async function autoSaveToDocumentsTab(userId, certUrl, certName, approved = fals
 }
 
 const STEP_DOC_NAMES = {
-  1: ['ICT Health and Safety Program Part I — All ICT Users'],
-  2: ['ICT Health and Safety Program Part II — Lab Users'],
-  3: ['ICT Safety Rules — Compliance Form (Appendix D)', 'DRS Online Training — Part 1 Certificate', 'DRS Online Training — Part 2 Certificate'],
+  // Step 1 (video) issues no document; Step 3's certificate comes from the
+  // acknowledgement test. Part I / Part II entries are kept so documents saved
+  // by the retired steps are still recognised on existing records.
+  2: ['DRS Online Training — Part 1 Certificate', 'DRS Online Training — Part 2 Certificate'],
+  'legacy_part1': ['ICT Health and Safety Program Part I — All ICT Users'],
+  'legacy_part2': ['ICT Health and Safety Program Part II — Lab Users'],
 }
 
 // Documents auto-saved from the Safety tab (Steps 1-3) — approving these in
@@ -80,59 +83,31 @@ async function setDocApproval(userId, stepNumber, approved) {
 }
 
 // ── Step configuration ─────────────────────────────────────────────────────
+// Three steps as of Sept 2026. The two ICT Safety Part I / Part II PDF readers
+// that used to be steps 1 and 2 are gone; their lab_safety_progress rows are
+// left in place rather than deleted, since they record training that happened.
 const STEPS = [
   {
     number: 1,
     title: 'Step 1',
-    icon: '📋',
-    description: 'Read ICT Safety Part I & receive certificate',
-    type: 'pdf_safety',
-    pdfConfig: {
-      pdfPath: '/ict-safety-part1.pdf',
-      slideCount: 46,
-      displayTitle: 'ICT Health and Safety Program Part I',
-      certTitle: 'ICT Health and Safety Program Part I — All ICT Users',
-      certSubtitle: 'Covering RAMP Risk Assessment, PPE, Emergency Procedures & ICT Laboratory Policies',
-      certSemester: 'ICT LABORATORY SAFETY PROGRAM  ·  FALL 2025',
-      storagePrefix: 'safety-certs/part1/',
-      stepNumber: 1,
-      localKeyBase: 'ictlab_step1',
-      autoUpdateOnMount: true,
-    },
-  },
-  {
-    number: 2,
-    title: 'Step 2',
-    icon: '📋',
-    description: 'Read ICT Safety Part II & receive certificate',
-    type: 'pdf_safety',
-    pdfConfig: {
-      pdfPath: '/ict-safety-part2.pdf',
-      slideCount: 24,
-      displayTitle: 'ICT Health and Safety Program Part II',
-      certTitle: 'ICT Health and Safety Program Part II — Lab Users',
-      certSubtitle: 'Covering Chemical Safety, Lab Policies, Equipment Use & Emergency Preparedness',
-      certSemester: 'ICT LABORATORY SAFETY PROGRAM  ·  FALL 2025',
-      storagePrefix: 'safety-certs/part2/',
-      stepNumber: 2,
-      localKeyBase: 'ictlab_step2',
-      autoUpdateOnMount: false,
-    },
-  },
-  {
-    number: 3,
-    title: 'Step 3',
-    icon: '📝',
-    description: 'Read Safety Rules, sign compliance form & complete online training',
-    type: 'safety_rules',
-  },
-  {
-    number: 4,
-    title: 'Step 4',
     icon: '🎬',
     description: 'Watch the ICT Safety Training Video',
     type: 'ict_video',
     content: null,
+  },
+  {
+    number: 2,
+    title: 'Step 2',
+    icon: '📝',
+    description: 'Read the Laboratory Safety Guide & complete DRS online training',
+    type: 'safety_rules',
+  },
+  {
+    number: 3,
+    title: 'Step 3',
+    icon: '🎓',
+    description: 'Watch both safety videos & pass the acknowledgement test',
+    type: 'safety_exam',
   },
 ]
 
@@ -981,9 +956,11 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
     piFirst:   '',
     piLast:    '',
   })
-  const [formUrl, setFormUrl]         = useState(savedUrls.form || null)
-  const [generatingForm, setGeneratingForm] = useState(false)
-  const [formError, setFormError]     = useState(null)
+  // Laboratory Safety Guide: read to the last page, then confirm. Stored in the
+  // same certificate_url JSON blob the other items use.
+  const [guideRead, setGuideRead]     = useState(!!savedUrls.guide)
+  const [guideAtEnd, setGuideAtEnd]   = useState(!!savedUrls.guide)
+  const [savingGuide, setSavingGuide] = useState(false)
 
   // External cert uploads
   const [ext1Url, setExt1Url]   = useState(savedUrls.ext1 || null)
@@ -995,147 +972,45 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
   const ext2InputRef = useRef(null)
 
   async function saveProgress(updates) {
-    const urls = { form: formUrl, ext1: ext1Url, ext2: ext2Url, ...updates }
-    const allDone = !!urls.form && !!urls.ext1 && !!urls.ext2
-    const wasAllDoneBefore = !!savedUrls.form && !!savedUrls.ext1 && !!savedUrls.ext2
+    // `guide` must be carried in the base object, not only when it arrives in
+    // updates — otherwise the next save (an upload) drops the confirmation the
+    // user already gave.
+    // savedUrls.form is carried through untouched: the compliance form is
+    // retired, but a record that already has one must not lose it on the next
+    // save.
+    const urls = { form: savedUrls.form || null, guide: guideRead, ext1: ext1Url, ext2: ext2Url, ...updates }
+    const allDone = !!urls.guide && !!urls.ext1 && !!urls.ext2
+    const wasAllDoneBefore = !!savedUrls.guide && !!savedUrls.ext1 && !!savedUrls.ext2
     const submittedAt = allDone ? (stepRow?.submitted_at || new Date().toISOString()) : (stepRow?.submitted_at || null)
     const payload = {
       user_id: user.id,
       organization_id: session.organizationId,
-      step_number: 3,
+      step_number: 2,
       completed: false,
       certificate_url: JSON.stringify(urls),
       submitted_at: submittedAt,
     }
-    await sb.from('lab_safety_progress').upsert(payload, { onConflict: 'user_id,step_number' })
+    const { error: upsertErr } = await sb.from('lab_safety_progress')
+      .upsert(payload, { onConflict: 'user_id,step_number' })
+    if (upsertErr) { console.error('[LabSafety] saveProgress failed:', upsertErr); return false }
     if (allDone && !wasAllDoneBefore) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
       notifyManagersOfSafetySubmission(session.organizationId, fullName, 'ICT Safety Compliance Documents')
     }
     onCertGenerated({ certificate_url: JSON.stringify(urls), submitted_at: submittedAt })
+    return true
   }
 
-  async function generateComplianceForm() {
-    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim() || !formData.piLast.trim() || !formData.piFirst.trim()) {
-      setFormError('Please fill in all fields before generating the form.')
-      return
-    }
-    setGeneratingForm(true)
-    setFormError(null)
-    try {
-      // ICT logo watermark
-      let logoDataUrl = null
-      try {
-        const res = await fetch('/ict-logo.png')
-        if (res.ok) {
-          const blob = await res.blob()
-          const objUrl = URL.createObjectURL(blob)
-          const img = await new Promise(resolve => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = objUrl })
-          if (img?.naturalWidth > 0) {
-            const cvs = document.createElement('canvas'); cvs.width = img.naturalWidth; cvs.height = img.naturalHeight
-            const ctx = cvs.getContext('2d'); ctx.globalAlpha = 0.07; ctx.drawImage(img, 0, 0)
-            logoDataUrl = cvs.toDataURL('image/png')
-          }
-          URL.revokeObjectURL(objUrl)
-        }
-      } catch {}
-
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const W = 210, H = 297
-
-      doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F')
-      if (logoDataUrl) { const s = 120; doc.addImage(logoDataUrl, 'PNG', W/2 - s/2, H/2 - s/2 + 20, s, s) }
-
-      // Border
-      doc.setDrawColor(29, 158, 117); doc.setLineWidth(2); doc.rect(8, 8, W - 16, H - 16)
-      doc.setLineWidth(0.5); doc.rect(11, 11, W - 22, H - 22)
-      doc.setFillColor(29, 158, 117)
-      ;[[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([cx, cy]) => doc.circle(cx, cy, 3, 'F'))
-
-      // Header band
-      doc.setFillColor(13, 71, 161); doc.rect(8, 8, W - 16, 28, 'F')
-      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
-      doc.text('Civil and Environmental Engineering ICT Laboratory', W/2, 19, { align: 'center' })
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
-      doc.text('Safety Rules — COMPLIANCE FORM', W/2, 29, { align: 'center' })
-
-      // Body text
-      doc.setTextColor(50, 50, 50); doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
-      const body = 'I have read, understood, and will comply with the rules outlined in the Civil and Environmental Engineering ICT Laboratory Safety Rules. I will take full responsibility for any action that may happen while using the ICT Laboratories.'
-      doc.text(body, 20, 50, { maxWidth: W - 40 })
-
-      // LAB_USER section
-      let y = 82
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20)
-      doc.text('LAB_USER:', 20, y); y += 14
-
-      const lineColor = [29, 158, 117]
-      doc.setDrawColor(...lineColor); doc.setLineWidth(0.4)
-
-      // Last / First name row
-      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
-      doc.text(formData.lastName, 20, y - 2)
-      doc.text(formData.firstName, 105, y - 2)
-      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
-      doc.text('Last Name (print)', 20, y + 4)
-      doc.text('First Name (print)', 105, y + 4)
-      y += 18
-
-      // Signature / Date row
-      doc.setDrawColor(...lineColor)
-      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
-      doc.text(`${formData.firstName} ${formData.lastName}`, 20, y - 2)
-      doc.setFont('helvetica', 'normal')
-      doc.text(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), 105, y - 2)
-      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
-      doc.text('Signature (Electronic)', 20, y + 4)
-      doc.text('Date Signed', 105, y + 4)
-      y += 18
-
-      // Email row
-      doc.setDrawColor(...lineColor); doc.line(20, y, 130, y)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
-      doc.text(formData.email, 20, y - 2)
-      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
-      doc.text('UIUC Email address', 20, y + 4)
-      y += 24
-
-      // PI section
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20)
-      doc.text('PRINCIPAL INVESTIGATOR:', 20, y); y += 14
-
-      doc.setDrawColor(...lineColor)
-      doc.line(20, y, 95, y); doc.line(105, y, 190, y)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(20, 20, 20)
-      doc.text(formData.piLast, 20, y - 2)
-      doc.text(formData.piFirst, 105, y - 2)
-      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
-      doc.text('Last Name (print)', 20, y + 4)
-      doc.text('First Name (print)', 105, y + 4)
-
-      // Footer
-      doc.setFillColor(29, 158, 117); doc.rect(8, H - 20, W - 16, 12, 'F')
-      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
-      doc.text('ICT Laboratory · College of Engineering · University of Illinois Urbana-Champaign', W/2, H - 12, { align: 'center' })
-
-      const blob = doc.output('blob')
-      const fileName = `safety-certs/step3/${user.id}-compliance-${Date.now()}.pdf`
-      const { error: upErr } = await sb.storage.from('project-files').upload(fileName, blob, { contentType: 'application/pdf', upsert: false })
-      if (upErr) throw upErr
-
-      const { data: urlData } = sb.storage.from('project-files').getPublicUrl(fileName)
-      const url = urlData?.publicUrl
-      setFormUrl(url)
-      await saveProgress({ form: url })
-      await autoSaveToDocumentsTab(user.id, url, 'ICT Safety Rules — Compliance Form (Appendix D)')
-    } catch (e) {
-      console.error('Compliance form error:', e)
-      setFormError('Failed to generate or upload the form. Please try again.')
-    }
-    setGeneratingForm(false)
+  async function confirmGuide() {
+    if (guideRead || savingGuide) return
+    setSavingGuide(true)
+    const ok = await saveProgress({ guide: true })
+    setSavingGuide(false)
+    // Only flip the box once the write actually landed — a checkbox that ticks
+    // itself and then silently did not save is worse than one that refuses.
+    if (ok !== false) setGuideRead(true)
   }
+
 
   async function uploadExtCert(part, file) {
     if (!file) return
@@ -1177,7 +1052,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { label: 'Compliance Form (Appendix D)', url: urls.form, done: hasForm },
+              { label: 'Laboratory Safety Guide — read & confirmed', url: null, done: !!urls.guide },
               { label: 'DRS Online Training Part 1 Certificate', url: urls.ext1, done: hasExt1 },
               { label: 'DRS Online Training Part 2 Certificate', url: urls.ext2, done: hasExt2 },
             ].map(({ label, url, done }, i) => (
@@ -1201,7 +1076,9 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
   // ── Lab user view ──
   const isSubmitted = !!stepRow?.submitted_at
-  const allDone = !!formUrl && !!ext1Url && !!ext2Url
+  // The compliance form (Appendix D) was removed Sept 2026; the Laboratory
+  // Safety Guide confirmation takes its place in the completion check.
+  const allDone = guideRead && !!ext1Url && !!ext2Url
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1209,112 +1086,40 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       {/* Submitted banner */}
       {isSubmitted && (
         <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
-          <span style={{ fontWeight: 700 }}>✓ All Step 3 documents submitted — awaiting lab manager approval.</span><br />
+          <span style={{ fontWeight: 700 }}>✓ All Step 2 documents submitted — awaiting lab manager approval.</span><br />
           All certificates have been saved to your <strong>Training Records → Documents tab</strong>. Already sent to your lab manager — no need to submit them again.
         </div>
       )}
 
-      {/* ── Card 1: Read Safety Rules PDF ── */}
-      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* ── Card 1: Laboratory Safety Guide ── */}
+      <div style={{ border: `1px solid ${guideRead ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: guideRead ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${guideRead ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#E1F5EE', border: '2px solid #1D9E75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#1D9E75', flexShrink: 0 }}>1</div>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Read the ICT Safety Rules Document</div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Laboratory Safety Guide</div>
+          {guideRead && <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#085041' }}>✓ Confirmed</span>}
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
-            Read all 6 pages of the <strong>ICT Safety Rules in Laboratories — 2026</strong>, including General Safety Rules, PPE requirements (Appendix A), Electrical Rules (Appendix B), and the Compliance Form template (Appendix D).
+            Read every page of the <strong>Laboratory Safety Guide — Chemical Hygiene Plan and Safety Policies</strong>
+            (University of Illinois, Division of Research Safety). The confirmation box appears once you reach the last page.
           </div>
           <SimplePDFViewer
-            pdfPath="/ict-safety-rules.pdf"
-            localKey={`ictlab_step3_read_${user?.id}`}
-            onLastPage={() => {}}
-            maxPages={5}
+            pdfPath="/laboratory-safety-guide.pdf"
+            localKey={`ictlab_step2_guide_${user?.id}`}
+            onLastPage={() => setGuideAtEnd(true)}
+            maxPages={17}
           />
-        </div>
-      </div>
-
-      {/* ── Card 2: Compliance Form ── */}
-      <div style={{ border: `1px solid ${formUrl ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', background: formUrl ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${formUrl ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: formUrl ? '#1D9E75' : '#E1F5EE', border: `2px solid ${formUrl ? '#1D9E75' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: formUrl ? '#fff' : '#9ca3af', flexShrink: 0 }}>
-            {formUrl ? '✓' : '2'}
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: formUrl ? '#085041' : 'var(--text)' }}>Sign the Compliance Form (Appendix D)</div>
-          {formUrl && (
-            <a href={formUrl} target="_blank" rel="noreferrer"
-              style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#1D9E75', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              View Form ↗
-            </a>
-          )}
-        </div>
-        <div style={{ padding: 16 }}>
-          {!formUrl ? (
-            <>
-              <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '12px 14px', marginBottom: 14, fontSize: 13, color: '#1e293b', lineHeight: 1.8 }}>
-                <span style={{ fontWeight: 700 }}>Compliance Statement (Appendix D):</span><br />
-                "I have read, understood, and will comply with the rules outlined in the Civil and Environmental Engineering ICT Laboratory Safety Rules. I will take full responsibility for any action that may happen while using the ICT Laboratories."
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
-                Fill in your details below. Your typed name serves as your electronic signature. This generates a signed PDF version of Appendix D and submits it to your lab manager.
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                {[
-                  { key: 'firstName', label: 'First Name*' },
-                  { key: 'lastName',  label: 'Last Name*' },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
-                    <input
-                      value={formData[key]}
-                      onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>UIUC Email Address*</div>
-                <input
-                  value={formData.email}
-                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  type="email"
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Principal Investigator</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                {[
-                  { key: 'piFirst', label: 'PI First Name*' },
-                  { key: 'piLast',  label: 'PI Last Name*' },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
-                    <input
-                      value={formData[key]}
-                      onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--sans)', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                ))}
-              </div>
-              {formError && <div style={{ fontSize: 13, color: '#c84b2f', background: '#fef2f2', borderRadius: 6, padding: '8px 12px', marginBottom: 10 }}>{formError}</div>}
-              <button
-                onClick={generateComplianceForm}
-                disabled={generatingForm}
-                style={{ padding: '10px 22px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: generatingForm ? 'default' : 'pointer', opacity: generatingForm ? 0.7 : 1 }}
-              >
-                {generatingForm ? '⏳ Generating…' : '📋 Generate & Submit Compliance Form'}
-              </button>
-            </>
-          ) : (
-            <div style={{ fontSize: 13, color: '#085041', lineHeight: 1.7 }}>
-              Your signed compliance form has been submitted and saved to your <strong>Documents tab</strong>. Click <strong>View Form ↗</strong> above to download a copy.
-            </div>
+          {(guideAtEnd || guideRead) && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: '#E1F5EE', border: '1px solid #9FE1CB', cursor: guideRead ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: '#085041' }}>
+              <input type="checkbox" checked={guideRead} disabled={guideRead || savingGuide}
+                onChange={confirmGuide} style={{ width: 'auto' }} />
+              I confirm reading the Laboratory Safety Guide
+            </label>
           )}
         </div>
       </div>
 
-      {/* ── Card 3: External Training ── */}
+      {/* ── Card 2: External Training ── */}
       <div style={{ border: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', background: (ext1Url && ext2Url) ? '#E1F5EE' : 'var(--surface2)', borderBottom: `1px solid ${(ext1Url && ext2Url) ? '#9FE1CB' : 'var(--border)'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: '50%', background: (ext1Url && ext2Url) ? '#1D9E75' : '#E1F5EE', border: `2px solid ${(ext1Url && ext2Url) ? '#1D9E75' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: (ext1Url && ext2Url) ? '#fff' : '#9ca3af', flexShrink: 0 }}>
@@ -1394,7 +1199,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
       {/* Progress summary */}
       {!isSubmitted && (
         <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', paddingBottom: 4 }}>
-          {[!!formUrl, !!ext1Url, !!ext2Url].filter(Boolean).length} / 3 items submitted
+          {[guideRead, !!ext1Url, !!ext2Url].filter(Boolean).length} / 3 items submitted
           {allDone ? ' — step will be marked as submitted' : ''}
         </div>
       )}
@@ -1402,7 +1207,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
   )
 }
 
-// ── Step 4: ICT Safety Video ───────────────────────────────────────────────
+// ── Step 1: ICT Safety Video ───────────────────────────────────────────────
 
 const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 
@@ -1441,13 +1246,13 @@ function Step4VideoContent({ user, isManager }) {
     const orgId = session?.organizationId || null
     const { error } = await sb.from('lab_safety_progress').upsert({
       user_id: userId,
-      step_number: 4,
+      step_number: 1,
       completed: true,
       submitted_at: new Date().toISOString(),
       organization_id: orgId,
     }, { onConflict: 'user_id,step_number' })
     if (error) {
-      console.error('Step 4 confirm error:', error)
+      console.error('Step 1 confirm error:', error)
       setConfirmError('Failed to save your confirmation. Please try again.')
       setSaving(false)
       return
@@ -1455,7 +1260,7 @@ function Step4VideoContent({ user, isManager }) {
     setConfirmed(true)
     if (orgId) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
-      notifyManagersOfSafetySubmission(orgId, fullName, 'ICT Safety Training Video confirmation (Step 4)')
+      notifyManagersOfSafetySubmission(orgId, fullName, 'ICT Safety Training Video confirmation (Step 1)')
     }
     setSaving(false)
   }
@@ -1717,7 +1522,7 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
       {allApproved && (
         <div style={{ borderTop: '1px solid #9FE1CB', padding: '16px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>🎉 All 4 steps approved!</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>{`🎉 All ${STEPS.length} steps approved!`}</div>
             <div style={{ fontSize: 12, color: '#085041', marginTop: 2 }}>
               {isLabManager
                 ? `${user.nick_name?.trim() || user.name}'s certificates have been saved to their Documents tab in Training Records.`
