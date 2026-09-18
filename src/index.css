@@ -453,7 +453,7 @@ main > * { animation: screen-fade 0.16s ease-out; }
   background-size: cover;
   /* Near-centred: at 2:1 against a 2.02:1 window there is barely any crop
      left to steer. */
-  background-position: 50% 46%;
+  background-position: 50% 30%;
   background-repeat: no-repeat;
 }
 /* margin auto rather than justify-content:center — this element scrolls, and a
@@ -490,11 +490,12 @@ main > * { animation: screen-fade 0.16s ease-out; }
 @media (min-width: 1024px) {
   .login-shell {
     align-items: flex-start;
-    padding-left: min(6vw, 96px);
-    /* Sits the card lower in the frame. With auto margins the content centres
-       in the padded box, so this shifts it down by about half the value —
-       and when the card is taller than the space, it offsets directly. */
-    padding-top: clamp(24px, 10vh, 96px);
+    /* Tight to the edge: every pixel the card sits further right is a pixel
+       more of the lettering it covers. */
+    padding-left: min(3vw, 44px);
+    /* No extra top padding. The card is ~680px in a ~745px window, so pushing
+       it down moves its top edge INTO the lettering rather than clear of it —
+       the card and the sign move toward each other, not apart. */
   }
 }
 @media (max-width: 1023px) {
