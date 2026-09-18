@@ -424,65 +424,58 @@ main > * { animation: screen-fade 0.16s ease-out; }
 
 
 /* ── Sign-in page backdrop (ICT building) ──────────────────────────────
-   Treatment C: the card sits in a darkened left column so it reads against
-   the photo, while the right side stays clear enough to show the entrance
-   and the ICT mark — which is the half worth seeing.
+   The photo is fitted to the viewport HEIGHT and anchored right, so the whole
+   building is shown with no vertical crop, and the left of the screen is a
+   clear panel for the card.
 
-   The scrim is a ::before rather than a filter on the image: filtering the
-   background would dim the whole photo evenly and lose exactly the contrast
-   the right side needs. */
+   `cover` was wrong here. It fills the width, so the photo zooms until only
+   ~66% of its height shows, and the ILLINOIS CENTER FOR TRANSPORTATION
+   lettering lands at 8–45% across — exactly where the card sits. No amount of
+   moving the card fixes that: on a 744px-tall window the card and its footer
+   are ~765px, so there is nowhere below the sign to put it. Not cropping the
+   photo is what solves it. */
 .login-shell {
   position: relative;
   height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;            /* narrow screens: centred, as before */
+  justify-content: flex-start;
+  align-items: center;
   padding: 20px;
-  background-color: #1b1f26;      /* shown while the photo loads, and behind it */
+  background-color: #12161c;
   background-image: url('/ict-building.jpg');
-  background-size: cover;
-  /* 62% across keeps both the wall sign (left) and the entrance (right) in
-     frame as the crop tightens. 42% down rather than 58%: the higher the
-     focal point sits in the frame, the more roofline and signage show and
-     the less pavement — which is the part nobody needs. */
-  background-position: 62% 42%;
+  background-size: auto 100%;
+  background-position: right center;
   background-repeat: no-repeat;
 }
+/* margin auto rather than justify-content:center — this element scrolls, and a
+   centred flex child taller than its container has its top clipped with no way
+   to reach it. */
+.login-shell > * { position: relative; z-index: 1; margin-block: auto; }
+
 .login-shell::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Strong under the card, gone by the doorway. */
-  /* Three passes. The first is a corner vignette carrying the area under the
-     card and its footer.
-     Its centre is anchored BELOW the frame (112%), which is what keeps it
-     from reading as a shape: an earlier version centred at 82% put the
-     ellipse's upper arc straight through the footer text as a visible edge.
-     The second pass is a gentle full-width bottom fade, kept light so the
-     hedges and pavement on the right stay readable. */
   background:
-    radial-gradient(ellipse 125% 88% at 16% 112%,
-      rgba(16,20,28,0.62) 0%,
-      rgba(16,20,28,0.34) 42%,
-      rgba(16,20,28,0.10) 66%,
-      rgba(16,20,28,0.00) 78%),
-    linear-gradient(180deg,
-      rgba(16,20,28,0.00) 58%,
-      rgba(16,20,28,0.14) 82%,
-      rgba(16,20,28,0.26) 100%),
+    /* blends the photo's left edge into the panel so the join is not a line */
     linear-gradient(90deg,
-      rgba(16,20,28,0.78) 0%,
-      rgba(16,20,28,0.66) 26%,
-      rgba(16,20,28,0.40) 48%,
-      rgba(16,20,28,0.12) 68%,
-      rgba(16,20,28,0.02) 100%);
+      rgba(18,22,28,1.00) 0%,
+      rgba(18,22,28,0.97) 24%,
+      rgba(18,22,28,0.66) 38%,
+      rgba(18,22,28,0.26) 50%,
+      rgba(18,22,28,0.08) 64%,
+      rgba(18,22,28,0.00) 76%),
+    /* a little weight under the card and its footer */
+    linear-gradient(180deg,
+      rgba(18,22,28,0.00) 60%,
+      rgba(18,22,28,0.10) 82%,
+      rgba(18,22,28,0.24) 100%);
 }
-.login-shell > * { position: relative; z-index: 1; }
 
-/* The footer under the card sits on the dark scrim, so it cannot use the
+/* The footer under the card sits on the dark panel, so it cannot use the
    page's normal text tokens. */
 .login-shell .login-meta,
 .login-shell .login-meta div { color: rgba(255,255,255,0.72) !important; }
@@ -491,32 +484,19 @@ main > * { animation: screen-fade 0.16s ease-out; }
   border-color: rgba(255,255,255,0.4) !important;
   color: rgba(255,255,255,0.88) !important;
 }
-.login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
+.login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
 
 @media (min-width: 900px) {
-  /* Wide enough to hold a column without crowding the entrance.
-     The card also drops below the ILLINOIS CENTER FOR TRANSPORTATION sign,
-     which sits high on the left wall — centred vertically, the card covered
-     exactly the lettering the photo is there to show.
-     flex-start + padding rather than centring: with overflow-y on the same
-     element, centring a card taller than the viewport clips its top and the
-     logo becomes unreachable. */
-  .login-shell {
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding-left: min(7vw, 110px);
-    /* Sit as low as the wall sign needs (34vh) but never so low that the card
-       and the footer beneath it run off the bottom — 580px is what the two
-       need together. On a short laptop this yields, so nothing is clipped;
-       on a tall screen it holds at 34vh and the sign stays clear above. */
-    padding-top: min(34vh, max(40px, calc(100vh - 580px)));
-    padding-bottom: 32px;
-  }
+  .login-shell { align-items: flex-start; padding-left: min(6vw, 96px); }
 }
 @media (max-width: 899px) {
-  /* Narrow: the card has to come back to the middle, so darken evenly
-     rather than leaving one edge bright behind it. */
+  /* Too narrow to hold a panel beside the photo: fill the screen and darken
+     evenly, with the card back in the middle. */
+  .login-shell {
+    background-size: cover;
+    background-position: 62% 45%;
+  }
   .login-shell::before {
-    background: linear-gradient(180deg, rgba(16,20,28,0.72), rgba(16,20,28,0.84));
+    background: linear-gradient(180deg, rgba(18,22,28,0.74), rgba(18,22,28,0.86));
   }
 }
