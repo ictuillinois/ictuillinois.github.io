@@ -14,7 +14,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [failCount, setFailCount]   = useState(0)
   const [lockUntil, setLockUntil]   = useState(0)
-  const [showHelpLookup, setShowHelpLookup] = useState(false)
   const [showContact, setShowContact] = useState(false)
   // Shown only when a user has multiple roles — never for single-role accounts
   const [accountPicker, setAccountPicker] = useState(null) // { rows, orgsMap }
@@ -137,7 +136,7 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <img src={`${import.meta.env.BASE_URL}ict-logo.png`} alt="ICT-Lab"
               style={{ width: 160, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
-            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICT-Lab Sign In</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICTLAB</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Access is managed by your organization admin</div>
           </div>
 
@@ -215,27 +214,11 @@ export default function Login() {
             </form>
           )}
 
-          <div style={{ marginTop: 16 }}>
-           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => setShowHelpLookup(v => !v)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, textAlign: 'center' }}>
-              {showHelpLookup ? '▲ Hide' : 'Need help logging in? →'}
-            </button>
-            <span style={{ color: 'var(--border)' }}>·</span>
+          <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
             <button type="button" onClick={() => setShowContact(true)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <IconMail size={13} /> Contact Us
             </button>
-           </div>
-            {showHelpLookup && (
-              <div style={{ marginTop: 12, background: 'var(--surface2)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>Contact the ICT-Lab team for access assistance:</div>
-                <a href="mailto:ictengineers@mx.uillinois.edu"
-                  style={{ fontSize: 13, fontWeight: 600, color: '#1D9E75', textDecoration: 'none' }}>
-                  ictengineers@mx.uillinois.edu
-                </a>
-              </div>
-            )}
           </div>
         </div>
 
