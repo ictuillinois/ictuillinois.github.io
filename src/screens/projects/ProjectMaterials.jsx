@@ -152,6 +152,21 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
     ? [...baseTypes.filter(t => t.key !== 'other'), baseTypes.find(t => t.key === 'other')]
     : [...baseTypes, { key: 'other', label: 'Other' }]
   const [pgCustom, setPgCustom] = useState('')
+  // Whether the user chose "Other" for the gradation grade is TRACKED, not
+  // inferred from the value. Inferring it (grade not in the list) meant that
+  // typing a value which happens to match an entry — "FM2" — silently turned
+  // the free-text answer back into that dropdown selection mid-keystroke.
+  const [gradeOther, setGradeOther] = useState(() => {
+    const l = IDOT_GRADATIONS[form.idot_gradation_cat] || []
+    const g = form.idot_gradation_grade || ''
+    return !!g && !l.includes(g)
+  })
+  // Re-infer only when the CATEGORY changes, never while typing.
+  useEffect(() => {
+    const l = IDOT_GRADATIONS[form.idot_gradation_cat] || []
+    const g = form.idot_gradation_grade || ''
+    setGradeOther(!!g && !l.includes(g))
+  }, [form.idot_gradation_cat])
 
   function setPG(val) {
     if (val === 'Other') {
@@ -189,29 +204,28 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
             </select>
           </div>
           {form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat] && (() => {
-            // A grade that is not in the category's list is a typed-in one, so
-            // the select shows Other and the box below holds the value. The
-            // value itself still lives in idot_gradation_grade — no second
-            // column, and nothing downstream has to know the difference.
             const list = IDOT_GRADATIONS[form.idot_gradation_cat]
             const grade = form.idot_gradation_grade || ''
-            const isOther = !!grade && !list.includes(grade)
             return (
               <>
                 <div className="field">
                   <label>Gradation Grade <span style={{ color: '#c84b2f' }}>*</span></label>
-                  <select value={isOther ? '__other__' : grade}
-                    onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value === '__other__' ? ' ' : e.target.value }))}>
+                  <select value={gradeOther ? '__other__' : grade}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '__other__') { setGradeOther(true); setForm(f => ({ ...f, idot_gradation_grade: '' })) }
+                      else { setGradeOther(false); setForm(f => ({ ...f, idot_gradation_grade: v })) }
+                    }}>
                     <option value="">— Select grade —</option>
                     {list.map(g => <option key={g} value={g}>{g}</option>)}
                     <option value="__other__">Other</option>
                   </select>
                 </div>
-                {(isOther || grade === ' ') && (
+                {gradeOther && (
                   <div className="field">
                     <label>Gradation grade name <span style={{ color: '#c84b2f' }}>*</span></label>
-                    <input autoFocus value={grade.trim()}
-                      onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value || ' ' }))}
+                    <input autoFocus value={grade}
+                      onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value }))}
                       placeholder="Name this gradation grade…" />
                   </div>
                 )}
