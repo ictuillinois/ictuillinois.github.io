@@ -1186,6 +1186,69 @@ Approving a step now shows a bar naming the next one, on every step but the
 last. Progress here is an object with a `completed` flag (LabHive's is a plain
 boolean) — a truthy test lights the bar on every step.
 
+## Sign-in page — LOCKED, do not change without explicit permission (ICT-Lab)
+
+The backdrop and the card were tuned together over many rounds against real
+window sizes. Changing one value in isolation reliably breaks the composition,
+because the card is a **fixed pixel size** while the photo **scales with the
+window**.
+
+### The constraint, so it is not rediscovered
+
+- The wall lettering spans **8–45% of the photo's width**; the card occupies
+  about **6–34% of the screen**. They overlap horizontally *however the photo
+  is panned* — no crop or `background-position` puts the sign clear to the
+  right of the card. **Only vertical separation exists.**
+- The card + credit line is **~650px fixed**. On the Windows machine
+  (~884px viewport) that is 76% of the height and there is room below the
+  sign. On a Mac (~739px — menu bar and dock) it is 91% and there is not.
+  This is the entire reason the two platforms looked different; nothing about
+  the rendering differs.
+- Lowering the card and giving the sign sky above it move the two **toward**
+  each other. Doing both at once is what broke it twice.
+
+### What is set, and why
+
+| Where | Value | Why |
+|---|---|---|
+| `public/ict-building.jpg` | 2000×1501, 518 KB | original is 9.4 MB — far too heavy for the first page anyone loads |
+| `background-size` | `cover` | full-bleed; a right-hand band reads as a split screen, which was rejected |
+| `background-position` | `62% 42%` | tall windows |
+| short windows | `62% 80%` + `zoom: 0.85` | see below |
+| `padding-left` | `min(7vw, 110px)` | every pixel right is a pixel more lettering covered |
+| `padding-top` | `min(34vh, max(40px, calc(100vh - 580px)))` | as low as the sign needs, yielding before the credit line clips |
+
+**The `@media (min-width: 900px) and (max-height: 820px)` rule is the Mac fix.**
+It scales the column to 85% (freeing ~100px) and lifts the focal point to 80%
+so the sign sits at the top of the frame. `zoom`, not `transform: scale` —
+zoom changes the layout box so `padding-top` sees the smaller height; a
+transform leaves a 670px hole and the offset is computed from the old size.
+
+### The card
+
+Title is **ICTlab**. Below the Sign in button: Terms of Service, then
+**Contact Us** alone, then **Developed by Mohsen Motlagh** outside the card.
+
+Removed deliberately — do not restore: the ICT-Lab / Integrated Lab Management
+Platform / copyright block, the standalone Contact Us button, and the
+"Need help logging in?" toggle (its panel only showed an email address, which
+Contact Us covers properly).
+
+`.login-shell .login-meta` sets the credit line light explicitly; the page's
+`--text2` / `--text3` tokens are tuned for a light background and are almost
+invisible on the scrim.
+
+## The sign-in URL must stay clean
+
+`https://ictlab.labhive.app` — **not** `…/?_v=mu77t63s`.
+
+`main.jsx` force-navigates with a `_v` cache-buster when `version.json` reports
+a build the tab is not running; that is the stale-index recovery and it must
+stay. What must also stay is the `history.replaceState` immediately after it
+that strips `_v` once the fresh build is running. Without it the parameter
+sticks in the address bar, and that is the URL people copy, bookmark and send
+on. `replaceState` costs no request and leaves no extra history entry.
+
 ## Silent-failure classes seen in this codebase — check for these
 
 Every one of these shipped and went unnoticed; none produced an error.
