@@ -136,7 +136,7 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <img src={`${import.meta.env.BASE_URL}ict-logo.png`} alt="ICT-Lab"
               style={{ width: 160, objectFit: 'contain', display: 'block', margin: '0 auto 12px' }} />
-            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICTLAB</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>ICTlab</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Access is managed by your organization admin</div>
           </div>
 
