@@ -54,6 +54,23 @@ if (localStorage.getItem('ictlab_show_tooltips') === 'false') {
   } catch {}
 })()
 
+// Tidy the cache-busting param out of the address bar once the fresh build is
+// running. It has done its job by then — the browser has already fetched the
+// uncached page — and leaving it turns a clean https://ictlab.labhive.app into
+// https://ictlab.labhive.app/?_v=mu77t63s, which is what people copy, bookmark
+// and send to each other.
+//
+// replaceState, not a navigation: rewriting the URL in place costs no request
+// and leaves no extra history entry, so Back still behaves.
+try {
+  const url = new URL(window.location.href)
+  if (url.searchParams.has('_v')) {
+    url.searchParams.delete('_v')
+    const clean = url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : '') + url.hash
+    window.history.replaceState(window.history.state, '', clean)
+  }
+} catch {}
+
 // Mounted here rather than inside App so it survives App's early returns
 // (login page, maintenance mode, the /admin route) — a stale tab should be
 // told about a new build no matter which of those it is sitting on.
