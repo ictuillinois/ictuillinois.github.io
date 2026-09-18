@@ -130,7 +130,7 @@ export default function Login() {
 
   return (
     <>
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '20px' }}>
+    <div className="login-shell">
       <div style={{ width: '100%', maxWidth: 420 }}>
 
         <div className="card" style={{ padding: '28px 28px 12px' }}>
@@ -232,13 +232,13 @@ export default function Login() {
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>ICT-Lab</div>
+        <div className="login-meta" style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
+          <div className="login-brand" style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>ICT-Lab</div>
           <div>Integrated Lab Management Platform</div>
           <div>© {new Date().getFullYear()} All rights reserved</div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, paddingBottom: 8 }}>
+        <div className="login-contact" style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, paddingBottom: 8 }}>
           <button onClick={() => setShowContact(true)}
             style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
             <IconMail size={15} /> Contact Us

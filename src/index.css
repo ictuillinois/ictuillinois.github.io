@@ -421,3 +421,67 @@ main > * { animation: screen-fade 0.16s ease-out; }
     bottom: calc(88px + env(safe-area-inset-bottom));
   }
 }
+
+
+/* ── Sign-in page backdrop (ICT building) ──────────────────────────────
+   Treatment C: the card sits in a darkened left column so it reads against
+   the photo, while the right side stays clear enough to show the entrance
+   and the ICT mark — which is the half worth seeing.
+
+   The scrim is a ::before rather than a filter on the image: filtering the
+   background would dim the whole photo evenly and lose exactly the contrast
+   the right side needs. */
+.login-shell {
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;            /* narrow screens: centred, as before */
+  padding: 20px;
+  background-color: #1b1f26;      /* shown while the photo loads, and behind it */
+  background-image: url('/ict-building.jpg');
+  background-size: cover;
+  /* 68% across keeps the entrance in frame as the viewport narrows and the
+     crop tightens; 58% down favours the building over sky and pavement. */
+  background-position: 68% 58%;
+  background-repeat: no-repeat;
+}
+.login-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Strong under the card, gone by the doorway. */
+  background: linear-gradient(90deg,
+    rgba(16,20,28,0.86) 0%,
+    rgba(16,20,28,0.78) 26%,
+    rgba(16,20,28,0.52) 48%,
+    rgba(16,20,28,0.16) 68%,
+    rgba(16,20,28,0.04) 100%);
+}
+.login-shell > * { position: relative; z-index: 1; }
+
+/* The footer under the card sits on the dark scrim, so it cannot use the
+   page's normal text tokens. */
+.login-shell .login-meta,
+.login-shell .login-meta div { color: rgba(255,255,255,0.72) !important; }
+.login-shell .login-meta .login-brand { color: #fff !important; }
+.login-shell .login-contact button {
+  border-color: rgba(255,255,255,0.4) !important;
+  color: rgba(255,255,255,0.88) !important;
+}
+.login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
+
+@media (min-width: 900px) {
+  /* Wide enough to hold a column without crowding the entrance. */
+  .login-shell { align-items: flex-start; padding-left: min(7vw, 110px); }
+}
+@media (max-width: 899px) {
+  /* Narrow: the card has to come back to the middle, so darken evenly
+     rather than leaving one edge bright behind it. */
+  .login-shell::before {
+    background: linear-gradient(180deg, rgba(16,20,28,0.72), rgba(16,20,28,0.84));
+  }
+}
