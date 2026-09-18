@@ -443,9 +443,11 @@ main > * { animation: screen-fade 0.16s ease-out; }
   background-color: #1b1f26;      /* shown while the photo loads, and behind it */
   background-image: url('/ict-building.jpg');
   background-size: cover;
-  /* 68% across keeps the entrance in frame as the viewport narrows and the
-     crop tightens; 58% down favours the building over sky and pavement. */
-  background-position: 68% 58%;
+  /* 62% across keeps both the wall sign (left) and the entrance (right) in
+     frame as the crop tightens. 42% down rather than 58%: the higher the
+     focal point sits in the frame, the more roofline and signage show and
+     the less pavement — which is the part nobody needs. */
+  background-position: 62% 42%;
   background-repeat: no-repeat;
 }
 .login-shell::before {
@@ -454,12 +456,15 @@ main > * { animation: screen-fade 0.16s ease-out; }
   inset: 0;
   pointer-events: none;
   /* Strong under the card, gone by the doorway. */
-  background: linear-gradient(90deg,
-    rgba(16,20,28,0.86) 0%,
-    rgba(16,20,28,0.78) 26%,
-    rgba(16,20,28,0.52) 48%,
-    rgba(16,20,28,0.16) 68%,
-    rgba(16,20,28,0.04) 100%);
+  background:
+    /* a little extra weight low-left, where the card now sits */
+    radial-gradient(120% 90% at 12% 82%, rgba(16,20,28,0.55), rgba(16,20,28,0) 60%),
+    linear-gradient(90deg,
+      rgba(16,20,28,0.84) 0%,
+      rgba(16,20,28,0.74) 26%,
+      rgba(16,20,28,0.46) 48%,
+      rgba(16,20,28,0.14) 68%,
+      rgba(16,20,28,0.03) 100%);
 }
 .login-shell > * { position: relative; z-index: 1; }
 
@@ -475,8 +480,20 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
 
 @media (min-width: 900px) {
-  /* Wide enough to hold a column without crowding the entrance. */
-  .login-shell { align-items: flex-start; padding-left: min(7vw, 110px); }
+  /* Wide enough to hold a column without crowding the entrance.
+     The card also drops below the ILLINOIS CENTER FOR TRANSPORTATION sign,
+     which sits high on the left wall — centred vertically, the card covered
+     exactly the lettering the photo is there to show.
+     flex-start + padding rather than centring: with overflow-y on the same
+     element, centring a card taller than the viewport clips its top and the
+     logo becomes unreachable. */
+  .login-shell {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding-left: min(7vw, 110px);
+    padding-top: clamp(96px, 26vh, 260px);
+    padding-bottom: 40px;
+  }
 }
 @media (max-width: 899px) {
   /* Narrow: the card has to come back to the middle, so darken evenly
