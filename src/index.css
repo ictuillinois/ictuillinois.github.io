@@ -456,15 +456,19 @@ main > * { animation: screen-fade 0.16s ease-out; }
   inset: 0;
   pointer-events: none;
   /* Strong under the card, gone by the doorway. */
+  /* Two linear passes, no radial: a radial centred low-left renders as a
+     visible dark blob with an edge running through the footer. */
   background:
-    /* a little extra weight low-left, where the card now sits */
-    radial-gradient(120% 90% at 12% 82%, rgba(16,20,28,0.55), rgba(16,20,28,0) 60%),
+    linear-gradient(180deg,
+      rgba(16,20,28,0.00) 52%,
+      rgba(16,20,28,0.30) 78%,
+      rgba(16,20,28,0.58) 100%),
     linear-gradient(90deg,
-      rgba(16,20,28,0.84) 0%,
-      rgba(16,20,28,0.74) 26%,
-      rgba(16,20,28,0.46) 48%,
-      rgba(16,20,28,0.14) 68%,
-      rgba(16,20,28,0.03) 100%);
+      rgba(16,20,28,0.78) 0%,
+      rgba(16,20,28,0.66) 26%,
+      rgba(16,20,28,0.40) 48%,
+      rgba(16,20,28,0.12) 68%,
+      rgba(16,20,28,0.02) 100%);
 }
 .login-shell > * { position: relative; z-index: 1; }
 
@@ -491,8 +495,12 @@ main > * { animation: screen-fade 0.16s ease-out; }
     align-items: flex-start;
     justify-content: flex-start;
     padding-left: min(7vw, 110px);
-    padding-top: clamp(96px, 26vh, 260px);
-    padding-bottom: 40px;
+    /* Sit as low as the wall sign needs (34vh) but never so low that the card
+       and the footer beneath it run off the bottom — 580px is what the two
+       need together. On a short laptop this yields, so nothing is clipped;
+       on a tall screen it holds at 34vh and the sign stays clear above. */
+    padding-top: min(34vh, max(40px, calc(100vh - 580px)));
+    padding-bottom: 32px;
   }
 }
 @media (max-width: 899px) {
