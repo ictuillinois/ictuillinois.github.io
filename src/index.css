@@ -424,20 +424,15 @@ main > * { animation: screen-fade 0.16s ease-out; }
 
 
 /* ── Sign-in page backdrop (ICT building) ──────────────────────────────
-   The photo occupies a band on the RIGHT; the left is a clean panel holding
-   the card. The panel width is set here rather than falling out of the
-   viewport, because it has to be wide enough for the card at every size.
+   Full-bleed photo with the card sitting on a darkened left — no panel, no
+   seam.
 
-   Two earlier attempts failed for the same reason. `cover` fills the width,
-   zooming until only ~two thirds of the photo's height shows and putting the
-   ILLINOIS CENTER FOR TRANSPORTATION lettering at 8–45% across — exactly
-   where the card sits. Fitting the photo to height and anchoring it right
-   fixed that on a wide window, but on a 1440x780 laptop it leaves only a
-   401px panel for a card that needs ~506px, so they collide again.
-
-   Moving the card cannot solve either case: on a 744px-tall window the card
-   and its footer are ~765px together, so there is nowhere below the sign to
-   put it. */
+   The wall lettering spans 8–45% of the photo's WIDTH and the card occupies
+   roughly 6–34% of the screen, so the two overlap horizontally however the
+   photo is panned; there is no crop that puts the sign clear to the right of
+   the card. The only separation available is vertical, which is why the
+   focal point sits low (82%): that lifts the sign to the top ~20% of the
+   frame, above the card rather than behind it. */
 .login-shell {
   position: relative;
   height: 100%;
@@ -446,67 +441,52 @@ main > * { animation: screen-fade 0.16s ease-out; }
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  padding: 20px;
-  background: #12161c;
+  padding: 16px 20px 20px;
+  background-color: #12161c;
+  background-image: url('/ict-building.jpg');
+  background-size: cover;
+  background-position: 50% 82%;
+  background-repeat: no-repeat;
 }
 /* margin auto rather than justify-content:center — this element scrolls, and a
    centred flex child taller than its container has its top clipped with no way
-   to reach it, which is what cut the footer off. */
+   to reach it. */
 .login-shell > * { position: relative; z-index: 1; margin-block: auto; }
 
-/* the photo band */
 .login-shell::before {
-  content: '';
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  left: clamp(520px, 38%, 860px);
-  background-image: url('/ict-building.jpg');
-  background-size: cover;
-  background-position: 52% 45%;
-  pointer-events: none;
-}
-/* blends the band's left edge into the panel so the join is not a line */
-.login-shell::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
+    /* holds the card; clears well before the entrance */
     linear-gradient(90deg,
-      rgba(18,22,28,1.00) 0%,
-      rgba(18,22,28,1.00) 30%,
-      rgba(18,22,28,0.72) 42%,
-      rgba(18,22,28,0.28) 54%,
-      rgba(18,22,28,0.06) 68%,
-      rgba(18,22,28,0.00) 80%),
+      rgba(14,18,24,0.90) 0%,
+      rgba(14,18,24,0.84) 22%,
+      rgba(14,18,24,0.62) 38%,
+      rgba(14,18,24,0.30) 52%,
+      rgba(14,18,24,0.10) 68%,
+      rgba(14,18,24,0.02) 84%),
+    /* a little weight under the card and the credit line */
     linear-gradient(180deg,
-      rgba(18,22,28,0.00) 62%,
-      rgba(18,22,28,0.10) 84%,
-      rgba(18,22,28,0.22) 100%);
+      rgba(14,18,24,0.00) 58%,
+      rgba(14,18,24,0.12) 82%,
+      rgba(14,18,24,0.28) 100%);
 }
 
-/* The footer under the card sits on the dark panel, so it cannot use the
-   page's normal text tokens. */
-.login-shell .login-meta,
-.login-shell .login-meta div { color: rgba(255,255,255,0.72) !important; }
-.login-shell .login-meta .login-brand { color: #fff !important; }
-.login-shell .login-contact button {
-  border-color: rgba(255,255,255,0.4) !important;
-  color: rgba(255,255,255,0.88) !important;
-}
+/* The credit line sits on the dark side, so it cannot use the page's normal
+   text tokens — they are tuned for a light background. */
+.login-shell .login-meta { color: rgba(255,255,255,0.68) !important; }
 .login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
 
 @media (min-width: 1024px) {
   .login-shell { align-items: flex-start; padding-left: min(6vw, 96px); }
 }
 @media (max-width: 1023px) {
-  /* No room for a panel beside the photo: fill the screen, darken evenly,
-     card back in the middle. */
+  /* Narrow: the card has to come back to the middle, so darken evenly rather
+     than leaving one edge bright behind it. */
+  .login-shell { background-position: 58% 70%; }
   .login-shell::before {
-    left: 0;
-    background-position: 62% 45%;
-  }
-  .login-shell::after {
-    background: linear-gradient(180deg, rgba(18,22,28,0.74), rgba(18,22,28,0.86));
+    background: linear-gradient(180deg, rgba(14,18,24,0.72), rgba(14,18,24,0.86));
   }
 }

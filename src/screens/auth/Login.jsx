@@ -216,10 +216,17 @@ export default function Login() {
           )}
 
           <div style={{ marginTop: 16 }}>
+           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}>
             <button type="button" onClick={() => setShowHelpLookup(v => !v)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, width: '100%', textAlign: 'center' }}>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, textAlign: 'center' }}>
               {showHelpLookup ? '▲ Hide' : 'Need help logging in? →'}
             </button>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <button type="button" onClick={() => setShowContact(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--text3)', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconMail size={13} /> Contact Us
+            </button>
+           </div>
             {showHelpLookup && (
               <div style={{ marginTop: 12, background: 'var(--surface2)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>Contact the ICT-Lab team for access assistance:</div>
@@ -232,17 +239,8 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="login-meta" style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
-          <div className="login-brand" style={{ fontWeight: 600, fontSize: 14, color: 'var(--text2)' }}>ICT-Lab</div>
-          <div>Integrated Lab Management Platform</div>
-          <div>© {new Date().getFullYear()} All rights reserved</div>
-        </div>
-
-        <div className="login-contact" style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, paddingBottom: 8 }}>
-          <button onClick={() => setShowContact(true)}
-            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 16px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <IconMail size={15} /> Contact Us
-          </button>
+        <div className="login-meta" style={{ textAlign: 'center', marginTop: 10, fontSize: 12 }}>
+          Developed by Mohsen Motlagh
         </div>
       </div>
     </div>
