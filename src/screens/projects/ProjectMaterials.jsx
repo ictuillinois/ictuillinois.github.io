@@ -138,13 +138,19 @@ function CheckList({ options, selected, onChange, required }) {
 // ── Material type form (conditional fields) ───────────────────
 // orgTypes: array of {key, label} loaded from org's material_types (or category defaults)
 function MaterialTypeForm({ form, setForm, orgTypes }) {
-  const types = orgTypes?.length ? orgTypes : [
+  const baseTypes = orgTypes?.length ? orgTypes : [
     { key: 'aggregate',      label: 'Aggregate' },
     { key: 'asphalt_binder', label: 'Asphalt Binder' },
     { key: 'plant_mix',      label: 'Plant Mix' },
     { key: 'cores',          label: 'Cores' },
     { key: 'other',          label: 'Other' },
   ]
+  // Other is always offered and always last. An org that sets its own
+  // material_types would otherwise lose it entirely, leaving no way to record
+  // a material the list does not cover.
+  const types = baseTypes.some(t => t.key === 'other')
+    ? [...baseTypes.filter(t => t.key !== 'other'), baseTypes.find(t => t.key === 'other')]
+    : [...baseTypes, { key: 'other', label: 'Other' }]
   const [pgCustom, setPgCustom] = useState('')
 
   function setPG(val) {
@@ -182,15 +188,36 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
               {IDOT_CATEGORY_LABELS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
-          {form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat] && (
-            <div className="field">
-              <label>Gradation Grade <span style={{ color: '#c84b2f' }}>*</span></label>
-              <select value={form.idot_gradation_grade || ''} onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value }))}>
-                <option value="">— Select grade —</option>
-                {IDOT_GRADATIONS[form.idot_gradation_cat].map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
-          )}
+          {form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat] && (() => {
+            // A grade that is not in the category's list is a typed-in one, so
+            // the select shows Other and the box below holds the value. The
+            // value itself still lives in idot_gradation_grade — no second
+            // column, and nothing downstream has to know the difference.
+            const list = IDOT_GRADATIONS[form.idot_gradation_cat]
+            const grade = form.idot_gradation_grade || ''
+            const isOther = !!grade && !list.includes(grade)
+            return (
+              <>
+                <div className="field">
+                  <label>Gradation Grade <span style={{ color: '#c84b2f' }}>*</span></label>
+                  <select value={isOther ? '__other__' : grade}
+                    onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value === '__other__' ? ' ' : e.target.value }))}>
+                    <option value="">— Select grade —</option>
+                    {list.map(g => <option key={g} value={g}>{g}</option>)}
+                    <option value="__other__">Other</option>
+                  </select>
+                </div>
+                {(isOther || grade === ' ') && (
+                  <div className="field">
+                    <label>Gradation grade name <span style={{ color: '#c84b2f' }}>*</span></label>
+                    <input autoFocus value={grade.trim()}
+                      onChange={e => setForm(f => ({ ...f, idot_gradation_grade: e.target.value || ' ' }))}
+                      placeholder="Name this gradation grade…" />
+                  </div>
+                )}
+              </>
+            )
+          })()}
           <div className="field">
             <label>Sieve Sizes</label>
             <CheckList options={SIEVE_SIZES} selected={form.agg_sieve_sizes || []} onChange={v => setForm(f => ({ ...f, agg_sieve_sizes: v }))} />
@@ -272,8 +299,9 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
       {/* ── OTHER ── */}
       {form.material_type === 'other' && (
         <div className="field">
-          <label>Additional Info <span style={{ color: '#c84b2f' }}>*</span></label>
-          <textarea rows={3} value={form.other_info || ''} onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))} placeholder="Describe the material type and any relevant details…" style={{ resize: 'vertical' }} />
+          <label>Material type name <span style={{ color: '#c84b2f' }}>*</span></label>
+          <input value={form.other_info || ''} onChange={e => setForm(f => ({ ...f, other_info: e.target.value }))}
+            placeholder="Name this material type…" />
         </div>
       )}
 
@@ -728,7 +756,9 @@ function validate(form, toast, isSolo) {
   if (isSolo) return true
   if (form.material_type === 'aggregate') {
     if (!form.idot_gradation_cat) { toast('IDOT Gradation category is required for aggregate.'); return false }
-    if (!form.idot_gradation_grade) { toast('Gradation grade is required for aggregate.'); return false }
+    // trim(): a single space is the sentinel for "Other chosen, nothing typed
+    // yet", and it is truthy — without this the form saves a blank grade.
+    if (!form.idot_gradation_grade?.trim()) { toast('Gradation grade is required for aggregate.'); return false }
   }
   if (form.material_type === 'asphalt_binder' && !form.ab_binder_pg) { toast('Binder PG grade is required.'); return false }
   if (form.material_type === 'plant_mix') {
@@ -799,7 +829,8 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       agg_sieve_sizes: isSolo ? [] : form.agg_sieve_sizes,
       agg_raw_or_rap: isSolo ? null : (form.agg_raw_or_rap || null),
       idot_gradation_cat: form.idot_gradation_cat || null,
-      idot_gradation_grade: form.idot_gradation_grade || null,
+      // trimmed so the ' ' sentinel never reaches the database
+      idot_gradation_grade: form.idot_gradation_grade?.trim() || null,
       ab_binder_pg: isSolo ? null : (form.ab_binder_pg || null),
       ab_mix_design: isSolo ? null : (form.ab_mix_design || null),
       ab_has_polymer: isSolo ? false : form.ab_has_polymer,
