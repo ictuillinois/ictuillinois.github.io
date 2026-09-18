@@ -456,13 +456,23 @@ main > * { animation: screen-fade 0.16s ease-out; }
   inset: 0;
   pointer-events: none;
   /* Strong under the card, gone by the doorway. */
-  /* Two linear passes, no radial: a radial centred low-left renders as a
-     visible dark blob with an edge running through the footer. */
+  /* Three passes. The first is a corner vignette carrying the area under the
+     card and its footer.
+     Its centre is anchored BELOW the frame (112%), which is what keeps it
+     from reading as a shape: an earlier version centred at 82% put the
+     ellipse's upper arc straight through the footer text as a visible edge.
+     The second pass is a gentle full-width bottom fade, kept light so the
+     hedges and pavement on the right stay readable. */
   background:
+    radial-gradient(ellipse 125% 88% at 16% 112%,
+      rgba(16,20,28,0.62) 0%,
+      rgba(16,20,28,0.34) 42%,
+      rgba(16,20,28,0.10) 66%,
+      rgba(16,20,28,0.00) 78%),
     linear-gradient(180deg,
-      rgba(16,20,28,0.00) 52%,
-      rgba(16,20,28,0.30) 78%,
-      rgba(16,20,28,0.58) 100%),
+      rgba(16,20,28,0.00) 58%,
+      rgba(16,20,28,0.14) 82%,
+      rgba(16,20,28,0.26) 100%),
     linear-gradient(90deg,
       rgba(16,20,28,0.78) 0%,
       rgba(16,20,28,0.66) 26%,
