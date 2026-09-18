@@ -427,12 +427,18 @@ main > * { animation: screen-fade 0.16s ease-out; }
    Full-bleed photo with the card sitting on a darkened left — no panel, no
    seam.
 
-   The wall lettering spans 8–45% of the photo's WIDTH and the card occupies
-   roughly 6–34% of the screen, so the two overlap horizontally however the
-   photo is panned; there is no crop that puts the sign clear to the right of
-   the card. The only separation available is vertical, which is why the
-   focal point sits low (82%): that lifts the sign to the top ~20% of the
-   frame, above the card rather than behind it. */
+   The source photo is cropped to 2:1 — the shape a desktop window actually
+   is — rather than left at the camera's 4:3. At 4:3, `cover` had to discard
+   about a third of its height to fill the width, which magnified the building
+   and pushed the wall lettering off the top edge. Cropping the file instead
+   means almost nothing is discarded at display time, so the full ILLINOIS
+   CENTER FOR TRANSPORTATION sign shows with sky above it.
+
+   The lettering still spans 8–45% of the photo's WIDTH while the card
+   occupies about 6–34% of the screen, so they overlap horizontally however
+   the photo is panned. Only vertical separation exists, and the card is
+   ~680px against a ~745px window, so it cannot clear the sign entirely
+   without the card itself getting shorter. */
 .login-shell {
   position: relative;
   height: 100%;
@@ -445,7 +451,9 @@ main > * { animation: screen-fade 0.16s ease-out; }
   background-color: #12161c;
   background-image: url('/ict-building.jpg');
   background-size: cover;
-  background-position: 50% 82%;
+  /* Near-centred: at 2:1 against a 2.02:1 window there is barely any crop
+     left to steer. */
+  background-position: 50% 46%;
   background-repeat: no-repeat;
 }
 /* margin auto rather than justify-content:center — this element scrolls, and a
@@ -480,12 +488,19 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
 
 @media (min-width: 1024px) {
-  .login-shell { align-items: flex-start; padding-left: min(6vw, 96px); }
+  .login-shell {
+    align-items: flex-start;
+    padding-left: min(6vw, 96px);
+    /* Sits the card lower in the frame. With auto margins the content centres
+       in the padded box, so this shifts it down by about half the value —
+       and when the card is taller than the space, it offsets directly. */
+    padding-top: clamp(24px, 10vh, 96px);
+  }
 }
 @media (max-width: 1023px) {
   /* Narrow: the card has to come back to the middle, so darken evenly rather
      than leaving one edge bright behind it. */
-  .login-shell { background-position: 58% 70%; }
+  .login-shell { background-position: 56% 50%; }
   .login-shell::before {
     background: linear-gradient(180deg, rgba(14,18,24,0.72), rgba(14,18,24,0.86));
   }
