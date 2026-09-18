@@ -424,85 +424,96 @@ main > * { animation: screen-fade 0.16s ease-out; }
 
 
 /* ── Sign-in page backdrop (ICT building) ──────────────────────────────
-   Full-bleed photo with the card sitting on a darkened left — no panel, no
-   seam.
+   Treatment C: the card sits in a darkened left column so it reads against
+   the photo, while the right side stays clear enough to show the entrance
+   and the ICT mark — which is the half worth seeing.
 
-   The source photo is cropped to 2:1 — the shape a desktop window actually
-   is — rather than left at the camera's 4:3. At 4:3, `cover` had to discard
-   about a third of its height to fill the width, which magnified the building
-   and pushed the wall lettering off the top edge. Cropping the file instead
-   means almost nothing is discarded at display time, so the full ILLINOIS
-   CENTER FOR TRANSPORTATION sign shows with sky above it.
-
-   The lettering still spans 8–45% of the photo's WIDTH while the card
-   occupies about 6–34% of the screen, so they overlap horizontally however
-   the photo is panned. Only vertical separation exists, and the card is
-   ~680px against a ~745px window, so it cannot clear the sign entirely
-   without the card itself getting shorter. */
+   The scrim is a ::before rather than a filter on the image: filtering the
+   background would dim the whole photo evenly and lose exactly the contrast
+   the right side needs. */
 .login-shell {
   position: relative;
   height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  padding: 16px 20px 20px;
-  background-color: #12161c;
+  justify-content: center;
+  align-items: center;            /* narrow screens: centred, as before */
+  padding: 20px;
+  background-color: #1b1f26;      /* shown while the photo loads, and behind it */
   background-image: url('/ict-building.jpg');
   background-size: cover;
-  /* Near-centred: at 2:1 against a 2.02:1 window there is barely any crop
-     left to steer. */
-  background-position: 50% 30%;
+  /* 62% across keeps both the wall sign (left) and the entrance (right) in
+     frame as the crop tightens. 42% down rather than 58%: the higher the
+     focal point sits in the frame, the more roofline and signage show and
+     the less pavement — which is the part nobody needs. */
+  background-position: 62% 42%;
   background-repeat: no-repeat;
 }
-/* margin auto rather than justify-content:center — this element scrolls, and a
-   centred flex child taller than its container has its top clipped with no way
-   to reach it. */
-.login-shell > * { position: relative; z-index: 1; margin-block: auto; }
-
 .login-shell::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Strong under the card, gone by the doorway. */
+  /* Three passes. The first is a corner vignette carrying the area under the
+     card and its footer.
+     Its centre is anchored BELOW the frame (112%), which is what keeps it
+     from reading as a shape: an earlier version centred at 82% put the
+     ellipse's upper arc straight through the footer text as a visible edge.
+     The second pass is a gentle full-width bottom fade, kept light so the
+     hedges and pavement on the right stay readable. */
   background:
-    /* holds the card; clears well before the entrance */
-    linear-gradient(90deg,
-      rgba(14,18,24,0.90) 0%,
-      rgba(14,18,24,0.84) 22%,
-      rgba(14,18,24,0.62) 38%,
-      rgba(14,18,24,0.30) 52%,
-      rgba(14,18,24,0.10) 68%,
-      rgba(14,18,24,0.02) 84%),
-    /* a little weight under the card and the credit line */
+    radial-gradient(ellipse 125% 88% at 16% 112%,
+      rgba(16,20,28,0.62) 0%,
+      rgba(16,20,28,0.34) 42%,
+      rgba(16,20,28,0.10) 66%,
+      rgba(16,20,28,0.00) 78%),
     linear-gradient(180deg,
-      rgba(14,18,24,0.00) 58%,
-      rgba(14,18,24,0.12) 82%,
-      rgba(14,18,24,0.28) 100%);
+      rgba(16,20,28,0.00) 58%,
+      rgba(16,20,28,0.14) 82%,
+      rgba(16,20,28,0.26) 100%),
+    linear-gradient(90deg,
+      rgba(16,20,28,0.78) 0%,
+      rgba(16,20,28,0.66) 26%,
+      rgba(16,20,28,0.40) 48%,
+      rgba(16,20,28,0.12) 68%,
+      rgba(16,20,28,0.02) 100%);
 }
+.login-shell > * { position: relative; z-index: 1; }
 
-/* The credit line sits on the dark side, so it cannot use the page's normal
-   text tokens — they are tuned for a light background. */
-.login-shell .login-meta { color: rgba(255,255,255,0.68) !important; }
-.login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
+/* The footer under the card sits on the dark scrim, so it cannot use the
+   page's normal text tokens. */
+/* Only the credit line remains under the card; the ICT-Lab / platform /
+   copyright block and the standalone Contact Us button were removed from the
+   markup, so their rules are gone too. */
+.login-shell .login-meta { color: rgba(255,255,255,0.72) !important; }
+.login-shell .card { box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
 
-@media (min-width: 1024px) {
+@media (min-width: 900px) {
+  /* Wide enough to hold a column without crowding the entrance.
+     The card also drops below the ILLINOIS CENTER FOR TRANSPORTATION sign,
+     which sits high on the left wall — centred vertically, the card covered
+     exactly the lettering the photo is there to show.
+     flex-start + padding rather than centring: with overflow-y on the same
+     element, centring a card taller than the viewport clips its top and the
+     logo becomes unreachable. */
   .login-shell {
     align-items: flex-start;
-    /* Tight to the edge: every pixel the card sits further right is a pixel
-       more of the lettering it covers. */
-    padding-left: min(3vw, 44px);
-    /* No extra top padding. The card is ~680px in a ~745px window, so pushing
-       it down moves its top edge INTO the lettering rather than clear of it —
-       the card and the sign move toward each other, not apart. */
+    justify-content: flex-start;
+    padding-left: min(7vw, 110px);
+    /* Sit as low as the wall sign needs (34vh) but never so low that the card
+       and the footer beneath it run off the bottom — 580px is what the two
+       need together. On a short laptop this yields, so nothing is clipped;
+       on a tall screen it holds at 34vh and the sign stays clear above. */
+    padding-top: min(34vh, max(40px, calc(100vh - 580px)));
+    padding-bottom: 32px;
   }
 }
-@media (max-width: 1023px) {
-  /* Narrow: the card has to come back to the middle, so darken evenly rather
-     than leaving one edge bright behind it. */
-  .login-shell { background-position: 56% 50%; }
+@media (max-width: 899px) {
+  /* Narrow: the card has to come back to the middle, so darken evenly
+     rather than leaving one edge bright behind it. */
   .login-shell::before {
-    background: linear-gradient(180deg, rgba(14,18,24,0.72), rgba(14,18,24,0.86));
+    background: linear-gradient(180deg, rgba(16,20,28,0.72), rgba(16,20,28,0.84));
   }
 }
