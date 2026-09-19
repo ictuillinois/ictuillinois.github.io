@@ -118,6 +118,7 @@ function getScreenTabs(screen, session) {
     { key: 'tasks',     icon: '✅', label: 'My Tasks' },
     ...(!isSolo ? [{ key: 'team', icon: '👥', label: 'Team' }] : []),
     { key: 'calendar',  icon: '📅', label: 'Calendar' },
+    { key: 'timeline',  icon: '📈', label: 'Timeline' },
     ...(!isSolo ? [{ key: 'meetings', icon: '🤝', label: 'Meetings' }] : []),
     { key: 'reminder',  icon: '⏰', label: 'Reminders' },
     ...(isAdmin ? [{ key: 'assign', icon: '📌', label: 'Assign Others' }] : []),

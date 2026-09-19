@@ -5,6 +5,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 import ScrollTabs from '../../components/ScrollTabs'
 import HelpPanel from '../../components/HelpPanel'
+import Timeline from './Timeline'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -1323,9 +1324,22 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
   const [calDayPopup, setCalDayPopup] = useState(null)
   const [desktop, setDesktop] = useState(isDesktop())
   const [showAddTask, setShowAddTask] = useState(false)
-  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', is_private: isLabUser ? true : false, remind_daily: false })
+  const [newTask, setNewTask] = useState({ title: '', start_date: '', start_time: '', deadline: '', deadline_time: '', notes: '', priority: 'medium', project_id: '', is_private: isLabUser ? true : false, remind_daily: false })
+  // Projects a task can belong to. Tasks lived entirely apart from projects
+  // before this — the Task Board was a second, parallel world.
+  const [projects, setProjects] = useState([])
+  const [projectFilter, setProjectFilter] = useState('')
   const [saving, setSaving] = useState(false)
   const { toast } = useAppStore()
+
+  async function loadProjects() {
+    let q = sb.from('projects').select('id, name, project_id').order('name')
+    q = isSolo ? q.eq('solo_owner_id', userId || '00000000-0000-0000-0000-000000000000')
+               : q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    const { data, error } = await q
+    if (error) { console.error('[PM] project list failed:', error); return }
+    setProjects(data || [])
+  }
 
   async function loadOutOfLab() {
     if (!userId) return
@@ -1340,7 +1354,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  useEffect(() => { load(); loadOutOfLab() }, [userId, isOwnerAdmin, orgId, isSolo])
+  useEffect(() => { load(); loadOutOfLab(); loadProjects() }, [userId, isOwnerAdmin, orgId, isSolo])
 
   async function load() {
     try {
@@ -1420,7 +1434,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
     if (!newTask.title.trim()) { toast('Please enter a task title.'); return }
     setSaving(true)
     try {
-      const payload = { title: newTask.title, start_date: newTask.start_date || null, start_time: newTask.start_time || null, deadline: newTask.deadline || null, deadline_time: newTask.deadline_time || null, notes: newTask.notes || '', status: 'todo', progress: 0, is_meeting_task: false, priority: newTask.priority || 'medium', is_private: newTask.is_private || false, remind_daily: newTask.remind_daily || false, login_mode: isSolo ? 'solo' : 'team', organization_id: !isSolo ? (orgId || null) : null }
+      const payload = { title: newTask.title, start_date: newTask.start_date || null, start_time: newTask.start_time || null, deadline: newTask.deadline || null, deadline_time: newTask.deadline_time || null, notes: newTask.notes || '', status: 'todo', progress: 0, is_meeting_task: false, priority: newTask.priority || 'medium', is_private: newTask.is_private || false, remind_daily: newTask.remind_daily || false, project_id: newTask.project_id || null, login_mode: isSolo ? 'solo' : 'team', organization_id: !isSolo ? (orgId || null) : null }
       if (userId) { payload.assigned_to = userId; payload.created_by = userId }
       const { data, error } = await sb.from('tasks').insert(payload).select().single()
       if (error) throw error
@@ -1505,6 +1519,13 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
                   <option value="low">Low</option>
+                </select>
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Project <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}>(opt)</span></label>
+                <select value={newTask.project_id} onChange={e => setNewTask({ ...newTask, project_id: e.target.value })}>
+                  <option value="">— No project —</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.project_id ? ` · ${p.project_id}` : ''}</option>)}
                 </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -2974,6 +2995,7 @@ export default function PM() {
       {activeTab === 'team'      && !isLabUser && <Team orgId={orgId} isSolo={isSolo} userId={userId} isAdmin={isAdmin} userName={userName} />}
       {activeTab === 'team'      && isLabUser && labUserGroupId && <LabUserTeamView userId={userId} groupId={labUserGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
+      {activeTab === 'timeline'  && <Timeline userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
       {activeTab === 'meetings'  && !isLabUser && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}

@@ -773,6 +773,12 @@ $b$);
 -- STEP 15: tasks, attachments, comments, out-of-lab, reminders, groups
 -- ────────────────────────────────────────────────────────────────
 
+-- Tasks belong to a project. Before this the Task Board and Projects were two
+-- unconnected worlds: project_id appeared nowhere in PM.jsx at all.
+-- Nullable on purpose — plenty of lab work is not tied to one project.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id UUID;
+CREATE INDEX IF NOT EXISTS tasks_project_idx ON tasks(project_id);
+
 SELECT _apply_rls('tasks', 'tasks_policy', $b$
 FOR ALL TO authenticated
 USING (
