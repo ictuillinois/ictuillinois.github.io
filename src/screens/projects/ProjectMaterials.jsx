@@ -161,12 +161,23 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
     const g = form.idot_gradation_grade || ''
     return !!g && !l.includes(g)
   })
+  // Same for the category. A saved category that is not one of the IDOT keys
+  // was typed in, so the form opens showing it as Other.
+  const [catOther, setCatOther] = useState(() => {
+    const c = form.idot_gradation_cat || ''
+    return !!c && !IDOT_CATEGORY_LABELS.some(x => x.key === c)
+  })
   // Re-infer only when the CATEGORY changes, never while typing.
   useEffect(() => {
+    // Not while a custom category name is being typed: that edits
+    // idot_gradation_cat on every keystroke, and re-inferring here would
+    // switch the grade back to a dropdown mid-word. A custom chart has no
+    // grade list at all, so its grade is always free text.
+    if (catOther) { setGradeOther(true); return }
     const l = IDOT_GRADATIONS[form.idot_gradation_cat] || []
     const g = form.idot_gradation_grade || ''
     setGradeOther(!!g && !l.includes(g))
-  }, [form.idot_gradation_cat])
+  }, [form.idot_gradation_cat, catOther])
 
   function setPG(val) {
     if (val === 'Other') {
@@ -198,16 +209,37 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
         <div>
           <div className="field">
             <label>IDOT Gradation Chart <span style={{ color: '#c84b2f' }}>*</span></label>
-            <select value={form.idot_gradation_cat || ''} onChange={e => setForm(f => ({ ...f, idot_gradation_cat: e.target.value, idot_gradation_grade: '' }))}>
+            <select value={catOther ? '__other__' : (form.idot_gradation_cat || '')}
+              onChange={e => {
+                const v = e.target.value
+                // Changing the category always clears the grade — the grades
+                // belong to the category, so keeping the old one would leave a
+                // grade that does not exist under the new chart.
+                if (v === '__other__') { setCatOther(true); setGradeOther(true); setForm(f => ({ ...f, idot_gradation_cat: '', idot_gradation_grade: '' })) }
+                else { setCatOther(false); setGradeOther(false); setForm(f => ({ ...f, idot_gradation_cat: v, idot_gradation_grade: '' })) }
+              }}>
               <option value="">— Select category —</option>
               {IDOT_CATEGORY_LABELS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              <option value="__other__">Other</option>
             </select>
           </div>
-          {form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat] && (() => {
-            const list = IDOT_GRADATIONS[form.idot_gradation_cat]
+          {catOther && (
+            <div className="field">
+              <label>Gradation chart name <span style={{ color: '#c84b2f' }}>*</span></label>
+              <input autoFocus value={form.idot_gradation_cat || ''}
+                onChange={e => setForm(f => ({ ...f, idot_gradation_cat: e.target.value }))}
+                placeholder="Name this gradation chart…" />
+            </div>
+          )}
+          {/* Also renders for a custom chart, which has no grade list — without
+              this the field disappeared while the required check still
+              demanded a grade, so the form could not be saved at all. */}
+          {(catOther || (form.idot_gradation_cat && IDOT_GRADATIONS[form.idot_gradation_cat])) && (() => {
+            const list = IDOT_GRADATIONS[form.idot_gradation_cat] || []
             const grade = form.idot_gradation_grade || ''
             return (
               <>
+                {!catOther && (
                 <div className="field">
                   <label>Gradation Grade <span style={{ color: '#c84b2f' }}>*</span></label>
                   <select value={gradeOther ? '__other__' : grade}
@@ -221,6 +253,7 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
                     <option value="__other__">Other</option>
                   </select>
                 </div>
+                )}
                 {gradeOther && (
                   <div className="field">
                     <label>Gradation grade name <span style={{ color: '#c84b2f' }}>*</span></label>
