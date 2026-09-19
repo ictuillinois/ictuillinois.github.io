@@ -29,8 +29,24 @@ function InfoCell({ label, value, icon: Icon, emptyText = 'Not set' }) {
 }
 
 // ── Project Info (view/edit a project's metadata) ──────────────
+// A person's display name. nick_name wins when set, otherwise first + last —
+// and for lab users the first name is stored in the email column.
+function personName(u) {
+  if (!u) return ''
+  const nick = u.nick_name?.trim()
+  if (nick) return nick
+  const first = u.role === 'lab_user' ? (u.email || '') : ''
+  const joined = [first, u.name, u.last_name].filter(Boolean).join(' ').trim()
+  return joined || u.name || u.email || ''
+}
+
 function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
-  const { toast } = useAppStore()
+  const { toast, session } = useAppStore()
+  // Only an org admin may change project info. A solo workspace has no admin
+  // role at all — its owner is the only person in it — so the gate must not
+  // apply there or they could never edit their own project.
+  const isAdmin = session?.role === 'admin'
+  const canEditInfo = !readOnly && (isSolo || isAdmin)
   const [exporting, setExporting] = useState(false)
 
   // One CSV per project: a row per material, a column per material question.
@@ -60,10 +76,11 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [],
     sampling_date: project.sampling_date || '', storage_date: project.storage_date || '',
     notes: project.notes || '',
+    created_by: project.created_by || '',
   })
 
   useEffect(() => {
-    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' })
+    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' , created_by: project.created_by || '' })
     setEditing(false)
   }, [project.id])
 
@@ -80,6 +97,9 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     if (nameTooLong) { toast(nameTooLong); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
     const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, lab_user_ids: form.lab_user_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
+    // created_by is only written by an admin. Merging it unconditionally
+    // would let any other editor blank it just by saving the form.
+    if (isAdmin) payload.created_by = form.created_by || null
     const { error } = await sb.from('projects').update(payload).eq('id', project.id)
     if (error) { toast('Error saving project.'); return }
     toast('Project info saved.'); setEditing(false); onSaved()
@@ -109,6 +129,21 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         </div>
       </div>
       {!isSolo && <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} required={false} />}
+      {!isSolo && isAdmin && (
+        <div className="field">
+          <label>Created by</label>
+          <select value={form.created_by || ''} onChange={e => setForm(f => ({ ...f, created_by: e.target.value }))}>
+            <option value="">— Not recorded —</option>
+            {/* A name saved before this list existed, or belonging to someone
+                since removed, is kept as an option so saving cannot silently
+                discard it. */}
+            {form.created_by && !users.some(u => personName(u) === form.created_by) && (
+              <option value={form.created_by}>{form.created_by}</option>
+            )}
+            {users.map(u => { const n = personName(u); return n ? <option key={u.id} value={n}>{n}</option> : null })}
+          </select>
+        </div>
+      )}
       <div className="grid-2">
         <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
         <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
@@ -124,7 +159,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
           title="Download this project's materials as an Excel file">
           {exporting ? 'Exporting…' : '⬇️ Export materials (Excel)'}
         </button>
-        {!readOnly && <button className="btn btn-sm" onClick={() => setEditing(true)}>✏️ Edit info</button>}
+        {canEditInfo && <button className="btn btn-sm" onClick={() => setEditing(true)}>✏️ Edit info</button>}
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
         <span className={`badge ${statusBadge}`} style={{ fontSize: 12, padding: '4px 12px' }}>{project.status}</span>
@@ -2251,7 +2286,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   }
 
   async function loadUsers() {
-    let q = sb.from('users').select('id, name').order('name')
+    // name alone is not a person's name here: for lab users the first name
+    // lives in the email column. Select enough to render one properly.
+    let q = sb.from('users').select('id, name, last_name, nick_name, email, role').order('name')
     if (!isSolo) q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     const { data } = await q
     setUsers(data || [])
