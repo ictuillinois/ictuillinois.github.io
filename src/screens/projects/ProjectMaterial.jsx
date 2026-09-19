@@ -134,6 +134,9 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 20, marginBottom: 20 }}>
         <InfoCell label="Created" icon={IconCalendar} value={new Date(project.created_at).toLocaleDateString()} />
+        {/* Projects made before this column existed have no creator recorded,
+            so they say so rather than showing an empty cell. */}
+        <InfoCell label="Created by" icon={IconUser} value={project.created_by} emptyText="Not recorded" />
         {!isSolo && <InfoCell label="Project PI" icon={IconUser} value={project.pi_name} emptyText="Not assigned" />}
         <InfoCell label="Sampling Date" icon={IconCalendar} value={project.sampling_date} />
         <InfoCell label="Storage Date" icon={IconCalendar} value={project.storage_date} />
@@ -179,6 +182,11 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
       notes: form.notes.trim() || null,
       solo_owner_id: soloOwnerId || null,
       organization_id: isSolo ? null : (session?.organizationId || null),
+      // Who made it. Taken from the session rather than asked for — the
+      // person is signed in, so a field would only invite a wrong answer.
+      // A name string, matching how project_results and project_links already
+      // record their author on this database.
+      created_by: session?.username || session?.name || session?.email || null,
     }
     const { data, error } = await sb.from('projects').insert(payload).select().single()
     setSaving(false)

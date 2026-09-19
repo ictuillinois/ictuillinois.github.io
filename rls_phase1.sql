@@ -517,6 +517,10 @@ $b$);
 -- which DISABLES RLS on the table as a fail-safe — meaning `projects` has
 -- been running with RLS OFF and only its old, unrelated wide-open `p` policy
 -- (ALL/public) in effect. Found + fixed Sept 2026.
+-- Who created a project. Recorded from the session at insert time and shown
+-- in Project Info; rows that predate this column read as "Not recorded".
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by TEXT;
+
 SELECT _apply_rls('projects', 'projects_policy', $b$
 FOR ALL TO authenticated
 USING (
