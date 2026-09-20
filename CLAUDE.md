@@ -1463,3 +1463,24 @@ started yet gets no daily nag.
 It also collided: its dedup was "skip if this user has any `deadline_reminder`
 today", which the Edge Function knows nothing about, so both would have fired
 every morning.
+
+## Schema audit — run this before blaming the UI (Sept 2026)
+
+`node scripts/schema-audit.mjs` → writes `schema-audit.sql`. Paste that into
+the SQL Editor for THIS project; it returns every (table, column) the code
+uses that the database does not have. **An empty result is the goal.**
+
+This exists because nearly every silent failure in this codebase has been the
+same shape — a column in the code that is not in the database. PostgREST
+rejects the WHOLE request over one unknown column, and most call sites never
+read `error`, so the feature shows nothing and reports nothing:
+`notifications.task_id` · `project_materials.organization_id` ·
+`organizations.allowed_modules_labusers` · `projects.students` ·
+`user_dashboard_prefs.created_at` · `users.gender` · `users.terms_accepted_version`.
+
+Run it after any schema change, and on BOTH projects — they drift.
+
+What it does NOT catch, so do not read an empty result as "nothing is broken":
+wrong column TYPE (`lab_user_ids` is `text[]` here and `uuid[]` there), missing
+RLS policies (use the exposure check), writes that match zero rows, `onConflict`
+without a matching unique index, and a relationship stored in two directions.
