@@ -53,6 +53,31 @@ function topLevelKeys(src, openBrace) {
   return out
 }
 
+// --verify table.column — print the real call sites for one finding.
+//
+// The scan deliberately over-collects, so a few rows are always neighbouring
+// columns blamed on the wrong table. Reading the actual lines is how you tell
+// those from a genuine break — and skipping that step is how a real finding
+// gets waved off as noise.
+const VERIFY = process.argv.indexOf('--verify')
+if (VERIFY > -1) {
+  const [tbl, col] = (process.argv[VERIFY + 1] || '').split('.')
+  if (!tbl || !col) { console.error('  usage: --verify table.column'); process.exit(1) }
+  let hits = 0
+  for (const file of walk(ROOT)) {
+    const lines = readFileSync(file, 'utf8').split('\n')
+    lines.forEach((l, i) => {
+      if (!l.includes(col)) return
+      const ctx = lines.slice(Math.max(0, i - 12), i + 1).join('\n')
+      const last = [...ctx.matchAll(/\.from\(\s*['"`]([a-z0-9_]+)['"`]/gi)].pop()
+      if (last && last[1] === tbl) { console.log(`  ${file}:${i + 1}  ${l.trim().slice(0, 100)}`); hits++ }
+    })
+  }
+  console.log(hits ? `\n  ${hits} site(s) — read them: a real column, or a neighbour blamed on this table?`
+                   : `\n  no site in a ${tbl} chain — this row is scan noise, ignore it.`)
+  process.exit(0)
+}
+
 const found = new Map()   // table -> Set(columns)
 const add = (t, c) => {
   if (!c || c === '*' || c.includes('(') || c.includes(':')) return
