@@ -3055,6 +3055,8 @@ function Reminders({ userId }) {
 export default function PM() {
   const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
   const activeTab = sidebarSubTab || 'overview'
+  const [timelineTask, setTimelineTask] = useState(null)
+  const [timelineReload, setTimelineReload] = useState(0)
   const [pendingTask, setPendingTask] = useState(null)
   const [labUserGroupId, setLabUserGroupId] = useState(undefined) // undefined=loading, null=no group, uuid=has group
   const userId = session?.userId
@@ -3085,10 +3087,26 @@ export default function PM() {
       {activeTab === 'team'      && !isLabUser && <Team orgId={orgId} isSolo={isSolo} userId={userId} isAdmin={isAdmin} userName={userName} />}
       {activeTab === 'team'      && isLabUser && labUserGroupId && <LabUserTeamView userId={userId} groupId={labUserGroupId} orgId={orgId} />}
       {activeTab === 'calendar'  && <CalendarView userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
-      {activeTab === 'timeline'  && <Timeline userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={task => { setPendingTask(task); setSidebarSubTab('tasks') }} />}
+      {activeTab === 'timeline'  && <Timeline userId={userId} isOwnerAdmin={isOwnerAdmin} isSolo={isSolo} orgId={orgId} onTaskClick={setTimelineTask} reloadKey={timelineReload} />}
       {activeTab === 'meetings'  && !isLabUser && <Meetings userId={userId} isAdmin={isAdmin} userName={userName} orgId={orgId} />}
       {activeTab === 'reminder'  && <Reminders userId={userId} />}
       {activeTab === 'assign'    && session?.role === 'admin' && <AssignOthers userId={userId} orgId={orgId} />}
+
+      {/* Opened from the Timeline. Rendered here rather than navigating to
+          My Tasks: clicking a bar to read a task should not move you off the
+          chart and make you find your way back. */}
+      {timelineTask && (
+        <TaskModal
+          task={timelineTask}
+          onClose={() => setTimelineTask(null)}
+          onUpdate={updated => { setTimelineTask(updated); setTimelineReload(k => k + 1) }}
+          onDelete={timelineTask?.created_by === userId
+            ? () => setTimelineReload(k => k + 1)
+            : undefined}
+          currentUserId={userId}
+          currentUserName={userName}
+        />
+      )}
     </div>
   )
 }

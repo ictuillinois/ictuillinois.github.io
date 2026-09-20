@@ -117,7 +117,7 @@ function ProgressChart({ tasks, log, height = 150 }) {
   )
 }
 
-export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
+export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick, reloadKey = 0 }) {
   const { toast } = useAppStore()
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
@@ -130,7 +130,7 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
   const [hideDone, setHideDone] = useState(false)
   const [zoom, setZoom] = useState(26)          // px per day
 
-  useEffect(() => { load() }, [userId, isOwnerAdmin, orgId, isSolo])
+  useEffect(() => { load() }, [userId, isOwnerAdmin, orgId, isSolo, reloadKey])
 
   async function load() {
     setLoading(true)
