@@ -112,6 +112,13 @@ npm run ios            # build + sync + open iOS simulator
 
 ### Required SQL (run once in Supabase SQL Editor if not applied)
 ```sql
+-- Task Board (Sept 2026) — run in BOTH projects:
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id UUID;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by TEXT;
+-- task_progress_log and task_dependencies are created by rls_phase1.sql,
+-- which also carries their policies — run the whole file, not just these.
+NOTIFY pgrst, 'reload schema';
+
 -- Session Sept 2026 — run in BOTH projects, they are separate databases:
 ALTER TABLE project_materials ADD COLUMN IF NOT EXISTS additional_info TEXT;
 ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS icons_granted       BOOLEAN DEFAULT TRUE;
@@ -1248,6 +1255,67 @@ stay. What must also stay is the `history.replaceState` immediately after it
 that strips `_v` once the fresh build is running. Without it the parameter
 sticks in the address bar, and that is the URL people copy, bookmark and send
 on. `replaceState` costs no request and leaves no extra history entry.
+
+## Task Board — project links, Timeline, progress history, critical path (Sept 2026)
+
+Four changes, built in this order because each depends on the one before.
+
+### 1. Tasks belong to projects
+`tasks.project_id` (nullable). Before this, `project_id` appeared **nowhere**
+in `PM.jsx` — the Task Board and Projects were two unconnected worlds in an app
+whose centre is Projects & Materials. Nullable on purpose: plenty of lab work
+is not tied to one project.
+
+### 2. Timeline (Gantt) — `src/screens/maintenance/Timeline.jsx`
+Sidebar key `timeline`. **Its own file, not another branch in `PM.jsx`**, which
+is ~3000 lines already.
+
+No new data: a bar spans `start_date` → `deadline`, its fill is `progress`, its
+colour is `priority`. Grouped by project, today line, weekend shading, zoom.
+
+**Tasks with neither date are listed as "Undated", never dropped.** They cannot
+be placed on a timeline, and a task that silently vanishes from a view is worse
+than one that says it is unscheduled.
+
+### 3. Progress history — `task_progress_log`
+`tasks.progress` holds only the CURRENT value, so **no chart of the past can be
+derived from it** — history must be written as it happens or it does not exist.
+
+**All progress and status writes go through `src/lib/taskProgress.js`.** Three
+call sites each did their own update before; a fourth would have gone unlogged
+and left a hole in every chart.
+
+- The helper reads the session from the **store**, not from arguments. Two of
+  its three callers (`TaskModal`, `Meetings`) have neither a `session` nor an
+  `orgId` prop — referencing an undeclared one is a ReferenceError the build
+  does not catch, and it would have crashed the board on the first tick-off.
+- Moving a task to `done` forces `progress` to 100. A task left done at 40%
+  makes every chart under-report finished work.
+- Logging is best-effort: failing to record history never blocks the edit.
+- The chart carries each task's last value forward day by day — a task nobody
+  touched for a week has not gone back to zero.
+
+### 4. Dependencies + critical path
+`task_dependencies` (task_id waits on depends_on_id), unique on the pair.
+
+**The maths is `src/lib/criticalPath.js` — pure functions, no Supabase, no
+React**, so it is testable directly rather than by clicking through the UI.
+Forward/backward pass, slack per task, critical = slack 0.
+
+- **Cycles are refused in the picker, before the insert.** The database cannot
+  express "no cycles" as a constraint, and a loop makes the chart meaningless
+  while being tedious to unpick afterwards.
+- Edges pointing **outside the visible set are dropped, not crashed on** — the
+  view is usually filtered to one project while a dependency reaches outside.
+- Tasks caught in a cycle are **reported**, not given made-up slack.
+- **A task with one date or none counts as one day, not zero.** Zero-length
+  tasks collapse into their neighbours and silently join the critical path.
+- The path is computed over the **filtered** set, so narrowing to one project
+  answers what drives that project's finish date, not the whole board's.
+
+Deliberately NOT built: resource levelling, baselines, drag-to-reschedule.
+Dependencies are the part most likely to go stale if nobody maintains them —
+watch whether they get used before building anything on top.
 
 ## Silent-failure classes seen in this codebase — check for these
 
