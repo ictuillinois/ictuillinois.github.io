@@ -588,7 +588,7 @@ export function ExamTab({ session }) {
   async function loadEquipmentData() {
     const [{ data: q }, { data: r }, { data: p }, { data: eqInfo }] = await Promise.all([
       sb.from('equipment_exam_questions').select('*').eq('equipment_id', selectedEq).order('order_num'),
-      sb.from('equipment_exam_results').select('*, users(name)').eq('equipment_id', selectedEq).order('taken_at', { ascending: false }),
+      sb.from('equipment_exam_results').select('*, users(name)').eq('equipment_id', selectedEq).order('created_at', { ascending: false }),
       session.userId ? sb.from('equipment_material_progress').select('*').eq('user_id', session.userId).eq('equipment_id', selectedEq).maybeSingle() : { data: null },
       sb.from('equipment_inventory').select('requires_exam').eq('id', selectedEq).maybeSingle(),
     ])
@@ -777,7 +777,7 @@ export function ExamTab({ session }) {
                             <td style={{ fontWeight: 500 }}>{r.users?.name || (r.user_id === session.userId ? session.username : '—')}</td>
                             <td style={{ fontFamily: 'var(--mono)' }}>{r.score}/{r.total} ({Math.round(r.score/r.total*100)}%)</td>
                             <td><span style={{ background: r.passed ? '#E1F5EE' : '#fcebeb', color: r.passed ? '#085041' : '#a32d2d', borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{r.passed ? 'Passed' : 'Failed'}</span></td>
-                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(r.taken_at).toLocaleDateString()}</td>
+                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(r.created_at).toLocaleDateString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -855,7 +855,7 @@ export function ExamTab({ session }) {
                   <div style={{ fontWeight: 600, color: latestResult.passed ? '#085041' : '#a32d2d' }}>
                     {latestResult.passed ? '✓ Exam passed' : '✕ Exam not passed'} — {latestResult.score}/{latestResult.total} ({Math.round(latestResult.score/latestResult.total*100)}%)
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Taken {new Date(latestResult.taken_at).toLocaleDateString()}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Taken {new Date(latestResult.created_at).toLocaleDateString()}</div>
                   {latestResult.passed && (
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8, fontStyle: 'italic' }}>
                       Your exam grade is for your information only and is not visible to your lab manager.

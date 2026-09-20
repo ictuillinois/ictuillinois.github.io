@@ -271,7 +271,7 @@ function LabUserDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
       // `const { data: projects }`, and the count silently showed 0 for every
       // lab user. Assignment lives in lab_user_ids (uuids), which is what the
       // rest of the app matches on.
-      let projQ = sb.from('projects').select('id,title,status').contains('lab_user_ids', [userId]).eq('status','active')
+      let projQ = sb.from('projects').select('id,name,status').contains('lab_user_ids', [userId]).eq('status','active')
       if (session?.organizationId) projQ = projQ.eq('organization_id', session.organizationId)
       const { data: projects } = await projQ
       const [freshRes,golfRes,alarmRes,eqRes,pendingRes,bookingsRes] = await Promise.all([
@@ -280,7 +280,7 @@ function LabUserDashboardView({ session, onNavigate, mileageUrl, moduleImages, a
         sb.from('training_building_alarm').select('id').eq('user_id',userId).maybeSingle(),
         sb.from('training_equipment').select('id').eq('user_id',userId).limit(1),
         sb.from('training_fresh').select('id').eq('user_id',userId).eq('admin_approved',false).maybeSingle(),
-        sb.from('equipment_bookings').select('id,equipment_name,start_time,end_time,status').eq('user_id',userId).gte('start_time',new Date().toISOString()).order('start_time').limit(3),
+        sb.from('equipment_bookings').select('id,start_time,end_time,status').eq('user_id',userId).gte('start_time',new Date().toISOString()).order('start_time').limit(3),
       ])
       let done = 0
       if (freshRes.data?.admin_approved) done++

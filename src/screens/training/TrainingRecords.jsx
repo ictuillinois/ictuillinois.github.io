@@ -748,7 +748,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     const idSet = new Set(ids.map(String))
 
     async function refreshExamsAndProgress() {
-      let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+      let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('created_at', { ascending: false })
       if (ids.length) examQ = examQ.in('user_id', ids)
       let progQ = sb.from('equipment_material_progress').select('*')
       if (ids.length) progQ = progQ.in('user_id', ids)
@@ -760,12 +760,12 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     // Poll every 10 seconds
     const interval = setInterval(refreshExamsAndProgress, 10000)
 
-    // Realtime — deduplicate by user+equipment+taken_at, not by id (table may have no id column)
+    // Realtime — deduplicate by user+equipment+created_at, not by id (table may have no id column)
     const examSub = sb.channel('eq-training-exams-' + (session?.organizationId || 'solo'))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'equipment_exam_results' }, ({ new: row }) => {
         if (row?.passed && idSet.has(String(row.user_id))) {
           setPassedExams(prev => {
-            const dup = prev.some(e => String(e.user_id) === String(row.user_id) && e.equipment_id === row.equipment_id && e.taken_at === row.taken_at)
+            const dup = prev.some(e => String(e.user_id) === String(row.user_id) && e.equipment_id === row.equipment_id && e.created_at === row.created_at)
             return dup ? prev : [row, ...prev]
           })
         }
@@ -788,7 +788,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   async function load() {
     setLoading(true)
     let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).order('nickname')
-    if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('created_by', session.userId)
+    if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('login_mode', 'solo')
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
     const ids = labUsers.map(s => s.id)
     let recQuery = sb.from('training_equipment').select('*')
@@ -799,7 +799,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     if (ids.length) schedQ = schedQ.in('user_id', ids)
     else if (session?.role === 'lab_user' && session?.userId) schedQ = schedQ.eq('user_id', session.userId)
     if (session?.organizationId) schedQ = schedQ.eq('organization_id', session.organizationId)
-    let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+    let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('created_at', { ascending: false })
     if (ids.length) examQ = examQ.in('user_id', ids)
     else if (session?.role === 'lab_user' && session?.userId) examQ = examQ.eq('user_id', session.userId)
     let progQ = sb.from('equipment_material_progress').select('*')
@@ -843,7 +843,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
         {!allDone && (
           <button onClick={async () => {
             const ids = labUsers.map(s => s.id)
-            let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('taken_at', { ascending: false })
+            let examQ = sb.from('equipment_exam_results').select('*').eq('passed', true).order('created_at', { ascending: false })
             if (ids.length) examQ = examQ.in('user_id', ids)
             let progQ = sb.from('equipment_material_progress').select('*')
             if (ids.length) progQ = progQ.in('user_id', ids)
@@ -1323,7 +1323,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                           <React.Fragment key={`exam-${exam.equipment_id}`}>
                           <tr style={{ background: '#E1F5EE' }}>
                             <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
-                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(exam.taken_at).toLocaleDateString()}</td>
+                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(exam.created_at).toLocaleDateString()}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>Self</td>
                             <td>
                               <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: '1px solid #9FE1CB' }}>
