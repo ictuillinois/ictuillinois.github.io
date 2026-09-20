@@ -1484,3 +1484,15 @@ What it does NOT catch, so do not read an empty result as "nothing is broken":
 wrong column TYPE (`lab_user_ids` is `text[]` here and `uuid[]` there), missing
 RLS policies (use the exposure check), writes that match zero rows, `onConflict`
 without a matching unique index, and a relationship stored in two directions.
+
+### Test results with attached files is LabHive-only
+
+`test_result_entries` and `project_record_files` do not exist in ICT-Lab and
+are not meant to (confirmed Sept 20 2026). `ResultsTab` in
+`ProjectMaterial.jsx` is declared but **never rendered** here, so the code
+referencing those tables cannot execute — the absence is harmless, not a
+missing migration.
+
+Both are listed in `scripts/schema-audit.ignore` along with the `solo_*`
+tables, so the audit stops reporting them. If that tab is ever wired up in
+ICT-Lab, delete those lines and create the tables WITH RLS policies first.

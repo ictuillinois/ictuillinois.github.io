@@ -1,0 +1,21 @@
+# Tables this project deliberately does not have.
+#
+# The audit skips them entirely, so their columns stop appearing as findings.
+# Everything listed here needs a reason — an unexplained entry is how a real
+# break gets silenced. Delete a line to start checking that table again.
+
+# Test results with attached files is a LabHive-only feature (confirmed
+# Sept 20 2026). ResultsTab in ProjectMaterial.jsx is declared but never
+# rendered here, so the code referencing these tables cannot execute.
+test_result_entries
+project_record_files
+project_files
+project_supplies
+analysis_comments
+
+# ICT-Lab is team-only: one organisation, no solo workspaces, no solo_users
+# table. Every solo code path is unreachable here.
+solo_users
+solo_workspace_invites
+solo_workspace_members
+solo_workspace_transfer_requests

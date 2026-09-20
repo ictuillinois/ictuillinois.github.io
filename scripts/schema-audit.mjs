@@ -17,6 +17,15 @@ import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, extname } from 'path'
 
 const ROOT = 'src'
+
+// Tables this project deliberately does not have — see scripts/schema-audit.ignore.
+// Skipping them keeps the report free of rows that are not findings; a report you
+// learn to skim past is worse than no report.
+let IGNORE = new Set()
+try {
+  IGNORE = new Set(readFileSync('scripts/schema-audit.ignore', 'utf8')
+    .split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')))
+} catch { /* no ignore file — check everything */ }
 const EXT = new Set(['.js', '.jsx', '.ts', '.tsx'])
 
 function walk(dir, out = []) {
@@ -80,6 +89,7 @@ if (VERIFY > -1) {
 
 const found = new Map()   // table -> Set(columns)
 const add = (t, c) => {
+  if (IGNORE.has(t)) return
   if (!c || c === '*' || c.includes('(') || c.includes(':')) return
   // `organizations.${poolKey}` is a column chosen at runtime, not a literal.
   if (!/^[a-z][a-z0-9_]*$/i.test(c)) return
@@ -137,3 +147,4 @@ ORDER BY (t.table_name IS NULL), u.tbl, u.col;
 `
 writeFileSync('schema-audit.sql', sql)
 console.log(`  ${pairs.length} column references across ${found.size} tables -> schema-audit.sql`)
+if (IGNORE.size) console.log(`  ${IGNORE.size} table(s) skipped via scripts/schema-audit.ignore`)
