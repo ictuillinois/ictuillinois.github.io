@@ -94,11 +94,12 @@ export default function TaskNetwork({ tasks, edges, onTaskClick }) {
     )
   }
 
-  const box = (x, y, label, sub, crit, onClick, key, filled) => (
-    <g key={key} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+  const box = (x, y, label, sub, crit, onClick, key, filled, done) => (
+    <g key={key} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', opacity: done ? 0.5 : 1 }}>
       <rect x={x} y={y} width={NODE_W} height={NODE_H} rx="9"
         fill={filled ? CRIT : 'var(--surface)'}
-        stroke={crit ? CRIT : 'var(--border)'} strokeWidth={crit ? 2.2 : 1.4} />
+        stroke={crit ? CRIT : 'var(--border)'} strokeWidth={crit ? 2.2 : 1.4}
+        strokeDasharray={done ? '4 3' : 'none'} />
       <text x={x + NODE_W / 2} y={y + (sub ? 23 : 33)} textAnchor="middle"
         style={{ fontSize: 12.5, fontWeight: 700, fill: filled ? '#fff' : 'var(--text)' }}>
         {label.length > 20 ? label.slice(0, 19) + '…' : label}
@@ -127,6 +128,9 @@ export default function TaskNetwork({ tasks, edges, onTaskClick }) {
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
           <span style={{ width: 22, height: 2, borderRadius: 2, background: PLAIN }} /> Has slack
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 22, height: 0, borderTop: `2px dashed ${PLAIN}` }} /> Done
         </span>
         {live.length === 0 && (
           <span style={{ color: 'var(--text3)' }}>
@@ -172,8 +176,13 @@ export default function TaskNetwork({ tasks, edges, onTaskClick }) {
             if (!p) return null
             const d = durationDays(t)
             const slack = cpm.slack.get(t.id)
-            return box(p.x, p.y, t.title, `${d} day${d !== 1 ? 's' : ''}${slack > 0 ? ` · ${slack}d slack` : ''}`,
-              cpm.critical.has(t.id), () => onTaskClick?.(t), `n-${t.id}`, false)
+            const done = t.status === 'done'
+            // Slack on finished work is a number about a thing that can no
+            // longer move — say "done" instead of quoting it days of float.
+            const sub = done ? `${d} day${d !== 1 ? 's' : ''} · done`
+              : `${d} day${d !== 1 ? 's' : ''}${slack > 0 ? ` · ${slack}d slack` : ''}`
+            return box(p.x, p.y, t.title, sub,
+              cpm.critical.has(t.id), () => onTaskClick?.(t), `n-${t.id}`, false, done)
           })}
           {box(endX, startY, 'COMPLETION', cpm.finishDays ? `${cpm.finishDays} days total` : null, true, null, 'end', true)}
         </svg>

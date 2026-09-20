@@ -218,7 +218,12 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
   // Critical path over what is on screen. Computed from the filtered set, so
   // narrowing to one project answers "what drives THIS project's finish date"
   // rather than the whole board's.
-  const cpm = useMemo(() => criticalPath(placed, edges), [placed, edges])
+  const liveEdges = useMemo(() => {
+    const on = new Set(placed.map(t => t.id))
+    return edges.filter(e => on.has(e.task_id) && on.has(e.depends_on_id))
+  }, [placed, edges])
+
+  const cpm = useMemo(() => criticalPath(placed, liveEdges), [placed, liveEdges])
 
   const today = new Date(iso(new Date()) + 'T00:00:00')
   const todayX = xOf(today)
@@ -282,7 +287,7 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
         </div>
       )}
 
-      {showCritical && edges.length > 0 && cpm.critical.size > 0 && (
+      {showCritical && liveEdges.length > 0 && cpm.critical.size > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16, fontSize: 13, color: 'var(--text2)' }}>
           <span style={{ display: 'inline-block', width: 22, height: 10, borderRadius: 3, background: '#1a56db' }} />
           <span><strong>{cpm.critical.size}</strong> task{cpm.critical.size !== 1 ? 's' : ''} on the critical path — slipping any of
@@ -291,7 +296,7 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
       )}
 
       {view === 'network' ? (
-        <TaskNetwork tasks={placed} edges={edges} onTaskClick={onTaskClick} />
+        <TaskNetwork tasks={placed} edges={liveEdges} onTaskClick={onTaskClick} />
       ) : (<>
 
       <ProgressChart tasks={shown} log={log} />
@@ -346,7 +351,7 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
                     const c = barColors(t)
                     const pct = Math.max(0, Math.min(100, t.progress ?? 0))
                     const overdue = t.status !== 'done' && parse(t.deadline) && parse(t.deadline) < today
-                    const isCritical = showCritical && cpm.critical.has(t.id) && edges.length > 0
+                    const isCritical = showCritical && cpm.critical.has(t.id) && liveEdges.length > 0
                     const slack = cpm.slack.get(t.id)
                     return (
                       <div key={t.id} style={{ height: 34, position: 'relative', borderBottom: '1px solid var(--border)' }}>

@@ -17,6 +17,14 @@ export function durationDays(t) {
   return 1
 }
 
+// What is LEFT of a task. A done task has no remaining work, so it cannot
+// delay anything that waits on it and it cannot slip the finish date — its
+// remaining length is 0 even though its planned length is unchanged.
+// durationDays stays the PLANNED length, which is what the boxes display.
+export function remainingDays(t) {
+  return t?.status === 'done' ? 0 : durationDays(t)
+}
+
 // Kahn's algorithm. Returns the order plus whatever could not be ordered,
 // which is exactly the set of tasks caught in a cycle.
 export function topoOrder(tasks, edges) {
@@ -51,7 +59,7 @@ export function topoOrder(tasks, edges) {
 export function criticalPath(tasks, edges) {
   const byId = new Map(tasks.map(t => [t.id, t]))
   const { order, preds, succs, cyclic } = topoOrder(tasks, edges)
-  const dur = id => durationDays(byId.get(id))
+  const dur = id => remainingDays(byId.get(id))
 
   const es = new Map(), ef = new Map()
   order.forEach(id => {
@@ -75,7 +83,10 @@ export function criticalPath(tasks, edges) {
   order.forEach(id => {
     const s = (ls.get(id) ?? 0) - (es.get(id) ?? 0)
     slack.set(id, s)
-    if (s === 0) critical.add(id)
+    // A done task can land on slack 0 — it sits at the head of a critical
+    // chain with zero remaining length — but calling finished work "critical"
+    // is wrong: there is nothing left to slip. Never mark it.
+    if (s === 0 && byId.get(id)?.status !== 'done') critical.add(id)
   })
 
   // A cycle has no meaningful slack, so those tasks are reported rather than

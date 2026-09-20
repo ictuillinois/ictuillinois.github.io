@@ -6,7 +6,7 @@ import { buildEmailHtml } from '../../lib/emailTemplate'
 import ScrollTabs from '../../components/ScrollTabs'
 import HelpPanel from '../../components/HelpPanel'
 import Timeline from './Timeline'
-import { setTaskProgress, setTaskStatus } from '../../lib/taskProgress'
+import { setTaskProgress, setTaskStatus, deleteTask as deleteTaskRow } from '../../lib/taskProgress'
 import { wouldCycle } from '../../lib/criticalPath'
 
 const BLUE = '#0d47a1'
@@ -1544,7 +1544,7 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
   }
 
   const deleteTask = async (id) => {
-    await sb.from('tasks').delete().eq('id', id)
+    await deleteTaskRow(id)
     setTasks(prev => prev.filter(t => t.id !== id))
     if (selectedTask?.id === id) setSelectedTask(null)
     toast('Task deleted.')
@@ -2334,7 +2334,7 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
   return (
     <div>
       {drawingNewTask && <DrawingBoard taskId={drawingNewTask.id} taskTitle={drawingNewTask.title} currentUserName={userName} onClose={() => setDrawingNewTask(null)} onAttachmentSaved={() => setDrawingNewTask(null)} />}
-      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updated => { setTasks(tasks.map(t => t.id === updated.id ? updated : t)); setSelectedTask(updated) }} onDelete={selectedTask?.created_by === userId ? id => { setTasks(tasks.filter(t => t.id !== id)); sb.from('tasks').delete().eq('id', id) } : undefined} currentUserId={userId} currentUserName={userName} />}
+      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updated => { setTasks(tasks.map(t => t.id === updated.id ? updated : t)); setSelectedTask(updated) }} onDelete={selectedTask?.created_by === userId ? id => { setTasks(tasks.filter(t => t.id !== id)); deleteTaskRow(id) } : undefined} currentUserId={userId} currentUserName={userName} />}
 
       {/* ── Step 1: Meeting selector card ─────────────────────────────────── */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
@@ -2660,7 +2660,7 @@ function AssignOthers({ userId, orgId }) {
   }
   const deleteTask = async (id) => {
     if (!confirm('Delete this task?')) return
-    await sb.from('tasks').delete().eq('id', id)
+    await deleteTaskRow(id)
     setTasks(tasks.filter(t => t.id !== id)); toast('Task deleted.')
   }
   const statusStyle = (s) => ({ todo: { background: '#f1f1f1', color: '#555' }, in_progress: { background: ORANGE_LIGHT, color: ORANGE }, done: { background: '#e8f5e9', color: '#2e7d32' } }[s] || {})
@@ -3101,7 +3101,7 @@ export default function PM() {
           onClose={() => setTimelineTask(null)}
           onUpdate={updated => { setTimelineTask(updated); setTimelineReload(k => k + 1) }}
           onDelete={timelineTask?.created_by === userId
-            ? () => setTimelineReload(k => k + 1)
+            ? async id => { await deleteTaskRow(id); setTimelineReload(k => k + 1) }
             : undefined}
           currentUserId={userId}
           currentUserName={userName}

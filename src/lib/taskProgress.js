@@ -48,3 +48,20 @@ export async function setTaskStatus(task, status) {
   await logPoint(task.id, progress, status)
   return { error: null, progress }
 }
+
+// Deleting a task must take its dependency edges with it. `task_dependencies`
+// has no foreign key to `tasks`, so an orphan edge survives the delete and
+// keeps being counted — that is how the Timeline came to announce a critical
+// path while the diagram below it said there were no dependencies at all.
+// Attachments are left alone: they are files in storage, not graph state.
+export async function deleteTask(id) {
+  const { error } = await sb.from('tasks').delete().eq('id', id)
+  if (error) { console.error('[taskProgress] delete failed:', error); return { error } }
+  const [dep, log] = await Promise.all([
+    sb.from('task_dependencies').delete().or(`task_id.eq.${id},depends_on_id.eq.${id}`),
+    sb.from('task_progress_log').delete().eq('task_id', id),
+  ])
+  if (dep.error) console.warn('[taskProgress] dependency cleanup failed:', dep.error.message)
+  if (log.error) console.warn('[taskProgress] history cleanup failed:', log.error.message)
+  return { error: null }
+}
