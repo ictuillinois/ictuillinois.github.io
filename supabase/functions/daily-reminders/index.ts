@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
 
   // --- daily reminders: tasks the user asked to be reminded about ---
   const { data: tasks, error } = await supabase.from("tasks")
-    .select("id, title, deadline, status, assigned_to, created_by, organization_id")
+    .select("id, title, deadline, start_date, status, assigned_to, created_by, organization_id")
     .eq("remind_daily", true).neq("status", "done");
   if (error) {
     console.error("[daily-reminders] task load failed:", error.message);
@@ -133,7 +133,10 @@ Deno.serve(async (req) => {
   // A task reminds whoever it is assigned to AND whoever created it — a task
   // you made for yourself is never "assigned", and was getting nothing.
   const perUser = new Map<string, { titles: string[]; due: number; over: number; orgId: string | null; firstId: string }>();
-  for (const t of tasks ?? []) {
+  // A task that has not started yet is not worth a daily nag. Ticking the box
+  // on something scheduled for next month should not produce noise from today.
+  const started = (tasks ?? []).filter((t) => !t.start_date || t.start_date <= today);
+  for (const t of started) {
     for (const uid of new Set([t.assigned_to, t.created_by].filter(Boolean) as string[])) {
       const e = perUser.get(uid) ?? { titles: [], due: 0, over: 0, orgId: t.organization_id ?? null, firstId: t.id };
       e.titles.push(t.title);

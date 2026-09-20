@@ -41,13 +41,15 @@ export async function runDailyTaskReminders() {
 
   const { data: tasks, error } = await sb
     .from('tasks')
-    .select('id, title, deadline, status, assigned_to, created_by')
+    .select('id, title, deadline, start_date, status, assigned_to, created_by')
     .eq('remind_daily', true)
     .neq('status', 'done')
     .or(`assigned_to.eq.${userId},created_by.eq.${userId}`)
   if (error) { console.warn('[dailyReminders] load failed:', error.message); return }
 
-  const open = tasks || []
+  // Not started yet = no daily nag. Filtered here rather than in the query:
+  // a second .or() alongside the assigned_to/created_by one is ambiguous.
+  const open = (tasks || []).filter(t => !t.start_date || t.start_date <= today)
   if (open.length && await claim(userId, 'daily_tasks', null, today, orgId)) {
     const overdue = open.filter(t => t.deadline && t.deadline < today).length
     const dueToday = open.filter(t => t.deadline === today).length
