@@ -779,6 +779,34 @@ $b$);
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id UUID;
 CREATE INDEX IF NOT EXISTS tasks_project_idx ON tasks(project_id);
 
+-- One row per change to a task's progress or status. tasks.progress holds only
+-- the CURRENT value, so a chart of the past cannot be derived from it — the
+-- history has to be written as it happens or it does not exist.
+CREATE TABLE IF NOT EXISTS task_progress_log (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id         UUID NOT NULL,
+  progress        INTEGER NOT NULL DEFAULT 0,
+  status          TEXT,
+  changed_by      UUID,
+  organization_id UUID,
+  changed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS task_progress_log_task_idx ON task_progress_log(task_id, changed_at);
+
+SELECT _apply_rls('task_progress_log', 'task_progress_log_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
+)
+WITH CHECK (
+  is_super_admin()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
+)
+$b$);
+
 SELECT _apply_rls('tasks', 'tasks_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1361,6 +1389,7 @@ DECLARE
     'projects_policy','project_child_policy','project_materials_policy','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',
+    'task_progress_log_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
     'task_reminders_policy','reminders_policy','lab_safety_progress_policy',
     'ict_layout_policy',

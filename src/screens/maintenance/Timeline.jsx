@@ -32,10 +32,94 @@ function span(t) {
   return e < s ? { start: e, end: s } : { start: s, end: e }
 }
 
+// Progress over time for the tasks currently in view.
+//
+// Built from task_progress_log, not from tasks.progress — the latter is only
+// today's number. Each day takes the last value LOGGED ON OR BEFORE it for
+// every task and averages them: carrying forward matters, because a task
+// nobody touched for a week has not gone back to zero.
+//
+// Tasks with no log entries at all (created before logging existed) count as
+// 0 until their first recorded change, which is the honest reading — their
+// past is genuinely unknown.
+function ProgressChart({ tasks, log, height = 150 }) {
+  const ids = new Set(tasks.map(t => t.id))
+  const points = log.filter(r => ids.has(r.task_id))
+
+  if (!tasks.length) return null
+  if (!points.length) return (
+    <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px 16px', marginBottom: 20, fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
+      No progress history yet. The chart fills in as people move tasks along —
+      it is recorded from now on, so it cannot show anything from before today.
+    </div>
+  )
+
+  const dayOf = ts => new Date(ts).toISOString().slice(0, 10)
+  const firstDay = points.reduce((m, r) => { const d = dayOf(r.changed_at); return !m || d < m ? d : m }, null)
+  const from = new Date(firstDay + 'T00:00:00')
+  const to = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00')
+  const days = Math.max(1, Math.round((to - from) / 86400000) + 1)
+
+  // last value per task, walked forward one day at a time
+  const byTask = new Map()
+  points.forEach(r => {
+    if (!byTask.has(r.task_id)) byTask.set(r.task_id, [])
+    byTask.get(r.task_id).push(r)
+  })
+  for (const arr of byTask.values()) arr.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
+
+  const series = []
+  const cursor = new Map()
+  for (let i = 0; i < days; i++) {
+    const d = new Date(+from + i * 86400000)
+    const key = d.toISOString().slice(0, 10)
+    byTask.forEach((arr, id) => {
+      const upto = arr.filter(r => dayOf(r.changed_at) <= key)
+      if (upto.length) cursor.set(id, upto[upto.length - 1].progress)
+    })
+    let sum = 0
+    tasks.forEach(t => { sum += cursor.get(t.id) ?? 0 })
+    series.push({ key, avg: sum / tasks.length })
+  }
+
+  const W = 100, H = 100      // viewBox units; the svg scales to its box
+  const x = i => (days === 1 ? W / 2 : (i / (days - 1)) * W)
+  const y = v => H - (v / 100) * H
+  const line = series.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(2)} ${y(p.avg).toFixed(2)}`).join(' ')
+  const area = `${line} L ${x(series.length - 1).toFixed(2)} ${H} L ${x(0).toFixed(2)} ${H} Z`
+  const latest = series[series.length - 1].avg
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 20, background: 'var(--surface)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Average progress
+        </span>
+        <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.round(latest)}%</span>
+        <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+          across {tasks.length} task{tasks.length !== 1 ? 's' : ''} · since {firstDay}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height, display: 'block', overflow: 'visible' }}>
+        {[0, 25, 50, 75, 100].map(v => (
+          <line key={v} x1="0" x2={W} y1={y(v)} y2={y(v)} stroke="var(--border)" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+        ))}
+        <path d={area} fill="var(--accent)" opacity="0.14" />
+        <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={x(series.length - 1)} cy={y(latest)} r="3" fill="var(--accent)" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4 }}>
+        <span>{firstDay}</span><span>{series[series.length - 1].key}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskClick }) {
   const { toast } = useAppStore()
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
+  const [log, setLog] = useState([])
   const [loading, setLoading] = useState(true)
   const [projectFilter, setProjectFilter] = useState('')
   const [hideDone, setHideDone] = useState(false)
@@ -58,7 +142,15 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
     pq = isSolo ? pq.eq('solo_owner_id', userId || '00000000-0000-0000-0000-000000000000')
                 : pq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
 
-    const [{ data: t, error: te }, { data: p, error: pe }] = await Promise.all([tq, pq])
+    // 180 days is plenty for a chart nobody reads further back than, and it
+    // keeps the payload bounded as the log grows.
+    const since = new Date(Date.now() - 180 * 86400000).toISOString()
+    const lq = sb.from('task_progress_log').select('task_id, progress, changed_at')
+      .gte('changed_at', since).order('changed_at')
+
+    const [{ data: t, error: te }, { data: p, error: pe }, { data: lg, error: le }] = await Promise.all([tq, pq, lq])
+    if (le) console.error('[Timeline] progress history failed:', le)
+    setLog(lg || [])
     setLoading(false)
     if (te) { toast('Could not load tasks: ' + te.message, true); return }
     if (pe) console.error('[Timeline] project load failed:', pe)
@@ -149,6 +241,8 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
           <input type="range" min="12" max="56" value={zoom} onChange={e => setZoom(+e.target.value)} style={{ width: 120 }} />
         </div>
       </div>
+
+      <ProgressChart tasks={shown} log={log} />
 
       {placed.length === 0 ? (
         <div className="empty-state" style={{ padding: 40 }}>

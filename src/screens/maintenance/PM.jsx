@@ -6,6 +6,7 @@ import { buildEmailHtml } from '../../lib/emailTemplate'
 import ScrollTabs from '../../components/ScrollTabs'
 import HelpPanel from '../../components/HelpPanel'
 import Timeline from './Timeline'
+import { setTaskProgress, setTaskStatus } from '../../lib/taskProgress'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -773,8 +774,8 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
   const cycleStatus = async () => {
     const next = { todo: 'in_progress', in_progress: 'done', done: 'todo' }
     const newStatus = next[localTask.status]
-    await sb.from('tasks').update({ status: newStatus }).eq('id', localTask.id)
-    const updated = { ...localTask, status: newStatus }
+    const { progress: p2 } = await setTaskStatus(localTask, newStatus)
+    const updated = { ...localTask, status: newStatus, progress: p2 ?? localTask.progress }
     setLocalTask(updated); onUpdate(updated)
   }
   const cyclePriority = async () => {
@@ -786,7 +787,7 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
     setLocalTask(updated); onUpdate(updated)
   }
   const updateProgress = async (val) => {
-    await sb.from('tasks').update({ progress: val }).eq('id', localTask.id)
+    await setTaskProgress(localTask, val)
     const updated = { ...localTask, progress: val }
     setLocalTask(updated); onUpdate(updated)
   }
@@ -1421,12 +1422,12 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
     e.stopPropagation()
     const next = { todo: 'in_progress', in_progress: 'done', done: 'todo' }
     const newStatus = next[task.status]
-    await sb.from('tasks').update({ status: newStatus }).eq('id', task.id)
-    setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
+    const { progress: p2 } = await setTaskStatus(task, newStatus)
+    setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus, progress: p2 ?? t.progress } : t))
   }
 
   const updateProgress = async (task, val) => {
-    await sb.from('tasks').update({ progress: val }).eq('id', task.id)
+    await setTaskProgress(task, val)
     setTasks(tasks.map(t => t.id === task.id ? { ...t, progress: val } : t))
   }
 
@@ -2213,8 +2214,8 @@ function Meetings({ userId, isAdmin, userName, orgId }) {
   const toggleStatus = async (task) => {
     const next = { todo: 'in_progress', in_progress: 'done', done: 'todo' }
     const newStatus = next[task.status]
-    await sb.from('tasks').update({ status: newStatus }).eq('id', task.id)
-    setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
+    const { progress: p2 } = await setTaskStatus(task, newStatus)
+    setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus, progress: p2 ?? t.progress } : t))
   }
   const meetingTasks = (mid) => tasks.filter(t => t.meeting_id === mid)
   const filteredMeetingTasks = (mid) => {
