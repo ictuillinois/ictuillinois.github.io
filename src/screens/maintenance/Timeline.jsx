@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { criticalPath } from '../../lib/criticalPath'
 
 // Task timeline (Gantt).
 //
@@ -120,6 +121,8 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
   const [log, setLog] = useState([])
+  const [edges, setEdges] = useState([])
+  const [showCritical, setShowCritical] = useState(true)
   const [loading, setLoading] = useState(true)
   const [projectFilter, setProjectFilter] = useState('')
   const [hideDone, setHideDone] = useState(false)
@@ -148,7 +151,13 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
     const lq = sb.from('task_progress_log').select('task_id, progress, changed_at')
       .gte('changed_at', since).order('changed_at')
 
-    const [{ data: t, error: te }, { data: p, error: pe }, { data: lg, error: le }] = await Promise.all([tq, pq, lq])
+    let dq = sb.from('task_dependencies').select('id, task_id, depends_on_id')
+    if (!isSolo) dq = dq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+
+    const [{ data: t, error: te }, { data: p, error: pe }, { data: lg, error: le }, { data: dp, error: de }] =
+      await Promise.all([tq, pq, lq, dq])
+    if (de) console.error('[Timeline] dependencies failed:', de)
+    setEdges(dp || [])
     if (le) console.error('[Timeline] progress history failed:', le)
     setLog(lg || [])
     setLoading(false)
@@ -204,6 +213,11 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
       a === '__none__' ? 1 : b === '__none__' ? -1 : (projectName(a) || '').localeCompare(projectName(b) || ''))
   }, [placed, projects])
 
+  // Critical path over what is on screen. Computed from the filtered set, so
+  // narrowing to one project answers "what drives THIS project's finish date"
+  // rather than the whole board's.
+  const cpm = useMemo(() => criticalPath(placed, edges), [placed, edges])
+
   const today = new Date(iso(new Date()) + 'T00:00:00')
   const todayX = xOf(today)
 
@@ -236,11 +250,30 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
           <input type="checkbox" checked={hideDone} onChange={e => setHideDone(e.target.checked)} style={{ width: 'auto' }} />
           Hide done
         </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 0, cursor: 'pointer' }}>
+          <input type="checkbox" checked={showCritical} onChange={e => setShowCritical(e.target.checked)} style={{ width: 'auto' }} />
+          Critical path
+        </label>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={lbl}>Zoom</span>
           <input type="range" min="12" max="56" value={zoom} onChange={e => setZoom(+e.target.value)} style={{ width: 120 }} />
         </div>
       </div>
+
+      {cpm.cyclic.length > 0 && (
+        <div style={{ background: '#fdf0ed', border: '1px solid #e24b4a', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#c0392b', lineHeight: 1.6 }}>
+          <strong>{cpm.cyclic.length} task{cpm.cyclic.length !== 1 ? 's' : ''} form a dependency loop</strong> and are left out of
+          the critical path — a chain that waits on itself has no start. Open one and remove a "waits on" entry to break it.
+        </div>
+      )}
+
+      {showCritical && edges.length > 0 && cpm.critical.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16, fontSize: 13, color: 'var(--text2)' }}>
+          <span style={{ display: 'inline-block', width: 22, height: 10, borderRadius: 3, background: '#c84b2f' }} />
+          <span><strong>{cpm.critical.size}</strong> task{cpm.critical.size !== 1 ? 's' : ''} on the critical path — slipping any of
+          them moves the finish date. The chain runs <strong>{cpm.finishDays}</strong> day{cpm.finishDays !== 1 ? 's' : ''} end to end.</span>
+        </div>
+      )}
 
       <ProgressChart tasks={shown} log={log} />
 
@@ -294,12 +327,15 @@ export default function Timeline({ userId, isOwnerAdmin, isSolo, orgId, onTaskCl
                     const c = barColors(t)
                     const pct = Math.max(0, Math.min(100, t.progress ?? 0))
                     const overdue = t.status !== 'done' && parse(t.deadline) && parse(t.deadline) < today
+                    const isCritical = showCritical && cpm.critical.has(t.id) && edges.length > 0
+                    const slack = cpm.slack.get(t.id)
                     return (
                       <div key={t.id} style={{ height: 34, position: 'relative', borderBottom: '1px solid var(--border)' }}>
                         {ticks.map((tk, i) => tk.weekend ? <div key={i} style={{ position: 'absolute', left: tk.x, top: 0, bottom: 0, width: zoom, background: 'rgba(0,0,0,0.03)' }} /> : null)}
                         <div onClick={() => onTaskClick?.(t)}
-                          title={`${t.title}\n${t.start_date || '—'} → ${t.deadline || '—'}\n${pct}% complete${overdue ? ' · overdue' : ''}`}
-                          style={{ position: 'absolute', left: x + 2, top: 6, width: w, height: 22, borderRadius: 6, background: c.soft, border: `1.5px solid ${overdue ? '#c84b2f' : c.bar}`, cursor: onTaskClick ? 'pointer' : 'default', overflow: 'hidden', opacity: t.status === 'done' ? 0.55 : 1 }}>
+                          title={`${t.title}\n${t.start_date || '—'} → ${t.deadline || '—'}\n${pct}% complete${overdue ? ' · overdue' : ''}${isCritical ? '\ncritical path — no slack' : (slack > 0 ? `\n${slack} day${slack !== 1 ? 's' : ''} of slack` : '')}`}
+                          style={{ position: 'absolute', left: x + 2, top: 6, width: w, height: 22, borderRadius: 6, background: c.soft, border: `${isCritical ? 2.5 : 1.5}px solid ${isCritical ? '#c84b2f' : overdue ? '#c84b2f' : c.bar}`,
+                            boxShadow: isCritical ? '0 0 0 2px rgba(200,75,47,0.18)' : 'none', cursor: onTaskClick ? 'pointer' : 'default', overflow: 'hidden', opacity: t.status === 'done' ? 0.55 : 1 }}>
                           {/* progress fill */}
                           <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: c.bar, opacity: 0.55 }} />
                           <div style={{ position: 'relative', fontSize: 10, fontWeight: 600, color: 'var(--text)', padding: '3px 6px', whiteSpace: 'nowrap' }}>

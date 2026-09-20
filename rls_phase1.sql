@@ -807,6 +807,37 @@ WITH CHECK (
 )
 $b$);
 
+-- Task dependencies: task_id waits on depends_on_id.
+-- The unique index is not cosmetic — the "waits on" picker would otherwise
+-- happily add the same edge twice and double-count it in the critical path.
+-- Cycles are prevented in the app before the insert; the database cannot
+-- express "no cycles" as a constraint.
+CREATE TABLE IF NOT EXISTS task_dependencies (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id         UUID NOT NULL,
+  depends_on_id   UUID NOT NULL,
+  organization_id UUID,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT task_dependencies_no_self CHECK (task_id <> depends_on_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS task_dependencies_pair_uniq
+  ON task_dependencies (task_id, depends_on_id);
+CREATE INDEX IF NOT EXISTS task_dependencies_task_idx ON task_dependencies(task_id);
+
+SELECT _apply_rls('task_dependencies', 'task_dependencies_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
+)
+WITH CHECK (
+  is_super_admin()
+  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
+  OR task_id IN (SELECT id FROM tasks WHERE login_mode = 'solo' AND created_by::text = my_solo_id()::text)
+)
+$b$);
+
 SELECT _apply_rls('tasks', 'tasks_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1390,6 +1421,7 @@ DECLARE
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',
     'task_progress_log_policy',
+    'task_dependencies_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
     'task_reminders_policy','reminders_policy','lab_safety_progress_policy',
     'ict_layout_policy',

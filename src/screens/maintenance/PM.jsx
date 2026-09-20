@@ -7,6 +7,7 @@ import ScrollTabs from '../../components/ScrollTabs'
 import HelpPanel from '../../components/HelpPanel'
 import Timeline from './Timeline'
 import { setTaskProgress, setTaskStatus } from '../../lib/taskProgress'
+import { wouldCycle } from '../../lib/criticalPath'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -483,6 +484,92 @@ function TaskGroupPanel({ userId, orgId, onGroupChange }) {
 
 // Requires: task_attachments table + task-files storage bucket in Supabase
 // SQL: CREATE TABLE task_attachments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), task_id uuid REFERENCES tasks(id) ON DELETE CASCADE, file_name text, file_url text, file_size bigint, uploaded_by text, created_at timestamptz DEFAULT now());
+// "Waits on" — the predecessors of a task.
+//
+// Cycles are refused here rather than in the database, which cannot express
+// "no cycles" as a constraint. A loop makes the critical path meaningless and
+// is tedious to unpick once saved, so the check happens before the insert.
+function TaskDependencies({ task, orgId, isSolo, userId }) {
+  const { toast } = useAppStore()
+  const [edges, setEdges] = useState([])
+  const [candidates, setCandidates] = useState([])
+  const [picking, setPicking] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { load() }, [task.id])
+
+  async function load() {
+    // Every edge in the workspace, not just this task's: wouldCycle has to
+    // walk the whole graph to find an indirect loop.
+    let eq = sb.from('task_dependencies').select('id, task_id, depends_on_id')
+    let tq = sb.from('tasks').select('id, title, status').eq('login_mode', isSolo ? 'solo' : 'team')
+    if (isSolo) tq = tq.eq('created_by', userId || '00000000-0000-0000-0000-000000000000')
+    else {
+      eq = eq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+      tq = tq.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    }
+    const [{ data: e, error: ee }, { data: t, error: te }] = await Promise.all([eq, tq])
+    if (ee) { console.error('[deps] load failed:', ee); return }
+    if (te) { console.error('[deps] task list failed:', te); return }
+    setEdges(e || [])
+    setCandidates((t || []).filter(x => x.id !== task.id))
+  }
+
+  const mine = edges.filter(e => e.task_id === task.id)
+  const titleOf = id => candidates.find(c => c.id === id)?.title || 'Task'
+
+  async function add() {
+    if (!picking) return
+    if (mine.some(e => e.depends_on_id === picking)) { toast('Already waiting on that task.'); return }
+    if (wouldCycle(edges, task.id, picking)) {
+      toast('That would create a loop — the other task already waits on this one.', true)
+      return
+    }
+    setBusy(true)
+    const { error } = await sb.from('task_dependencies').insert({
+      task_id: task.id, depends_on_id: picking, organization_id: isSolo ? null : (orgId || null),
+    })
+    setBusy(false)
+    if (error) { toast('Could not add: ' + error.message, true); return }
+    setPicking('')
+    load()
+  }
+
+  async function remove(id) {
+    const { error } = await sb.from('task_dependencies').delete().eq('id', id)
+    if (error) { toast('Could not remove: ' + error.message, true); return }
+    load()
+  }
+
+  return (
+    <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        Waits on
+      </div>
+      {mine.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 10 }}>
+          Nothing — this task can start whenever.
+        </div>
+      )}
+      {mine.map(e => (
+        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', marginBottom: 6, fontSize: 13 }}>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titleOf(e.depends_on_id)}</span>
+          <button onClick={() => remove(e.id)} className="btn btn-sm" style={{ color: '#c84b2f', flexShrink: 0 }}>Remove</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <select value={picking} onChange={e => setPicking(e.target.value)} style={{ flex: 1 }}>
+          <option value="">— Add a task this one waits on —</option>
+          {candidates
+            .filter(c => !mine.some(e => e.depends_on_id === c.id))
+            .map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+        </select>
+        <button className="btn btn-sm btn-primary" onClick={add} disabled={!picking || busy}>Add</button>
+      </div>
+    </div>
+  )
+}
+
 function TaskAttachments({ taskId, userName, refreshToken }) {
   const [attachments, setAttachments] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -937,6 +1024,8 @@ function TaskModal({ task, onClose, onUpdate, onDelete, currentUserId, currentUs
           />
         )}
         <TaskAttachments taskId={localTask.id} userName={currentUserName} refreshToken={attachmentRefresh} />
+        <TaskDependencies task={localTask} orgId={localTask.organization_id}
+          isSolo={localTask.login_mode === 'solo'} userId={currentUserId} />
         {onDelete && (
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={() => { if (confirm(`Delete "${localTask.title}"?`)) { onDelete(localTask.id); onClose() } }}
