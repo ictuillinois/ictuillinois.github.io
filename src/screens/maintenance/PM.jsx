@@ -2,12 +2,12 @@ import * as XLSX from 'xlsx-js-style'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
-import { buildEmailHtml } from '../../lib/emailTemplate'
 import ScrollTabs from '../../components/ScrollTabs'
 import HelpPanel from '../../components/HelpPanel'
 import Timeline from './Timeline'
 import { setTaskProgress, setTaskStatus, deleteTask as deleteTaskRow } from '../../lib/taskProgress'
 import { wouldCycle } from '../../lib/criticalPath'
+import { sendTaskNotification as sendNotification } from '../../lib/notify'
 
 const BLUE = '#0d47a1'
 const ORANGE = '#ff6b00'
@@ -31,28 +31,6 @@ function progressColor(pct) {
   if (pct >= 50)  return BLUE
   if (pct >= 25)  return ORANGE
   return '#c84b2f'
-}
-
-async function sendNotification(userId, type, title, body, taskId = null) {
-  if (!userId) return
-  const { data: prefs } = await sb.from('notification_prefs').select('*').eq('user_id', userId).maybeSingle()
-  if (!prefs || prefs[type] !== false) {
-    await sb.from('notifications').insert({ user_id: userId, type, title, body, task_id: taskId, read: false })
-  }
-  if (prefs && prefs[`email_${type}`] === true) {
-    const { data: user } = await sb.from('users').select('phone, email, organization_id').eq('id', userId).maybeSingle()
-    const toEmail = user?.phone || user?.email
-    if (toEmail) {
-      let orgContact = null
-      if (user?.organization_id) {
-        const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
-        orgContact = org
-      }
-      const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Task in ICT-Lab →', ctaUrl: 'https://ictlab.app/?screen=pm', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
-      await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type })
-        .then(({ error }) => { if (error) console.warn('PM email queue failed:', error.message) })
-    }
-  }
 }
 
 function ProgressCircle({ progress, onChange }) {
@@ -1489,22 +1467,8 @@ function MyTasks({ userId, isAdmin, isOwnerAdmin, userName, isSolo, orgId, isLab
         return new Date(a.deadline) - new Date(b.deadline)
       })
       setTasks(sorted)
-      if (userId) checkDeadlineNotifications(sorted)
     } catch(e) { console.error(e) }
     setLoading(false)
-  }
-
-  async function checkDeadlineNotifications(taskList) {
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowStr = tomorrow.toISOString().split('T')[0]
-    const todayStr = new Date().toISOString().split('T')[0]
-    const due = (taskList || []).filter(t => t.deadline === tomorrowStr && t.status !== 'done' && t.assigned_to === userId)
-    for (const task of due) {
-      const key = `ictlab_dl_notif_${task.id}_${todayStr}`
-      if (localStorage.getItem(key)) continue
-      localStorage.setItem(key, '1')
-      await sendNotification(userId, 'deadline_reminder', '⏰ Task due tomorrow', `"${task.title}" is due tomorrow`, task.id)
-    }
   }
 
   const toggleStatus = async (task, e) => {
