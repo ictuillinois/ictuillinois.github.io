@@ -21,6 +21,12 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 -- sent — a missing column fails the entire PostgREST request, not just itself.
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS remind_daily BOOLEAN DEFAULT FALSE;
 
+-- notifications.task_id is what NotificationBell reads to route a click to the
+-- task. Without the column EVERY insert that supplies it is rejected outright
+-- -- not just that field -- so all task notifications fail silently. ICT-Lab
+-- was missing it and had recorded no task notification for days.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_id UUID;
+
 -- notification_prefs needs the two keys these reminders are filtered on.
 ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS reminder_daily          BOOLEAN DEFAULT TRUE;
 ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS email_reminder_daily    BOOLEAN DEFAULT FALSE;
@@ -54,7 +60,7 @@ SELECT cron.schedule(
 --   SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'daily-reminders-hourly';
 --
 -- Did the last few runs reach the function? (status 200 = yes)
---   SELECT status, content::text, created FROM net._http_response ORDER BY created DESC LIMIT 5;
+--   SELECT status_code, content::text, created FROM net._http_response ORDER BY id DESC LIMIT 5;
 --
 -- What has been sent today?
 --   SELECT kind, count(*) FROM reminder_sends WHERE sent_for = CURRENT_DATE GROUP BY kind;
