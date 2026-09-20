@@ -1438,3 +1438,28 @@ copy.
   in try/catch because ICT-Lab has no `solo_users` table.
 - The Reminders tab's own 7-11am "check your list" ping was **removed** — same
   pref key, same morning, and it only told you to go and look.
+
+### Two faults found while deploying this (Sept 20 2026)
+
+**`notifications.task_id` was missing in ICT-Lab.** `NotificationBell` reads it
+to route a click to the task, and every sender supplies it — so the missing
+column rejected the ENTIRE insert, not just that field. No task notification
+of any kind had been recorded since Sept 16: assignments, comments and status
+changes were failing exactly as silently as the reminders. Silent-failure
+class #4. `daily_reminders_setup.sql` now adds the column.
+
+**LabHive already had a daily reminder nobody knew about** — pg_cron job
+`daily-task-reminders`, a raw `INSERT INTO notifications` created in the
+dashboard, in no SQL file and never in git. It ran at `0 8 * * *` UTC (3am
+Central). It has been unscheduled, because the Edge Function supersedes it,
+but note what it cost to find: **a scheduled job can exist in the database
+with no trace in the repo.** `SELECT jobid, jobname, schedule FROM cron.job`
+before adding any new one.
+
+It did carry one rule worth keeping, now in both the function and the client:
+`start_date IS NULL OR start_date <= CURRENT_DATE` — a task that has not
+started yet gets no daily nag.
+
+It also collided: its dedup was "skip if this user has any `deadline_reminder`
+today", which the Edge Function knows nothing about, so both would have fired
+every morning.
