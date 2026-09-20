@@ -1391,3 +1391,50 @@ WHERE n.nspname='public' AND c.relkind='r'
   AND (c.relrowsecurity=false
        OR NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname));
 ```
+
+## Daily task reminders — scheduled, not just client-side (Sept 2026)
+
+The "Remind me daily" tick box wrote `tasks.remind_daily` and **nothing read
+it** except a list on the Reminders tab. No notification was ever sent for it.
+The reminders that did send ran from the Reminders tab's own mount effect, so
+the 7-11am ping required opening the app AND navigating to Task Board ->
+Reminders inside that window. A reminder you only get by going to look for it
+is not a reminder.
+
+| Piece | Role |
+|---|---|
+| `supabase/functions/daily-reminders/` | the real sender — runs on a schedule |
+| `daily_reminders_setup.sql` | `reminder_sends` prereqs + the hourly cron |
+| `src/lib/dailyReminders.js` | same checks on login; fallback if cron is down |
+| `src/lib/notify.js` | one prefs-aware sender, shared with PM.jsx |
+| `reminder_sends` table | dedup, in the DB (see rls_phase1.sql) |
+
+**Deploy (per project — they are separate databases, do BOTH):**
+1. Run `rls_phase1.sql` (creates `reminder_sends` + its policy).
+2. Create an Edge Function named **`daily-reminders`**, paste
+   `supabase/functions/daily-reminders/index.ts`, Deploy.
+3. Run `daily_reminders_setup.sql`.
+   Project ref for this repo: `ilqnwprvxwbhvrjstwsd`.
+
+**The cron runs HOURLY and the function returns early unless it is 7am in
+`REMINDER_TZ`** (default `America/Chicago`, override with the `REMINDER_HOUR`
+secret). A fixed UTC schedule would drift an hour twice a year at daylight
+saving. `?force=1` on the function URL sends regardless of hour, for testing.
+
+**Dedup is a row in `reminder_sends`, claimed BEFORE sending.** Its unique
+index COALESCEs `ref_id`, because the daily summary has no task id and NULLs
+never collide in a plain unique index — without the COALESCE nothing would
+ever dedupe. The cron and the browser both claim through it, so whichever runs
+first sends and the other finds the day taken. Do NOT move this back to
+localStorage: it is per browser, so a laptop and a phone each sent their own
+copy.
+
+- The policy needs the **solo branch** (`user_id::text = my_solo_id()::text`).
+  Solo sessions carry `session.userId = solo_users.id`, so an org-only policy
+  blocks their claim and they silently receive nothing.
+- Reminders match **`created_by` as well as `assigned_to`** — a task you made
+  for yourself is never "assigned", and got nothing before.
+- The Edge Function falls back to `solo_users` for an email address, wrapped
+  in try/catch because ICT-Lab has no `solo_users` table.
+- The Reminders tab's own 7-11am "check your list" ping was **removed** — same
+  pref key, same morning, and it only told you to go and look.

@@ -2785,12 +2785,10 @@ function Reminders({ userId }) {
     const hour = new Date().getHours()
     const min = new Date().getMinutes()
 
-    // Daily morning check (7–11 am)
-    const morningKey = `ictlab_rem_morning_${userId}_${todayStr}`
-    if (!localStorage.getItem(morningKey) && hour >= 7 && hour < 11) {
-      localStorage.setItem(morningKey, '1')
-      await sendNotification(userId, 'reminder_daily', '☀️ Good morning!', 'Check your daily reminder list for today.', null)
-    }
+    // The 7-11am "check your list" ping lived here. It is gone: the daily
+    // reminder (lib/dailyReminders + the daily-reminders cron) fires on the
+    // same pref key that morning and names what is actually on the list,
+    // rather than telling you to go and look. Two of them was one too many.
 
     // Noon check (11 am–1 pm)
     const noonKey = `ictlab_rem_noon_${userId}_${todayStr}`

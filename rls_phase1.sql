@@ -824,6 +824,45 @@ CREATE UNIQUE INDEX IF NOT EXISTS task_dependencies_pair_uniq
   ON task_dependencies (task_id, depends_on_id);
 CREATE INDEX IF NOT EXISTS task_dependencies_task_idx ON task_dependencies(task_id);
 
+-- ---------------------------------------------------------------------------
+-- reminder_sends — one row per reminder actually delivered.
+--
+-- Dedup lives in the database, not in localStorage, for two reasons: the cron
+-- job and the browser both send daily reminders and must not both send the
+-- same one, and a per-browser marker meant a user with a laptop and a phone
+-- got the same reminder twice.
+--
+-- The unique index COALESCEs ref_id: the daily summary has no task id, and in
+-- a plain unique index NULLs never collide, so every run would insert a fresh
+-- row and nothing would ever be deduped.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reminder_sends (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL,
+  kind            TEXT NOT NULL,          -- 'daily_tasks' | 'deadline_tomorrow'
+  ref_id          UUID,                   -- task id where the reminder is per-task
+  sent_for        DATE NOT NULL,
+  organization_id UUID,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS reminder_sends_uniq ON reminder_sends
+  (user_id, kind, COALESCE(ref_id, '00000000-0000-0000-0000-000000000000'::uuid), sent_for);
+CREATE INDEX IF NOT EXISTS reminder_sends_day_idx ON reminder_sends (sent_for);
+
+SELECT _apply_rls('reminder_sends', 'reminder_sends_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+)
+WITH CHECK (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+)
+$b$);
+
 SELECT _apply_rls('task_dependencies', 'task_dependencies_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1422,6 +1461,7 @@ DECLARE
     'training_schedule_policy','training_policy','retraining_requests_policy',
     'task_progress_log_policy',
     'task_dependencies_policy',
+    'reminder_sends_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
     'task_reminders_policy','reminders_policy','lab_safety_progress_policy',
     'ict_layout_policy',
