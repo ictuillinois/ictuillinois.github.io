@@ -35,12 +35,29 @@ const FROM = /\.from\(\s*['"`]([a-z0-9_]+)['"`]\s*\)/gi
 
 // Column-bearing calls. `select` gets its own parser because of embeds.
 const FILTERS = /\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|contains|order|not)\(\s*['"`]([a-z0-9_]+)['"`]/gi
-const OBJKEYS = /\.(insert|update|upsert)\(\s*\{([^}]*)\}/gis
 const SELECTS = /\.select\(\s*['"`]([^'"`]*)['"`]/gi
+const WRITE = /\.(insert|update|upsert)\(\s*\{/gis
+
+// Keys of the TOP-LEVEL object only. `meta: { manager_name, note }` stores one
+// jsonb column named meta; harvesting its inner keys reported two columns that
+// were never columns, and noise like that is how a real finding gets waved off.
+function topLevelKeys(src, openBrace) {
+  let depth = 0, i = openBrace, out = [], buf = ''
+  for (; i < src.length && i < openBrace + 4000; i++) {
+    const ch = src[i]
+    if (ch === '{' || ch === '[' || ch === '(') { depth++; if (depth > 1) continue }
+    else if (ch === '}' || ch === ']' || ch === ')') { depth--; if (depth === 0) break; continue }
+    if (depth === 1) buf += ch
+  }
+  for (const m of buf.matchAll(/(?:^|,)\s*([a-z0-9_]+)\s*(?::|,|$)/gi)) out.push(m[1])
+  return out
+}
 
 const found = new Map()   // table -> Set(columns)
 const add = (t, c) => {
   if (!c || c === '*' || c.includes('(') || c.includes(':')) return
+  // `organizations.${poolKey}` is a column chosen at runtime, not a literal.
+  if (!/^[a-z][a-z0-9_]*$/i.test(c)) return
   if (!found.has(t)) found.set(t, new Set())
   found.get(t).add(c)
 }
@@ -50,16 +67,14 @@ for (const file of walk(ROOT)) {
   const marks = [...src.matchAll(FROM)]
   marks.forEach((m, i) => {
     const table = m[1]
-    const chain = src.slice(m.index, marks[i + 1]?.index ?? Math.min(src.length, m.index + 1200))
+    const chain = src.slice(m.index, Math.min(marks[i + 1]?.index ?? src.length, m.index + 400))
     for (const f of chain.matchAll(FILTERS)) add(table, f[2])
     for (const s of chain.matchAll(SELECTS)) {
       // strip embedded resources: "a, rel(b,c)" -> a
       s[1].replace(/\w+\s*\([^)]*\)/g, '').split(',').forEach(c => add(table, c.trim()))
     }
-    for (const o of chain.matchAll(OBJKEYS)) {
-      for (const k of o[2].matchAll(/(?:^|,)\s*([a-z0-9_]+)\s*:/gi)) add(table, k[1])
-      // shorthand { organization_id, user_id }
-      for (const k of o[2].matchAll(/(?:^|,)\s*([a-z0-9_]+)\s*(?=,|$)/gi)) add(table, k[1])
+    for (const w of chain.matchAll(WRITE)) {
+      for (const k of topLevelKeys(chain, w.index + w[0].length - 1)) add(table, k)
     }
   })
 }

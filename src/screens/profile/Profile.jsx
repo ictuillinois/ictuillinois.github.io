@@ -2675,7 +2675,7 @@ export function ApprovalRequestsPanel({ toast, session, onCountChange }) {
     setProcessing(req.id)
     try {
       await sb.from('account_deletion_requests').update({ status: 'denied', reviewed_by: session.userId, reviewed_at: new Date().toISOString() }).eq('id', req.id)
-      await sb.from('notifications').insert({ user_id: req.user_id, message: 'Your account deletion request has been denied by your lab manager.', type: 'deletion_denied', read: false })
+      await sb.from('notifications').insert({ user_id: req.user_id, title: 'Account deletion denied', type: 'account_deletion', body: 'Your account deletion request has been denied by your lab manager.', type: 'deletion_denied', read: false })
       toast(`${req.user_name}'s deletion request denied.`)
       const updated = requests.filter(x => x.id !== req.id)
       setRequests(updated)
