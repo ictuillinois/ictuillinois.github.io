@@ -1243,10 +1243,23 @@ const SAFETY_VIDEOS = {
 
 // One player for all three. The presign + expiry-retry + missing-file reporting
 // existed once per step before; a third copy is how they drift.
-function SafetyVideo({ extRef, onEnded, minHeight = 240, maxHeight = 480 }) {
+// WATCH_COVERAGE: how much of the running time must actually be played before
+// the step counts as watched. Not 100% — a few dropped frames at the end, or a
+// video whose final second never fires a timeupdate, would otherwise strand
+// someone who genuinely sat through it.
+const WATCH_COVERAGE = 0.95
+// Any forward jump bigger than this is a seek, not playback, and contributes
+// nothing. This is what stops dragging the scrubber to the end from counting.
+const MAX_TICK_SECONDS = 2
+
+function SafetyVideo({ extRef, onWatched, minHeight = 240, maxHeight = 480 }) {
   const [src, setSrc] = useState(null)
   const [missing, setMissing] = useState(false)
+  const [progress, setProgress] = useState(0)
   const retried = useRef(false)
+  const watchedSec = useRef(0)
+  const lastPos = useRef(0)
+  const done = useRef(false)
 
   const resolve = useCallback(async () => {
     try {
@@ -1259,6 +1272,34 @@ function SafetyVideo({ extRef, onEnded, minHeight = 240, maxHeight = 480 }) {
   }, [extRef])
 
   useEffect(() => { retried.current = false; resolve() }, [resolve])
+
+  // Count only real playback. `timeupdate` fires a few times a second; a delta
+  // inside MAX_TICK_SECONDS is someone watching, anything larger is a seek.
+  // Seeking backwards to re-watch is fine and simply re-accrues time.
+  function handleTimeUpdate(e) {
+    const v = e.currentTarget
+    const pos = v.currentTime
+    const delta = pos - lastPos.current
+    lastPos.current = pos
+    if (delta > 0 && delta <= MAX_TICK_SECONDS) watchedSec.current += delta
+    const dur = v.duration
+    if (!dur || !isFinite(dur)) return
+    const pct = Math.min(1, watchedSec.current / dur)
+    setProgress(pct)
+    if (!done.current && pct >= WATCH_COVERAGE) {
+      done.current = true
+      onWatched?.()
+    }
+  }
+
+  // Reaching the end is only proof if the time was actually put in.
+  function handleEnded(e) {
+    const dur = e.currentTarget.duration
+    if (!done.current && dur && watchedSec.current / dur >= WATCH_COVERAGE) {
+      done.current = true
+      onWatched?.()
+    }
+  }
 
   // A presigned GET is good for an hour. Resolve once more before calling the
   // file missing — an hour-old open tab is likelier than a vanished upload.
@@ -1287,16 +1328,33 @@ function SafetyVideo({ extRef, onEnded, minHeight = 240, maxHeight = 480 }) {
   }
 
   return (
-    <video
-      src={src}
-      controls
-      preload="metadata"
-      controlsList="nodownload"
-      onContextMenu={e => e.preventDefault()}
-      onEnded={onEnded}
-      onError={handleError}
-      style={{ width: '100%', minHeight, borderRadius: 8, background: '#000', display: 'block', maxHeight }}
-    />
+    <div>
+      <video
+        src={src}
+        controls
+        preload="metadata"
+        controlsList="nodownload"
+        onContextMenu={e => e.preventDefault()}
+        onTimeUpdate={handleTimeUpdate}
+        onSeeked={e => { lastPos.current = e.currentTarget.currentTime }}
+        onEnded={handleEnded}
+        onError={handleError}
+        style={{ width: '100%', minHeight, borderRadius: 8, background: '#000', display: 'block', maxHeight }}
+      />
+      {/* Show the watched share, not the scrubber position — otherwise someone
+          who skipped ahead sees a full bar and cannot tell why it is still
+          locked. */}
+      {!done.current && progress > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
+          </div>
+          <div style={{ marginTop: 5, fontSize: 12, color: 'var(--text3)', textAlign: 'center' }}>
+            {Math.round(progress * 100)}% watched — skipping ahead does not count
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1396,7 +1454,7 @@ function Step3VideosContent({ user, isManager }) {
               </span>
             )}
           </div>
-          <SafetyVideo extRef={v.ref} onEnded={() => markWatched(v.key)} minHeight={220} maxHeight={440} />
+          <SafetyVideo extRef={v.ref} onWatched={() => markWatched(v.key)} minHeight={220} maxHeight={440} />
         </div>
       ))}
 
@@ -1516,7 +1574,7 @@ function Step4VideoContent({ user, isManager }) {
           Watch the ICT Building Safety Video below, then answer the knowledge check.
           The questions unlock once you have watched the video in full.
         </div>
-        <SafetyVideo extRef={SAFETY_VIDEOS.step1} onEnded={handleVideoEnded} />
+        <SafetyVideo extRef={SAFETY_VIDEOS.step1} onWatched={handleVideoEnded} />
         {!videoWatched && (
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center' }}>
             Watch the full video to unlock the knowledge check below.
