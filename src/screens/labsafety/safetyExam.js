@@ -94,3 +94,48 @@ export function scoreSafetyExam(answers) {
     percent: Math.round((score / total) * 100),
   }
 }
+
+// ── Per-user option order ───────────────────────────────────────────────────
+//
+// Every lab user sees the same four options in a different order, so "the
+// answer is B, B, C, C, B" is worthless passed between them. The order is
+// derived from the user's id, which means it is stable for that person across
+// reloads and retakes — a shuffle that changed on every render would move an
+// option out from under the click that selected it.
+//
+// The ANSWER STORED IS ALWAYS THE ORIGINAL KEY (a/b/c/d), never the displayed
+// position, so scoring and any stored answers stay meaningful no matter how
+// the options were arranged on screen.
+
+function hash32(str) {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+// mulberry32 — small, fast, and deterministic for a given seed.
+function rng(seed) {
+  let a = seed >>> 0
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// Returns the original option keys in the order this user should see them.
+export function optionOrderFor(question, userId) {
+  const keys = Object.keys(question.options)
+  if (!userId) return keys
+  const next = rng(hash32(`${userId}:${question.id}`))
+  const out = [...keys]
+  for (let i = out.length - 1; i > 0; i--) {         // Fisher-Yates
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}

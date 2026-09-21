@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
-import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam } from './safetyExam'
+import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, optionOrderFor } from './safetyExam'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -1521,6 +1521,7 @@ function Step4VideoContent({ user, isManager }) {
 
       {!isManager && (
         <SafetyExamPanel
+          userId={userId}
           locked={!videoWatched}
           answers={answers}
           setAnswers={setAnswers}
@@ -1542,7 +1543,7 @@ function Step4VideoContent({ user, isManager }) {
 // The knowledge check itself. One question on screen at a time: the whole test
 // visible at once invites scanning ahead, and with a 5-of-5 pass rule a wall of
 // questions reads as more daunting than it is.
-function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, saved,
+function SafetyExamPanel({ userId, locked, answers, setAnswers, answeredAll, result, saved,
                            alreadyPassed, approved, saving, error, onSubmit, onRetake }) {
   const [current, setCurrent] = useState(0)
   const total = SAFETY_EXAM_QUESTIONS.length
@@ -1551,7 +1552,11 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
   // Start a retake at the beginning rather than wherever the last one ended.
   useEffect(() => { if (!result) setCurrent(0) }, [result])
 
-  if (alreadyPassed && !result) {
+  // A pass ends it. The questions and answers are never shown again — not on
+  // the pass screen, not on a revisit — so a passed user cannot reopen the
+  // paper and pass it around. Checked BEFORE `result`, so the review does not
+  // render for the attempt that just passed either.
+  if (alreadyPassed || result?.passed) {
     return (
       <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 6 }}>
@@ -1561,9 +1566,11 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
           {approved
             ? 'Nothing further is needed for this step.'
             : 'Your result has been sent to your lab manager. You will get access once they approve it.'}
-          {typeof saved?.exam_score === 'number' && (
-            <> Your score: <strong>{saved.exam_score} / {saved.exam_total}</strong>.</>
-          )}
+          {(() => {
+            const sc = result?.score ?? saved?.exam_score
+            const tt = result?.total ?? saved?.exam_total
+            return typeof sc === 'number' ? <> Your score: <strong>{sc} / {tt}</strong>.</> : null
+          })()}
         </div>
       </div>
     )
@@ -1577,44 +1584,38 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
     )
   }
 
-  // ── after submitting: the review ─────────────────────────────────────────
+  // ── after a failed attempt ───────────────────────────────────────────────
+  //
+  // Deliberately NO correct answers and no explanations here. Printing them
+  // for each miss would hand the whole key to anyone willing to fail once on
+  // purpose, which is exactly the hole the randomised option order is meant to
+  // close. What it does give is which topics were missed, so the retake is
+  // directed rather than blind.
   if (result) {
+    const missed = SAFETY_EXAM_QUESTIONS.filter(q => answers[q.id] !== q.correct)
     return (
       <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-        <div style={{
-          background: result.passed ? '#E1F5EE' : '#fdf0ed',
-          border: `1px solid ${result.passed ? '#9FE1CB' : '#f0c9bd'}`,
-          borderRadius: 8, padding: '14px 16px', marginBottom: 16,
-        }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: result.passed ? '#085041' : '#c84b2f', marginBottom: 6 }}>
-            {result.passed
-              ? `✓ Passed — ${result.score} / ${result.total}`
-              : `Not passed — ${result.score} / ${result.total}. You need ${result.needed} correct.`}
+        <div style={{ background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#c84b2f', marginBottom: 6 }}>
+            Not passed — {result.score} / {result.total}. You need {result.needed} correct.
           </div>
-          <div style={{ fontSize: 13, color: result.passed ? '#085041' : '#c84b2f', lineHeight: 1.6 }}>
-            {result.passed
-              ? 'Your result has been sent to your lab manager for approval.'
-              : 'Read the explanations below, then try again.'}
+          <div style={{ fontSize: 13, color: '#c84b2f', lineHeight: 1.6 }}>
+            Re-watch the video for the topics below, then try again. There is no limit on attempts.
           </div>
-          {!result.passed && (
-            <button className="btn btn-sm" onClick={onRetake} style={{ marginTop: 10 }}>Retake the knowledge check</button>
-          )}
         </div>
 
-        {/* Review only what they got wrong. Reprinting the whole paper with its
-            answer key is how the test leaks; the misses are what they need. */}
-        {SAFETY_EXAM_QUESTIONS.filter(q => answers[q.id] !== q.correct).map((q, n) => (
-          <div key={q.id} style={{ marginBottom: 12, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
-            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, lineHeight: 1.5 }}>{q.question}</div>
-            <div style={{ fontSize: 13, color: '#085041', marginBottom: 6 }}>
-              <strong>Correct answer:</strong> {q.options[q.correct]}
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.65 }}>{q.explanation}</div>
+        <div style={{ fontSize: 12.5, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 8 }}>
+          Topics to review
+        </div>
+        {missed.map(q => (
+          <div key={q.id} style={{ fontSize: 13.5, lineHeight: 1.55, padding: '10px 13px', marginBottom: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+            {q.question}
           </div>
         ))}
-        {result.passed && result.score === result.total && (
-          <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>Every answer correct.</div>
-        )}
+
+        <button className="btn btn-primary" onClick={onRetake} style={{ width: '100%', marginTop: 12 }}>
+          Retake the knowledge check
+        </button>
       </div>
     )
   }
@@ -1649,10 +1650,14 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
 
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14, lineHeight: 1.55 }}>{q.question}</div>
 
-      {Object.entries(q.options).map(([letter, text]) => {
-        const isPicked = picked === letter
+      {/* Displayed position is this user's shuffle; `key` is the true option
+          so the stored answer means the same thing for everyone. */}
+      {optionOrderFor(q, userId).map((key, pos) => {
+        const text = q.options[key]
+        const letter = String.fromCharCode(97 + pos)   // a, b, c, d by position
+        const isPicked = picked === key
         return (
-          <label key={letter} style={{
+          <label key={key} style={{
             display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', marginBottom: 7,
             background: isPicked ? 'var(--accent-light)' : 'var(--surface)',
             border: `1px solid ${isPicked ? 'var(--accent)' : 'var(--border)'}`,
@@ -1663,7 +1668,7 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
               name={q.id}
               checked={isPicked}
               disabled={saving}
-              onChange={() => setAnswers(a => ({ ...a, [q.id]: letter }))}
+              onChange={() => setAnswers(a => ({ ...a, [q.id]: key }))}
               // index.css sets a global `input { width: 100% }`. Without an
               // explicit width the radio fills the whole row, centring its
               // circle and pushing the option text to the far right.
