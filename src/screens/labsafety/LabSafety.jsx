@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { sb } from '../../lib/supabase'
+import { sb, SUPABASE_URL } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -1220,6 +1220,148 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
 const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 
+// Step 3's two videos live in Supabase Storage, not in the repo. They are
+// ~90 MB each: committing them would put 175 MB into git history permanently,
+// the build would copy both into docs/ again, and GitHub Pages caps a site at
+// 1 GB. Storage streams them and costs the repo nothing.
+const SAFETY_VIDEO_BUCKET = `${SUPABASE_URL}/storage/v1/object/public/safety-videos`
+const STEP3_VIDEOS = [
+  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', src: `${SAFETY_VIDEO_BUCKET}/lab-safety-part-1.mp4` },
+  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', src: `${SAFETY_VIDEO_BUCKET}/lab-safety-part-2.mp4` },
+]
+
+function Step3VideosContent({ user, isManager }) {
+  const { session } = useAppStore()
+  const userId = user?.id
+  const watchedKey = k => `ictlab_safety3_watched_${k}_${userId}`
+
+  const [watched, setWatched] = useState(() => {
+    const init = {}
+    for (const v of STEP3_VIDEOS) {
+      try { init[v.key] = !!localStorage.getItem(watchedKey(v.key)) } catch { init[v.key] = false }
+    }
+    return init
+  })
+  const [confirmed, setConfirmed] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [failed, setFailed] = useState({})
+
+  useEffect(() => {
+    if (!userId) return
+    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 3).maybeSingle()
+      .then(({ data }) => {
+        if (data?.completed) {
+          setConfirmed(true)
+          setWatched(Object.fromEntries(STEP3_VIDEOS.map(v => [v.key, true])))
+        }
+      })
+  }, [userId])
+
+  const allWatched = STEP3_VIDEOS.every(v => watched[v.key])
+
+  function markWatched(key) {
+    try { localStorage.setItem(watchedKey(key), '1') } catch { /* private mode */ }
+    setWatched(w => ({ ...w, [key]: true }))
+  }
+
+  async function handleConfirm(e) {
+    if (saving) return
+    if (!e.target.checked) { setConfirmed(false); return }
+    setError(null)
+    setSaving(true)
+    const orgId = session?.organizationId || null
+    const { error: err } = await sb.from('lab_safety_progress').upsert({
+      user_id: userId,
+      step_number: 3,
+      completed: true,
+      submitted_at: new Date().toISOString(),
+      organization_id: orgId,
+    }, { onConflict: 'user_id,step_number' })
+    if (err) {
+      console.error('Step 3 confirm error:', err)
+      setError('Failed to save your confirmation. Please try again.')
+      setSaving(false)
+      return
+    }
+    setConfirmed(true)
+    if (orgId) {
+      const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
+      notifyManagersOfSafetySubmission(orgId, fullName, 'Lab Safety videos confirmation (Step 3)')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
+        Watch both safety videos below. The confirmation unlocks once you have watched
+        both in full.
+      </div>
+
+      {STEP3_VIDEOS.map(v => (
+        <div key={v.key} style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 12, border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3)' }}>
+              {v.label}
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{v.title}</span>
+            {watched[v.key] && (
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: '#085041', background: '#E1F5EE', borderRadius: 6, padding: '2px 8px' }}>
+                Watched
+              </span>
+            )}
+          </div>
+          {failed[v.key] ? (
+            // Say which file is missing. "Video unavailable" sends whoever has to
+            // fix it hunting; the filename and bucket point straight at it.
+            <div style={{ fontSize: 13, color: '#c84b2f', background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '12px 14px', lineHeight: 1.6 }}>
+              This video has not been uploaded yet — <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{v.src.split('/').pop()}</span> is
+              missing from the <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>safety-videos</span> storage bucket.
+            </div>
+          ) : (
+            <video
+              src={v.src}
+              controls
+              preload="metadata"
+              controlsList="nodownload"
+              onContextMenu={e => e.preventDefault()}
+              onEnded={() => markWatched(v.key)}
+              onError={() => setFailed(f => ({ ...f, [v.key]: true }))}
+              style={{ width: '100%', minHeight: 220, borderRadius: 8, background: '#000', display: 'block', maxHeight: 440 }}
+            />
+          )}
+        </div>
+      ))}
+
+      {!isManager && (
+        <div style={{
+          background: confirmed ? '#E1F5EE' : allWatched ? 'var(--surface2)' : '#f5f5f5',
+          border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`,
+          borderRadius: 10, padding: 16, opacity: allWatched ? 1 : 0.5,
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: allWatched ? 'pointer' : 'not-allowed', fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={allWatched ? handleConfirm : undefined}
+              disabled={!allWatched || saving || confirmed}
+              style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: allWatched ? 'pointer' : 'not-allowed' }}
+            />
+            <span>I have watched both lab safety videos in full.</span>
+          </label>
+          {!allWatched && (
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
+              Watch both videos to unlock this confirmation.
+            </div>
+          )}
+          {error && <div style={{ marginTop: 8, fontSize: 12, color: '#c84b2f' }}>{error}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Step4VideoContent({ user, isManager }) {
   const { session }  = useAppStore()
   const userId     = user?.id
@@ -1232,7 +1374,7 @@ function Step4VideoContent({ user, isManager }) {
 
   useEffect(() => {
     if (!userId) return
-    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 4).maybeSingle()
+    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 1).maybeSingle()
       .then(({ data }) => {
         if (data?.completed) {
           setVideoWatched(true)
@@ -1348,6 +1490,10 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
 
   if (step.type === 'ict_video') {
     return <Step4VideoContent user={user} isManager={isManager} />
+  }
+
+  if (step.type === 'safety_exam') {
+    return <Step3VideosContent user={user} isManager={isManager} />
   }
 
   if (step.type === 'placeholder' || !step.content) {

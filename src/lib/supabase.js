@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = 'https://ilqnwprvxwbhvrjstwsd.supabase.co'
+export const SUPABASE_URL = 'https://ilqnwprvxwbhvrjstwsd.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8'
 
 // Auth storage adapter — powers the "Keep me signed in" checkbox.
