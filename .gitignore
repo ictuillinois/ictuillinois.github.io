@@ -29,3 +29,7 @@ supabase/.temp
 # Source videos — too large for git; they live in the safety-videos storage bucket
 /Lab safety part *.mp4
 /ICT Building safety video.mp4
+
+# Source document for the Step 1 knowledge check
+/Building safety knowledge check.docx
+/ICT-Building-safety-video.mp4
