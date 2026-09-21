@@ -22,12 +22,12 @@ export const SAFETY_EXAM_QUESTIONS = [
     question: 'When arriving at the ICT main building and hearing the alarm beeping, what is the correct procedure to disarm the system?',
     options: {
       a: 'Press "One" immediately, then enter your four-digit code.',
-      b: 'Enter your four-digit code and press "One" within 60 seconds.',
-      c: 'Enter your four-digit code and press "Two" within 60 seconds.',
+      b: 'Enter your four-digit code and press "One" within 15 seconds.',
+      c: 'Enter your four-digit code and press "Two" within 15 seconds.',
       d: 'Call a Research Engineer to disarm the system remotely.',
     },
     correct: 'b',
-    explanation: 'When you enter the building and hear the beeping, you have exactly 60 seconds to enter your unique four-digit code followed by the number "One" to disarm the security alarm. Pressing "Two" is for arming the system when you are the last to leave.',
+    explanation: 'When you enter the building and hear the beeping, you have exactly 15 seconds to enter your unique four-digit code followed by the number "One" to disarm the security alarm. Pressing "Two" is for arming the system when you are the last to leave.',
   },
   {
     id: 'fire-first-action',
