@@ -21,10 +21,16 @@ const ROOT = 'src'
 // Tables this project deliberately does not have — see scripts/schema-audit.ignore.
 // Skipping them keeps the report free of rows that are not findings; a report you
 // learn to skim past is worse than no report.
-let IGNORE = new Set()
+// Entries are either a whole table (`solo_users`) or one column
+// (`inspections.solo_owner_id`) for a column the code only reaches on a code
+// path this project never takes.
+let IGNORE = new Set(), IGNORE_COLS = new Set()
 try {
-  IGNORE = new Set(readFileSync('scripts/schema-audit.ignore', 'utf8')
-    .split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')))
+  for (const line of readFileSync('scripts/schema-audit.ignore', 'utf8').split('\n')) {
+    const l = line.trim()
+    if (!l || l.startsWith('#')) continue
+    ;(l.includes('.') ? IGNORE_COLS : IGNORE).add(l)
+  }
 } catch { /* no ignore file — check everything */ }
 const EXT = new Set(['.js', '.jsx', '.ts', '.tsx'])
 
@@ -89,7 +95,7 @@ if (VERIFY > -1) {
 
 const found = new Map()   // table -> Set(columns)
 const add = (t, c) => {
-  if (IGNORE.has(t)) return
+  if (IGNORE.has(t) || IGNORE_COLS.has(`${t}.${c}`)) return
   if (!c || c === '*' || c.includes('(') || c.includes(':')) return
   // `organizations.${poolKey}` is a column chosen at runtime, not a literal.
   if (!/^[a-z][a-z0-9_]*$/i.test(c)) return
@@ -147,4 +153,4 @@ ORDER BY (t.table_name IS NULL), u.tbl, u.col;
 `
 writeFileSync('schema-audit.sql', sql)
 console.log(`  ${pairs.length} column references across ${found.size} tables -> schema-audit.sql`)
-if (IGNORE.size) console.log(`  ${IGNORE.size} table(s) skipped via scripts/schema-audit.ignore`)
+if (IGNORE.size || IGNORE_COLS.size) console.log(`  skipped via scripts/schema-audit.ignore: ${IGNORE.size} table(s), ${IGNORE_COLS.size} column(s)`)

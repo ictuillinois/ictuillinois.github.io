@@ -19,3 +19,14 @@ solo_users
 solo_workspace_invites
 solo_workspace_members
 solo_workspace_transfer_requests
+
+# Solo-only columns in code shared with LabHive. ICT-Lab is team-only, so every
+# reference sits behind an `if (isSolo)` that is never true here — verified
+# Sept 21 2026, including SoloAddEquipmentModal, which is itself rendered
+# behind an isSolo guard. Remove these lines if ICT-Lab ever gains solo mode.
+equipment_inventory.solo_owner_id
+inspections.solo_owner_id
+
+# Extractor bleed, not a column: every hit is an sb.rpc() call, a `user_id`
+# filter on a DIFFERENT table, or a `meta.booking_user_id` object property.
+users.user_id
