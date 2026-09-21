@@ -1219,7 +1219,80 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
 // ── Step 1: ICT Safety Video ───────────────────────────────────────────────
 
-const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
+// Every safety video lives in AWS S3, not in the repo and not in Supabase
+// Storage. They are 45-91 MB: committing them would add ~220 MB to git history
+// permanently and the build would copy them into docs/ again, and Supabase's
+// free tier rejects any file over 50 MB. S3 already backs this project's files
+// (ictlab-files, via the s3-presign function) and serves HTTP range requests,
+// so the browser streams and seeks rather than downloading first.
+//
+// Keys are the objects as actually uploaded — spaces, capitals and all. S3 has
+// no true rename, so matching the code to the bucket beats re-uploading 220 MB
+// to tidy the names.
+const SAFETY_VIDEOS = {
+  step1: 'ext:s3:safety-videos/ICT-Building-safety-video.mp4',
+  part1: 'ext:s3:safety-videos/Lab safety part 1.mp4',
+  part2: 'ext:s3:safety-videos/Lab safety part 2.mp4',
+}
+
+// One player for all three. The presign + expiry-retry + missing-file reporting
+// existed once per step before; a third copy is how they drift.
+function SafetyVideo({ extRef, onEnded, minHeight = 240, maxHeight = 480 }) {
+  const [src, setSrc] = useState(null)
+  const [missing, setMissing] = useState(false)
+  const retried = useRef(false)
+
+  const resolve = useCallback(async () => {
+    try {
+      setSrc(await new S3Provider().resolveUrl(extRef))
+      setMissing(false)
+    } catch (e) {
+      console.error('[safety video] presign failed:', extRef, e)
+      setMissing(true)
+    }
+  }, [extRef])
+
+  useEffect(() => { retried.current = false; resolve() }, [resolve])
+
+  // A presigned GET is good for an hour. Resolve once more before calling the
+  // file missing — an hour-old open tab is likelier than a vanished upload.
+  function handleError() {
+    if (!retried.current) { retried.current = true; resolve(); return }
+    setMissing(true)
+  }
+
+  if (missing) {
+    // Name the key and the bucket. "Video unavailable" sends whoever has to fix
+    // it hunting; this exact mismatch has already cost two rounds of guessing.
+    return (
+      <div style={{ fontSize: 13, color: '#c84b2f', background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '12px 14px', lineHeight: 1.6 }}>
+        This video could not be loaded — <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{extRef.replace('ext:s3:', '')}</span> is
+        missing from the <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>ictlab-files</span> S3 bucket, or the name does not match exactly.
+      </div>
+    )
+  }
+
+  if (!src) {
+    return (
+      <div style={{ minHeight, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text3)' }}>
+        Loading video…
+      </div>
+    )
+  }
+
+  return (
+    <video
+      src={src}
+      controls
+      preload="metadata"
+      controlsList="nodownload"
+      onContextMenu={e => e.preventDefault()}
+      onEnded={onEnded}
+      onError={handleError}
+      style={{ width: '100%', minHeight, borderRadius: 8, background: '#000', display: 'block', maxHeight }}
+    />
+  )
+}
 
 // Step 3's two videos live in AWS S3, not in the repo and not in Supabase
 // Storage. They are 84 MB and 91 MB: committing them would add 175 MB to git
@@ -1232,8 +1305,8 @@ const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 // included. S3 keys may contain spaces — the presigner encodes them — so this
 // is not worth re-uploading 175 MB to tidy.
 const STEP3_VIDEOS = [
-  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', ref: 'ext:s3:safety-videos/Lab safety part 1.mp4' },
-  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', ref: 'ext:s3:safety-videos/Lab safety part 2.mp4' },
+  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', ref: SAFETY_VIDEOS.part1 },
+  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', ref: SAFETY_VIDEOS.part2 },
 ]
 
 function Step3VideosContent({ user, isManager }) {
@@ -1251,36 +1324,6 @@ function Step3VideosContent({ user, isManager }) {
   const [confirmed, setConfirmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [failed, setFailed] = useState({})
-  const [srcs, setSrcs] = useState({})
-  const retried = useRef({})
-
-  // A presigned S3 URL is good for an hour. Resolve on mount, and if a player
-  // errors, resolve once more before calling the file missing — an hour-old
-  // tab is a far likelier cause than a vanished upload.
-  const resolveSrc = useCallback(async (key, ref) => {
-    try {
-      const url = await new S3Provider().resolveUrl(ref)
-      setSrcs(m => ({ ...m, [key]: url }))
-      setFailed(f => ({ ...f, [key]: false }))
-    } catch (e) {
-      console.error('[safety video] presign failed:', e)
-      setFailed(f => ({ ...f, [key]: true }))
-    }
-  }, [])
-
-  useEffect(() => {
-    STEP3_VIDEOS.forEach(v => resolveSrc(v.key, v.ref))
-  }, [resolveSrc])
-
-  function handleVideoError(v) {
-    if (!retried.current[v.key]) {
-      retried.current[v.key] = true
-      resolveSrc(v.key, v.ref)       // probably an expired signature
-      return
-    }
-    setFailed(f => ({ ...f, [v.key]: true }))
-  }
 
   useEffect(() => {
     if (!userId) return
@@ -1347,29 +1390,7 @@ function Step3VideosContent({ user, isManager }) {
               </span>
             )}
           </div>
-          {failed[v.key] ? (
-            // Name the file and its location. "Video unavailable" sends whoever
-            // has to fix it hunting; the key points straight at it.
-            <div style={{ fontSize: 13, color: '#c84b2f', background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '12px 14px', lineHeight: 1.6 }}>
-              This video has not been uploaded yet — <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{v.ref.replace('ext:s3:', '')}</span> is
-              missing from the <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>ictlab-files</span> S3 bucket.
-            </div>
-          ) : !srcs[v.key] ? (
-            <div style={{ minHeight: 220, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text3)' }}>
-              Loading video…
-            </div>
-          ) : (
-            <video
-              src={srcs[v.key]}
-              controls
-              preload="metadata"
-              controlsList="nodownload"
-              onContextMenu={e => e.preventDefault()}
-              onEnded={() => markWatched(v.key)}
-              onError={() => handleVideoError(v)}
-              style={{ width: '100%', minHeight: 220, borderRadius: 8, background: '#000', display: 'block', maxHeight: 440 }}
-            />
-          )}
+          <SafetyVideo extRef={v.ref} onEnded={() => markWatched(v.key)} minHeight={220} maxHeight={440} />
         </div>
       ))}
 
@@ -1461,15 +1482,7 @@ function Step4VideoContent({ user, isManager }) {
         <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
           Watch the ICT Building Safety Video below. The confirmation checkbox will unlock once you have watched the entire video.
         </div>
-        <video
-          src={VIDEO_SRC}
-          controls
-          preload="metadata"
-          controlsList="nodownload"
-          onContextMenu={e => e.preventDefault()}
-          onEnded={handleVideoEnded}
-          style={{ width: '100%', minHeight: 240, borderRadius: 8, background: '#000', display: 'block', maxHeight: 480 }}
-        />
+        <SafetyVideo extRef={SAFETY_VIDEOS.step1} onEnded={handleVideoEnded} />
         {!videoWatched && (
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center' }}>
             Watch the full video to unlock the confirmation below.
