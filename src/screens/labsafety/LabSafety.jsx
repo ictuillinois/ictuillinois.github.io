@@ -1230,6 +1230,11 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 // Keys are the objects as actually uploaded — spaces, capitals and all. S3 has
 // no true rename, so matching the code to the bucket beats re-uploading 220 MB
 // to tidy the names.
+// Bump this to retire every browser's "I watched it" marker at once. Wiping
+// lab_safety_progress does not touch localStorage, so without a bump a reset
+// user skips the video and lands straight on the questions.
+const SAFETY_WATCH_VERSION = 'ictlab_v2'
+
 const SAFETY_VIDEOS = {
   step1: 'ext:s3:safety-videos/ICT-Building-safety-video.mp4',
   part1: 'ext:s3:safety-videos/Lab safety part 1.mp4',
@@ -1313,7 +1318,7 @@ const STEP3_VIDEOS = [
 function Step3VideosContent({ user, isManager }) {
   const { session } = useAppStore()
   const userId = user?.id
-  const watchedKey = k => `ictlab_safety3_watched_${k}_${userId}`
+  const watchedKey = k => `${SAFETY_WATCH_VERSION}_safety3_watched_${k}_${userId}`
 
   const [watched, setWatched] = useState(() => {
     const init = {}
@@ -1426,7 +1431,7 @@ function Step3VideosContent({ user, isManager }) {
 function Step4VideoContent({ user, isManager }) {
   const { session } = useAppStore()
   const userId = user?.id
-  const watchedKey = `ictlab_safety4_watched_${userId}`
+  const watchedKey = `${SAFETY_WATCH_VERSION}_safety4_watched_${userId}`
   const [videoWatched, setVideoWatched] = useState(() => {
     try { return !!localStorage.getItem(watchedKey) } catch { return false }
   })
