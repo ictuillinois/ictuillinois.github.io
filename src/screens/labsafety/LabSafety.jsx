@@ -1664,7 +1664,10 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
               checked={isPicked}
               disabled={saving}
               onChange={() => setAnswers(a => ({ ...a, [q.id]: letter }))}
-              style={{ marginTop: 3, accentColor: '#1D9E75' }}
+              // index.css sets a global `input { width: 100% }`. Without an
+              // explicit width the radio fills the whole row, centring its
+              // circle and pushing the option text to the far right.
+              style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2, accentColor: '#1D9E75' }}
             />
             <span><strong style={{ marginRight: 6 }}>{letter.toUpperCase()})</strong>{text}</span>
           </label>
