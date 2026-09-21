@@ -1539,11 +1539,18 @@ function Step4VideoContent({ user, isManager }) {
   )
 }
 
-// The knowledge check itself. Split out so Step4VideoContent stays about the
-// video and this stays about the exam.
+// The knowledge check itself. One question on screen at a time: the whole test
+// visible at once invites scanning ahead, and with a 5-of-5 pass rule a wall of
+// questions reads as more daunting than it is.
 function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, saved,
                            alreadyPassed, approved, saving, error, onSubmit, onRetake }) {
-  // Already through it: show status, not a form to fill in again.
+  const [current, setCurrent] = useState(0)
+  const total = SAFETY_EXAM_QUESTIONS.length
+  const needed = Math.ceil(total * SAFETY_EXAM_PASS_RATIO)
+
+  // Start a retake at the beginning rather than wherever the last one ended.
+  useEffect(() => { if (!result) setCurrent(0) }, [result])
+
   if (alreadyPassed && !result) {
     return (
       <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16 }}>
@@ -1570,68 +1577,16 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
     )
   }
 
-  return (
-    <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Building Safety knowledge check</div>
-      <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
-        {SAFETY_EXAM_QUESTIONS.length} questions. You need{' '}
-        <strong>{Math.ceil(SAFETY_EXAM_QUESTIONS.length * SAFETY_EXAM_PASS_RATIO)} of {SAFETY_EXAM_QUESTIONS.length}</strong>{' '}
-        correct to pass. You can retake it as many times as you need.
-      </div>
-
-      {SAFETY_EXAM_QUESTIONS.map((q, qi) => {
-        const picked = answers[q.id]
-        const graded = !!result
-        const wasRight = picked === q.correct
-        return (
-          <div key={q.id} style={{ marginBottom: 18, paddingBottom: 18, borderBottom: qi < SAFETY_EXAM_QUESTIONS.length - 1 ? '1px solid var(--border)' : 'none' }}>
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, lineHeight: 1.5 }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text3)', marginRight: 8 }}>{qi + 1}.</span>
-              {q.question}
-            </div>
-            {Object.entries(q.options).map(([letter, text]) => {
-              const isPicked = picked === letter
-              const isCorrect = letter === q.correct
-              let bg = 'var(--surface)', border = 'var(--border)', color = 'var(--text)'
-              if (graded && isCorrect) { bg = '#E1F5EE'; border = '#9FE1CB'; color = '#085041' }
-              else if (graded && isPicked && !isCorrect) { bg = '#fdf0ed'; border = '#f0c9bd'; color = '#c84b2f' }
-              else if (isPicked) { bg = 'var(--accent-light)'; border = 'var(--accent)' }
-              return (
-                <label key={letter} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', marginBottom: 6,
-                  background: bg, border: `1px solid ${border}`, borderRadius: 8, cursor: graded ? 'default' : 'pointer',
-                  fontSize: 13.5, lineHeight: 1.5, color,
-                }}>
-                  <input
-                    type="radio"
-                    name={q.id}
-                    checked={isPicked}
-                    disabled={graded || saving}
-                    onChange={() => setAnswers(a => ({ ...a, [q.id]: letter }))}
-                    style={{ marginTop: 3, accentColor: '#1D9E75' }}
-                  />
-                  <span><strong style={{ marginRight: 6 }}>{letter.toUpperCase()})</strong>{text}</span>
-                </label>
-              )
-            })}
-            {/* The explanation is the point of a retake — say WHY, not just wrong. */}
-            {graded && (
-              <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.65, color: 'var(--text2)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-                <strong style={{ color: wasRight ? '#085041' : '#c84b2f' }}>{wasRight ? 'Correct. ' : 'Not quite. '}</strong>
-                {q.explanation}
-              </div>
-            )}
-          </div>
-        )
-      })}
-
-      {result ? (
+  // ── after submitting: the review ─────────────────────────────────────────
+  if (result) {
+    return (
+      <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
         <div style={{
           background: result.passed ? '#E1F5EE' : '#fdf0ed',
           border: `1px solid ${result.passed ? '#9FE1CB' : '#f0c9bd'}`,
-          borderRadius: 8, padding: '14px 16px',
+          borderRadius: 8, padding: '14px 16px', marginBottom: 16,
         }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: result.passed ? '#085041' : '#c84b2f', marginBottom: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: result.passed ? '#085041' : '#c84b2f', marginBottom: 6 }}>
             {result.passed
               ? `✓ Passed — ${result.score} / ${result.total}`
               : `Not passed — ${result.score} / ${result.total}. You need ${result.needed} correct.`}
@@ -1639,25 +1594,109 @@ function SafetyExamPanel({ locked, answers, setAnswers, answeredAll, result, sav
           <div style={{ fontSize: 13, color: result.passed ? '#085041' : '#c84b2f', lineHeight: 1.6 }}>
             {result.passed
               ? 'Your result has been sent to your lab manager for approval.'
-              : 'Read the explanations above, then try again.'}
+              : 'Read the explanations below, then try again.'}
           </div>
           {!result.passed && (
             <button className="btn btn-sm" onClick={onRetake} style={{ marginTop: 10 }}>Retake the knowledge check</button>
           )}
         </div>
-      ) : (
-        <>
-          <button
-            className="btn btn-primary"
-            onClick={onSubmit}
-            disabled={!answeredAll || saving}
-            style={{ width: '100%' }}
-          >
-            {saving ? 'Submitting…' : answeredAll ? 'Submit answers' : `Answer all ${SAFETY_EXAM_QUESTIONS.length} questions to submit`}
-          </button>
-          {error && <div style={{ marginTop: 8, fontSize: 12, color: '#c84b2f' }}>{error}</div>}
-        </>
+
+        {/* Review only what they got wrong. Reprinting the whole paper with its
+            answer key is how the test leaks; the misses are what they need. */}
+        {SAFETY_EXAM_QUESTIONS.filter(q => answers[q.id] !== q.correct).map((q, n) => (
+          <div key={q.id} style={{ marginBottom: 12, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, lineHeight: 1.5 }}>{q.question}</div>
+            <div style={{ fontSize: 13, color: '#085041', marginBottom: 6 }}>
+              <strong>Correct answer:</strong> {q.options[q.correct]}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.65 }}>{q.explanation}</div>
+          </div>
+        ))}
+        {result.passed && result.score === result.total && (
+          <div style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>Every answer correct.</div>
+        )}
+      </div>
+    )
+  }
+
+  // ── taking it: one question at a time ────────────────────────────────────
+  const q = SAFETY_EXAM_QUESTIONS[current]
+  const picked = answers[q.id]
+  const isLast = current === total - 1
+
+  return (
+    <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>Building Safety knowledge check</div>
+        <div style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text3)' }}>
+          {current + 1} / {total}
+        </div>
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 12 }}>
+        {needed} of {total} correct to pass · retake as often as you need
+      </div>
+
+      {/* Progress pips: how far along, without showing what is coming. */}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 18 }}>
+        {SAFETY_EXAM_QUESTIONS.map((qq, n) => (
+          <div key={qq.id} style={{
+            height: 4, flex: 1, borderRadius: 2,
+            background: n < current ? 'var(--accent)' : n === current ? 'var(--accent)' : 'var(--border)',
+            opacity: n <= current ? 1 : 0.5,
+          }} />
+        ))}
+      </div>
+
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14, lineHeight: 1.55 }}>{q.question}</div>
+
+      {Object.entries(q.options).map(([letter, text]) => {
+        const isPicked = picked === letter
+        return (
+          <label key={letter} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', marginBottom: 7,
+            background: isPicked ? 'var(--accent-light)' : 'var(--surface)',
+            border: `1px solid ${isPicked ? 'var(--accent)' : 'var(--border)'}`,
+            borderRadius: 8, cursor: saving ? 'default' : 'pointer', fontSize: 13.5, lineHeight: 1.5,
+          }}>
+            <input
+              type="radio"
+              name={q.id}
+              checked={isPicked}
+              disabled={saving}
+              onChange={() => setAnswers(a => ({ ...a, [q.id]: letter }))}
+              style={{ marginTop: 3, accentColor: '#1D9E75' }}
+            />
+            <span><strong style={{ marginRight: 6 }}>{letter.toUpperCase()})</strong>{text}</span>
+          </label>
+        )
+      })}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+        {/* Back matters here: a mis-click with a 5-of-5 pass rule would
+            otherwise cost a guaranteed fail and a full retake. */}
+        {current > 0 && (
+          <button className="btn btn-sm" onClick={() => setCurrent(c => c - 1)} disabled={saving}>← Back</button>
+        )}
+        <div style={{ marginLeft: 'auto' }}>
+          {!picked ? (
+            <span style={{ fontSize: 12.5, color: 'var(--text3)', fontStyle: 'italic' }}>Choose an answer to continue</span>
+          ) : isLast ? (
+            <button className="btn btn-primary" onClick={onSubmit} disabled={!answeredAll || saving}>
+              {saving ? 'Submitting…' : 'Submit answers'}
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => setCurrent(c => c + 1)} disabled={saving}>
+              Next →
+            </button>
+          )}
+        </div>
+      </div>
+      {isLast && picked && !answeredAll && (
+        <div style={{ marginTop: 8, fontSize: 12.5, color: '#c84b2f' }}>
+          Some earlier questions are unanswered — use Back to finish them.
+        </div>
       )}
+      {error && <div style={{ marginTop: 8, fontSize: 12, color: '#c84b2f' }}>{error}</div>}
     </div>
   )
 }
