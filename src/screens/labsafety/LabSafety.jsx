@@ -1499,6 +1499,11 @@ function Step4VideoContent({ user, isManager }) {
   const [saved, setSaved] = useState(null)       // row already in the DB
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  // Counts retakes in THIS session. The shuffle must not depend solely on the
+  // stored attempt count: if the save fails, that number never moves and the
+  // retake serves up the first attempt's order again — exactly the failure
+  // this is guarding against.
+  const [retakeSeq, setRetakeSeq] = useState(0)
 
   useEffect(() => {
     if (!userId) return
@@ -1565,6 +1570,7 @@ function Step4VideoContent({ user, isManager }) {
   function retake() {
     setAnswers({})
     setResult(null)
+    setRetakeSeq(n => n + 1)
   }
 
   return (
@@ -1585,7 +1591,7 @@ function Step4VideoContent({ user, isManager }) {
       {!isManager && (
         <SafetyExamPanel
           userId={userId}
-          attempt={saved?.exam_attempts || 0}
+          attempt={(saved?.exam_attempts || 0) + retakeSeq}
           locked={!videoWatched}
           answers={answers}
           setAnswers={setAnswers}
@@ -1673,6 +1679,9 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
           <div style={{ fontSize: 13, color: '#c84b2f', lineHeight: 1.6 }}>
             Re-watch the video for the topics below, then try again. There is no limit on attempts.
           </div>
+          {error && (
+            <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: '#c84b2f' }}>{error}</div>
+          )}
         </div>
 
         <div style={{ fontSize: 12.5, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 8 }}>
