@@ -3,6 +3,13 @@
 -- ===========================================================================
 -- Run once in the Supabase SQL Editor for THIS project. Idempotent.
 --
+-- Replace <ICTLAB_PUBLISHABLE_KEY> below with this project's publishable key (Settings -> API).
+-- It is a PUBLIC key — it already ships in the client bundle and only
+-- authorizes invoking the function; RLS is what protects the data. It is kept
+-- out of this file so secret scanners stop flagging the Bearer header, not
+-- because the value is sensitive. Never paste a service_role / sb_secret_ key
+-- here: that one bypasses RLS entirely.
+--
 -- Prerequisites:
 --   1. reminder_sends table + RLS — created by rls_phase1.sql. Run that first.
 --   2. Edge Function "daily-reminders" deployed (supabase/functions/daily-reminders).
@@ -46,7 +53,7 @@ SELECT cron.schedule(
   SELECT net.http_post(
     url     := 'https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/daily-reminders',
     headers := jsonb_build_object(
-                 'Authorization', 'Bearer sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8',
+                 'Authorization', 'Bearer <ICTLAB_PUBLISHABLE_KEY>',
                  'Content-Type',  'application/json'),
     body    := '{}'::jsonb
   );

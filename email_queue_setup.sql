@@ -40,7 +40,7 @@ SELECT cron.schedule(
   SELECT net.http_post(
     url     := 'https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails',
     headers := jsonb_build_object(
-                 'Authorization', 'Bearer sb_publishable_HEl1HIKUs2vVmqa16LZhlQ_EwciS1M8',
+                 'Authorization', 'Bearer <ICTLAB_PUBLISHABLE_KEY>',
                  'Content-Type',  'application/json'),
     body    := '{}'::jsonb
   );
