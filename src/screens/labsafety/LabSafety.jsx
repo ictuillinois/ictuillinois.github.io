@@ -1228,9 +1228,12 @@ const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 // project's files (ictlab-files, via the s3-presign function), serves HTTP
 // range requests so the browser streams rather than downloading first, and
 // costs pennies a year at this volume.
+// Keys match the objects as they were actually uploaded, spaces and capitals
+// included. S3 keys may contain spaces — the presigner encodes them — so this
+// is not worth re-uploading 175 MB to tidy.
 const STEP3_VIDEOS = [
-  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', ref: 'ext:s3:safety-videos/lab-safety-part-1.mp4' },
-  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', ref: 'ext:s3:safety-videos/lab-safety-part-2.mp4' },
+  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', ref: 'ext:s3:safety-videos/Lab safety part 1.mp4' },
+  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', ref: 'ext:s3:safety-videos/Lab safety part 2.mp4' },
 ]
 
 function Step3VideosContent({ user, isManager }) {
