@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
-import { sb, SUPABASE_URL } from '../../lib/supabase'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { sb } from '../../lib/supabase'
+import { S3Provider } from '../../lib/storage/S3Provider'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -1220,14 +1221,16 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 
 const VIDEO_SRC = `${import.meta.env.BASE_URL}ict-safety-video.mp4`
 
-// Step 3's two videos live in Supabase Storage, not in the repo. They are
-// ~90 MB each: committing them would put 175 MB into git history permanently,
-// the build would copy both into docs/ again, and GitHub Pages caps a site at
-// 1 GB. Storage streams them and costs the repo nothing.
-const SAFETY_VIDEO_BUCKET = `${SUPABASE_URL}/storage/v1/object/public/safety-videos`
+// Step 3's two videos live in AWS S3, not in the repo and not in Supabase
+// Storage. They are 84 MB and 91 MB: committing them would add 175 MB to git
+// history permanently and the build would copy both into docs/ again, and
+// Supabase's free tier rejects any file over 50 MB. S3 already backs this
+// project's files (ictlab-files, via the s3-presign function), serves HTTP
+// range requests so the browser streams rather than downloading first, and
+// costs pennies a year at this volume.
 const STEP3_VIDEOS = [
-  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', src: `${SAFETY_VIDEO_BUCKET}/lab-safety-part-1.mp4` },
-  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', src: `${SAFETY_VIDEO_BUCKET}/lab-safety-part-2.mp4` },
+  { key: 'part1', label: 'Part 1', title: 'Lab Safety — Part 1', ref: 'ext:s3:safety-videos/lab-safety-part-1.mp4' },
+  { key: 'part2', label: 'Part 2', title: 'Lab Safety — Part 2', ref: 'ext:s3:safety-videos/lab-safety-part-2.mp4' },
 ]
 
 function Step3VideosContent({ user, isManager }) {
@@ -1246,6 +1249,35 @@ function Step3VideosContent({ user, isManager }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [failed, setFailed] = useState({})
+  const [srcs, setSrcs] = useState({})
+  const retried = useRef({})
+
+  // A presigned S3 URL is good for an hour. Resolve on mount, and if a player
+  // errors, resolve once more before calling the file missing — an hour-old
+  // tab is a far likelier cause than a vanished upload.
+  const resolveSrc = useCallback(async (key, ref) => {
+    try {
+      const url = await new S3Provider().resolveUrl(ref)
+      setSrcs(m => ({ ...m, [key]: url }))
+      setFailed(f => ({ ...f, [key]: false }))
+    } catch (e) {
+      console.error('[safety video] presign failed:', e)
+      setFailed(f => ({ ...f, [key]: true }))
+    }
+  }, [])
+
+  useEffect(() => {
+    STEP3_VIDEOS.forEach(v => resolveSrc(v.key, v.ref))
+  }, [resolveSrc])
+
+  function handleVideoError(v) {
+    if (!retried.current[v.key]) {
+      retried.current[v.key] = true
+      resolveSrc(v.key, v.ref)       // probably an expired signature
+      return
+    }
+    setFailed(f => ({ ...f, [v.key]: true }))
+  }
 
   useEffect(() => {
     if (!userId) return
@@ -1313,21 +1345,25 @@ function Step3VideosContent({ user, isManager }) {
             )}
           </div>
           {failed[v.key] ? (
-            // Say which file is missing. "Video unavailable" sends whoever has to
-            // fix it hunting; the filename and bucket point straight at it.
+            // Name the file and its location. "Video unavailable" sends whoever
+            // has to fix it hunting; the key points straight at it.
             <div style={{ fontSize: 13, color: '#c84b2f', background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '12px 14px', lineHeight: 1.6 }}>
-              This video has not been uploaded yet — <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{v.src.split('/').pop()}</span> is
-              missing from the <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>safety-videos</span> storage bucket.
+              This video has not been uploaded yet — <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{v.ref.replace('ext:s3:', '')}</span> is
+              missing from the <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>ictlab-files</span> S3 bucket.
+            </div>
+          ) : !srcs[v.key] ? (
+            <div style={{ minHeight: 220, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text3)' }}>
+              Loading video…
             </div>
           ) : (
             <video
-              src={v.src}
+              src={srcs[v.key]}
               controls
               preload="metadata"
               controlsList="nodownload"
               onContextMenu={e => e.preventDefault()}
               onEnded={() => markWatched(v.key)}
-              onError={() => setFailed(f => ({ ...f, [v.key]: true }))}
+              onError={() => handleVideoError(v)}
               style={{ width: '100%', minHeight: 220, borderRadius: 8, background: '#000', display: 'block', maxHeight: 440 }}
             />
           )}
