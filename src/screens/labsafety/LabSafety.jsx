@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
 import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, optionOrderFor } from './safetyExam'
@@ -1527,6 +1527,7 @@ function Step4VideoContent({ user, isManager }) {
       {!isManager && (
         <SafetyExamPanel
           userId={userId}
+          attempt={saved?.exam_attempts || 0}
           locked={!videoWatched}
           answers={answers}
           setAnswers={setAnswers}
@@ -1548,9 +1549,16 @@ function Step4VideoContent({ user, isManager }) {
 // The knowledge check itself. One question on screen at a time: the whole test
 // visible at once invites scanning ahead, and with a 5-of-5 pass rule a wall of
 // questions reads as more daunting than it is.
-function SafetyExamPanel({ userId, locked, answers, setAnswers, answeredAll, result, saved,
+function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, answeredAll, result, saved,
                            alreadyPassed, approved, saving, error, onSubmit, onRetake }) {
   const [current, setCurrent] = useState(0)
+
+  // Computed once per attempt. Calling optionOrderFor during render would
+  // re-derive the academic year on every keystroke, and an attempt spanning
+  // midnight on 1 August would reorder the options mid-question.
+  const orders = useMemo(() => Object.fromEntries(
+    SAFETY_EXAM_QUESTIONS.map(q => [q.id, optionOrderFor(q, userId, attempt)])
+  ), [userId, attempt])
   const total = SAFETY_EXAM_QUESTIONS.length
   const needed = Math.ceil(total * SAFETY_EXAM_PASS_RATIO)
 
@@ -1657,7 +1665,7 @@ function SafetyExamPanel({ userId, locked, answers, setAnswers, answeredAll, res
 
       {/* Displayed position is this user's shuffle; `key` is the true option
           so the stored answer means the same thing for everyone. */}
-      {optionOrderFor(q, userId).map((key, pos) => {
+      {orders[q.id].map((key, pos) => {
         const text = q.options[key]
         const letter = String.fromCharCode(97 + pos)   // a, b, c, d by position
         const isPicked = picked === key

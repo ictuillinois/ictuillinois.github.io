@@ -127,11 +127,26 @@ function rng(seed) {
   }
 }
 
+// Which academic year we are in. August starts a new one, so a fall retake
+// always lands in a different year from the previous fall's.
+//
+// This is in the seed because ICT-Lab wipes lab_safety_progress each fall for
+// the annual retake — which resets exam_attempts to 0. Seeding on the attempt
+// number alone would therefore hand every returning user the exact order they
+// saw the first time, a year of memory later.
+export function academicYear(now = new Date()) {
+  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
+}
+
 // Returns the original option keys in the order this user should see them.
-export function optionOrderFor(question, userId) {
+//
+// The order changes per user, per attempt, and per academic year. It is stable
+// WITHIN an attempt: callers pass a fixed `attempt`, and the panel memoises on
+// it, so options never move under a click that is choosing one.
+export function optionOrderFor(question, userId, attempt = 0, year = academicYear()) {
   const keys = Object.keys(question.options)
   if (!userId) return keys
-  const next = rng(hash32(`${userId}:${question.id}`))
+  const next = rng(hash32(`${userId}:${question.id}:${year}:${attempt}`))
   const out = [...keys]
   for (let i = out.length - 1; i > 0; i--) {         // Fisher-Yates
     const j = Math.floor(next() * (i + 1))
