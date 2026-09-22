@@ -1402,6 +1402,16 @@ function Step3VideosContent({ user, isManager }) {
 
   const allWatched = STEP3_VIDEOS.every(v => watched[v.key])
 
+  // Part 2 does not exist on the page until Part 1 is finished. Rendering both
+  // let a user start them playing side by side and sit through the pair in the
+  // time of one — the watch tracking counts each video honestly, but nothing
+  // stopped them running at once. It also paces the step: you finish one and
+  // then discover the next, rather than seeing a wall of video up front.
+  const firstUnwatched = STEP3_VIDEOS.findIndex(v => !watched[v.key])
+  const visibleVideos = firstUnwatched === -1
+    ? STEP3_VIDEOS
+    : STEP3_VIDEOS.slice(0, firstUnwatched + 1)
+
   function markWatched(key) {
     try { localStorage.setItem(watchedKey(key), '1') } catch { /* private mode */ }
     setWatched(w => ({ ...w, [key]: true }))
@@ -1437,11 +1447,11 @@ function Step3VideosContent({ user, isManager }) {
   return (
     <div>
       <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 14 }}>
-        Watch both safety videos below. The confirmation unlocks once you have watched
-        both in full.
+        Watch the safety video below in full. The confirmation unlocks once every part
+        has been watched.
       </div>
 
-      {STEP3_VIDEOS.map(v => (
+      {visibleVideos.map(v => (
         <div key={v.key} style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 12, border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3)' }}>
@@ -1457,6 +1467,12 @@ function Step3VideosContent({ user, isManager }) {
           <SafetyVideo extRef={v.ref} onWatched={() => markWatched(v.key)} minHeight={220} maxHeight={440} />
         </div>
       ))}
+
+      {visibleVideos.length < STEP3_VIDEOS.length && (
+        <div style={{ fontSize: 12.5, color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center', marginBottom: 12 }}>
+          The next part appears once this one has been watched in full.
+        </div>
+      )}
 
       {!isManager && (
         <div style={{
