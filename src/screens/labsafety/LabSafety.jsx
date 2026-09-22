@@ -1230,10 +1230,27 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
 // Keys are the objects as actually uploaded — spaces, capitals and all. S3 has
 // no true rename, so matching the code to the bucket beats re-uploading 220 MB
 // to tidy the names.
-// Bump this to retire every browser's "I watched it" marker at once. Wiping
-// lab_safety_progress does not touch localStorage, so without a bump a reset
-// user skips the video and lands straight on the questions.
-const SAFETY_WATCH_VERSION = 'ictlab_v2'
+// Which videos a user has watched is stored on their lab_safety_progress row,
+// not in localStorage: the marker follows the person between laptop and phone,
+// and the annual reset clears it along with everything else instead of needing
+// a version constant bumped by hand.
+//
+// It costs no extra reads — both steps already fetch this row on mount — and
+// one write per video ever. The videos themselves stream from S3, so none of
+// this touches Supabase bandwidth.
+async function markVideoWatched(userId, stepNumber, orgId, key, current) {
+  const next = Array.from(new Set([...(current || []), key]))
+  const { error } = await sb.from('lab_safety_progress').upsert({
+    user_id: userId,
+    step_number: stepNumber,
+    organization_id: orgId,
+    videos_watched: next,
+  }, { onConflict: 'user_id,step_number' })
+  // Best effort: failing to record it must never block the person watching.
+  // The cost of a lost write is being asked to watch again, never less.
+  if (error) console.warn('[safety] watch not recorded:', error.message)
+  return next
+}
 
 const SAFETY_VIDEOS = {
   step1: 'ext:s3:safety-videos/ICT-Building-safety-video.mp4',
@@ -1376,27 +1393,26 @@ const STEP3_VIDEOS = [
 function Step3VideosContent({ user, isManager }) {
   const { session } = useAppStore()
   const userId = user?.id
-  const watchedKey = k => `${SAFETY_WATCH_VERSION}_safety3_watched_${k}_${userId}`
-
-  const [watched, setWatched] = useState(() => {
-    const init = {}
-    for (const v of STEP3_VIDEOS) {
-      try { init[v.key] = !!localStorage.getItem(watchedKey(v.key)) } catch { init[v.key] = false }
-    }
-    return init
-  })
+  const [watched, setWatched] = useState({})
+  const [watchedList, setWatchedList] = useState([])
   const [confirmed, setConfirmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!userId) return
-    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', 3).maybeSingle()
+    sb.from('lab_safety_progress').select('completed, videos_watched')
+      .eq('user_id', userId).eq('step_number', 3).maybeSingle()
       .then(({ data }) => {
-        if (data?.completed) {
-          setConfirmed(true)
-          setWatched(Object.fromEntries(STEP3_VIDEOS.map(v => [v.key, true])))
-        }
+        const list = Array.isArray(data?.videos_watched) ? data.videos_watched : []
+        setWatchedList(list)
+        // An approved step means they watched it; don't make them sit through
+        // both again because the row predates this column.
+        const done = data?.completed
+          ? STEP3_VIDEOS.map(v => v.key)
+          : list
+        setWatched(Object.fromEntries(done.map(k => [k, true])))
+        if (data?.completed) setConfirmed(true)
       })
   }, [userId])
 
@@ -1412,9 +1428,10 @@ function Step3VideosContent({ user, isManager }) {
     ? STEP3_VIDEOS
     : STEP3_VIDEOS.slice(0, firstUnwatched + 1)
 
-  function markWatched(key) {
-    try { localStorage.setItem(watchedKey(key), '1') } catch { /* private mode */ }
-    setWatched(w => ({ ...w, [key]: true }))
+  async function markWatched(key) {
+    setWatched(w => ({ ...w, [key]: true }))     // reveal the next part at once
+    const next = await markVideoWatched(userId, 3, session?.organizationId || null, key, watchedList)
+    setWatchedList(next)
   }
 
   async function handleConfirm(e) {
@@ -1505,10 +1522,8 @@ function Step3VideosContent({ user, isManager }) {
 function Step4VideoContent({ user, isManager }) {
   const { session } = useAppStore()
   const userId = user?.id
-  const watchedKey = `${SAFETY_WATCH_VERSION}_safety4_watched_${userId}`
-  const [videoWatched, setVideoWatched] = useState(() => {
-    try { return !!localStorage.getItem(watchedKey) } catch { return false }
-  })
+  const [videoWatched, setVideoWatched] = useState(false)
+  const [watchedList, setWatchedList] = useState([])
 
   const [answers, setAnswers] = useState({})
   const [result, setResult] = useState(null)     // last submitted attempt
@@ -1524,20 +1539,23 @@ function Step4VideoContent({ user, isManager }) {
   useEffect(() => {
     if (!userId) return
     sb.from('lab_safety_progress')
-      .select('completed, submitted_at, exam_passed, exam_score, exam_total, exam_attempts')
+      .select('completed, submitted_at, exam_passed, exam_score, exam_total, exam_attempts, videos_watched')
       .eq('user_id', userId).eq('step_number', 1).maybeSingle()
       .then(({ data }) => {
         if (!data) return
         setSaved(data)
+        const list = Array.isArray(data.videos_watched) ? data.videos_watched : []
+        setWatchedList(list)
         // Someone who already passed has plainly watched it; don't make them
-        // sit through the video again just because this browser has no marker.
-        if (data.exam_passed || data.completed) setVideoWatched(true)
+        // sit through the video again on a row that predates this column.
+        if (list.includes('step1') || data.exam_passed || data.completed) setVideoWatched(true)
       })
   }, [userId])
 
-  function handleVideoEnded() {
-    try { localStorage.setItem(watchedKey, '1') } catch { /* private mode */ }
-    setVideoWatched(true)
+  async function handleVideoEnded() {
+    setVideoWatched(true)                        // unlock the questions at once
+    const next = await markVideoWatched(userId, 1, session?.organizationId || null, 'step1', watchedList)
+    setWatchedList(next)
   }
 
   const answeredAll = SAFETY_EXAM_QUESTIONS.every(q => answers[q.id])

@@ -17,6 +17,13 @@ ALTER TABLE lab_safety_progress ADD COLUMN IF NOT EXISTS exam_passed   BOOLEAN;
 ALTER TABLE lab_safety_progress ADD COLUMN IF NOT EXISTS exam_attempts INTEGER DEFAULT 0;
 ALTER TABLE lab_safety_progress ADD COLUMN IF NOT EXISTS exam_at       TIMESTAMPTZ;
 
+-- Which videos this user has watched for this step, e.g. ["part1","part2"].
+-- Stored here rather than in localStorage so the marker follows the person
+-- between laptop and phone, and so the annual reset clears it with everything
+-- else. One write per video ever; the videos themselves stream from S3, so
+-- none of this touches Supabase bandwidth.
+ALTER TABLE lab_safety_progress ADD COLUMN IF NOT EXISTS videos_watched JSONB DEFAULT '[]'::jsonb;
+
 -- The upsert targets (user_id, step_number); without a unique index on that
 -- pair, onConflict is rejected outright and every submission fails.
 CREATE UNIQUE INDEX IF NOT EXISTS lab_safety_progress_user_step_uniq
