@@ -1,3 +1,12 @@
+// @ts-nocheck — Deno, not Node.
+//
+// This file runs on Supabase's Deno runtime. The editor type-checks it with
+// Node/browser settings, so it cannot resolve `https://deno.land/...` or
+// `npm:` imports and does not know the `Deno` global exists — which it reports
+// as errors in a file that deploys and runs correctly. Since it cannot resolve
+// the imports it has no types to check against anyway, so its opinion here is
+// worth nothing, and a permanent red badge teaches you to ignore real ones.
+
 // send-emails — drains email_notifications_queue via Resend.
 //
 // Deploy: paste this into a new Edge Function named "send-emails" in the

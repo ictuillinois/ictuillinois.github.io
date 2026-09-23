@@ -1,5 +1,14 @@
+// @ts-nocheck — Deno, not Node.
+//
+// This file runs on Supabase's Deno runtime. The editor type-checks it with
+// Node/browser settings, so it cannot resolve `https://deno.land/...` or
+// `npm:` imports and does not know the `Deno` global exists — which it reports
+// as errors in a file that deploys and runs correctly. Since it cannot resolve
+// the imports it has no types to check against anyway, so its opinion here is
+// worth nothing, and a permanent red badge teaches you to ignore real ones.
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from 'npm:@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from 'npm:@aws-sdk/client-s3'
 import { getSignedUrl } from 'npm:@aws-sdk/s3-request-presigner'
 
 const REGION = Deno.env.get('AWS_S3_REGION') ?? 'us-east-1'
@@ -29,6 +38,18 @@ serve(async (req) => {
       const cmd = new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType ?? 'application/octet-stream' })
       const url = await getSignedUrl(s3, cmd, { expiresIn: 300 })
       return Response.json({ url }, { headers: CORS })
+    }
+
+    // List what is actually in a prefix. Added because a video that would not
+    // play turned out to be a filename mismatch, and there was no way to see
+    // the real key short of guessing at it one name at a time.
+    if (operation === 'list') {
+      const out = await s3.send(new ListObjectsV2Command({
+        Bucket: BUCKET, Prefix: key ?? '', MaxKeys: 200,
+      }))
+      return Response.json({
+        keys: (out.Contents ?? []).map(o => ({ key: o.Key, size: o.Size })),
+      }, { headers: CORS })
     }
 
     if (operation === 'get') {
