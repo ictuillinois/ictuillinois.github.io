@@ -53,6 +53,8 @@ const YEARS = Array.from({ length: 15 }, (_, i) => String(new Date().getFullYear
 const groupColor = { Material: '#92400e', Sustainability: '#085041', GPR: '#0369a1', Mechanic: '#534AB7', Other: '#6b6860' }
 const groupBg   = { Material: '#fef3c7', Sustainability: '#E1F5EE', GPR: '#e0f2fe', Mechanic: '#EEEDFE', Other: '#f0efe9' }
 
+const ROLE_LABELS = { admin: 'Org Admin', user: 'Lab Manager', lab_user: 'Lab User' }
+
 const sFirstName  = s => s?.name      || ''
 const sLastName   = s => s?.last_name || ''
 const sEmail      = s => s?.email     || ''
@@ -1952,6 +1954,46 @@ function LabManagerListPanel({ toast, session }) {
   // email=login; lab users (legacy labUser convention) store email=firstName,
   // name=lastName, phone=login email. Without this, a converted user shows
   // their email as first name and loses their login email display.
+  // Give someone an ADDITIONAL role rather than replacing the one they have.
+  //
+  // A role is a `users` row, not a field: Login already fetches every active
+  // row matching the email and offers a picker when there is more than one
+  // (see Login.jsx — it also back-fills auth_id on all of them). So a second
+  // role is a second row sharing the email, and nothing else has to change.
+  //
+  // No password is set on the new row. Authentication happens once against
+  // Supabase Auth for the email; the rows only decide what that login can be.
+  async function addMemberRole(u, newRole) {
+    const email = (u.email || '').trim().toLowerCase()
+    if (!email) { toast('Add an email address first — roles are linked by email.'); return }
+
+    const { data: existing, error: readErr } = await sb.from('users')
+      .select('id, role').ilike('email', email).eq('is_active', true)
+    if (readErr) { toast('Could not check existing roles: ' + readErr.message); return }
+    if ((existing || []).some(r => r.role === newRole)) {
+      toast('They already have that role.'); return
+    }
+
+    const { error } = await sb.from('users').insert({
+      name: u.name, last_name: u.last_name || null, nick_name: u.nick_name || null,
+      email,
+      phone: u.phone || null,
+      // Copy auth_id so the new row is usable on the very next login rather
+      // than waiting for Login's back-fill pass.
+      auth_id: u.auth_id || null,
+      organization_id: u.organization_id || session?.organizationId || null,
+      role: newRole,
+      admin_level: newRole === 'admin' ? 1 : 0,
+      is_active: true,
+      must_change_password: false,
+      photo_url: u.photo_url || null,
+      avatar: u.avatar || null,
+    })
+    if (error) { toast('Could not add role: ' + error.message); return }
+    toast(`${u.name || email} can now also sign in as ${ROLE_LABELS[newRole]} ✓`)
+    load()
+  }
+
   async function setMemberRole(u, newRole) {
     let payload = { role: newRole, admin_level: 0 }
     if (newRole === 'lab_user') {
@@ -2014,7 +2056,7 @@ function LabManagerListPanel({ toast, session }) {
         </div>
         )
       }
-      {showModal && <LabManagerModal labManagers={editLabManager} onClose={() => { setShowModal(false); setEditLabManager(null) }} onSave={saveLabManager} onRoleChange={setMemberRole} />}
+      {showModal && <LabManagerModal labManagers={editLabManager} onClose={() => { setShowModal(false); setEditLabManager(null) }} onSave={saveLabManager} onRoleChange={setMemberRole} onAddRole={addMemberRole} />}
       {accessTarget && <AccessModal user={accessTarget} toast={toast} session={session} onClose={() => setAccessTarget(null)} />}
       {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="user" onDone={() => { setPendingIconSetup(null); load(); toast('Lab manager created & icons saved ✓') }} />}
       {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: deleteTarget.name || 'this member' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteLabManager} deleting={deleting} />}
@@ -2022,7 +2064,7 @@ function LabManagerListPanel({ toast, session }) {
   )
 }
 
-function LabManagerModal({ labManagers, onClose, onSave, onRoleChange }) {
+function LabManagerModal({ labManagers, onClose, onSave, onRoleChange, onAddRole }) {
   // First/Last collected separately (stored joined in `name`) so role
   // conversions to lab user can split reliably
   const [form, setForm] = useState(() => {
@@ -2032,6 +2074,17 @@ function LabManagerModal({ labManagers, onClose, onSave, onRoleChange }) {
   })
   const [confirmDowngrade, setConfirmDowngrade] = useState(false)
   const [showPw, setShowPw] = useState(false)
+  const [heldRoles, setHeldRoles] = useState(null)   // null = still loading
+
+  useEffect(() => {
+    const email = (labManagers?.email || '').trim().toLowerCase()
+    if (!email) { setHeldRoles([]); return }
+    sb.from('users').select('role').ilike('email', email).eq('is_active', true)
+      .then(({ data, error }) => {
+        if (error) { console.warn('[roles] lookup failed:', error.message); setHeldRoles([]); return }
+        setHeldRoles([...new Set((data || []).map(r => r.role))])
+      })
+  }, [labManagers?.email])
 
   function handleRoleClick(opt) {
     if (opt.role === labManagers.role) return
@@ -2058,7 +2111,7 @@ function LabManagerModal({ labManagers, onClose, onSave, onRoleChange }) {
         </div>
         {labManagers && onRoleChange && (
           <div className="field">
-            <label>Role</label>
+            <label>Change role (replaces the current one)</label>
             <div style={{ display:'flex', gap:8 }}>
               {[{ label: 'Lab Manager', role: 'user' }, { label: 'Lab User', role: 'lab_user' }].map(opt => (
                 <button key={opt.role}
@@ -2068,6 +2121,40 @@ function LabManagerModal({ labManagers, onClose, onSave, onRoleChange }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {labManagers && onAddRole && (
+          <div className="field">
+            <label>Additional roles</label>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:8, lineHeight:1.5 }}>
+              Give this person a second role instead of replacing the one above. They keep
+              one password and pick a role when they sign in.
+            </div>
+            {heldRoles === null ? (
+              <div style={{ fontSize:12.5, color:'var(--text3)' }}>Checking existing roles…</div>
+            ) : (() => {
+              const held = new Set([...heldRoles, labManagers.role])
+              const addable = Object.keys(ROLE_LABELS).filter(r => !held.has(r))
+              return (
+                <>
+                  <div style={{ fontSize:12.5, color:'var(--text2)', marginBottom:8 }}>
+                    Currently: <strong>{[...held].map(r => ROLE_LABELS[r] || r).join(' · ')}</strong>
+                  </div>
+                  {addable.length ? (
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                      {addable.map(r => (
+                        <button key={r} type="button" className="btn btn-sm"
+                          onClick={() => { onAddRole(labManagers, r); onClose() }}>
+                          + Add as {ROLE_LABELS[r]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:12.5, color:'var(--text3)' }}>They already hold every role.</div>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
         {confirmDowngrade && (
