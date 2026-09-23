@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
+import { safetyComplete as isSafetyComplete } from '../labsafety/safetySteps'
 import { useAppStore } from '../../store/useAppStore'
 import { capabilityPool, orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
@@ -692,12 +693,13 @@ export default function Dashboard() {
   async function checkSafetyProgress() {
     if (!isLabUser || !session?.userId) { setSafetyComplete(true); return }
     try {
-      const { data } = await sb.from('lab_safety_progress')
-        .select('step_number')
-        .eq('user_id', session.userId)
-        .eq('completed', true)
-      const done = new Set((data || []).map(r => r.step_number))
-      setSafetyComplete([1, 2, 3, 4].every(n => done.has(n)))
+      const [{ data }, { data: me }] = await Promise.all([
+        sb.from('lab_safety_progress').select('step_number')
+          .eq('user_id', session.userId).eq('completed', true),
+        sb.from('users').select('required_safety_steps').eq('id', session.userId).maybeSingle(),
+      ])
+      const done = (data || []).map(r => r.step_number)
+      setSafetyComplete(isSafetyComplete(me?.required_safety_steps, done))
     } catch { setSafetyComplete(true) }
   }
 
