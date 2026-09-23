@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
+import { safetyComplete } from '../screens/labsafety/safetySteps'
 import { isSvgAvatar, AvatarSvg, AVATAR_PRESETS } from './Avatars'
 import NotificationBell from './NotificationBell'
 import SuperAdminBell from './SuperAdminBell'
@@ -572,17 +573,21 @@ export default function Layout({ children }) {
       .catch(e => console.warn('[daily reminders]', e))
   }, [session?.userId])
 
-  // Safety lock — lab users must complete all 4 safety steps before accessing modules
+  // Safety lock — a lab user is locked out of every module except Profile until
+  // the steps THEY are required to do are approved. Which steps that is comes
+  // from users.required_safety_steps; null means all of them.
   const [safetyLocked, setSafetyLocked] = useState(false)
   useEffect(() => {
     if (session?.role !== 'lab_user' || !session?.userId) { setSafetyLocked(false); return }
     const uid = session.userId
     async function checkSafety() {
       try {
-        const { data } = await sb.from('lab_safety_progress')
-          .select('step_number').eq('user_id', uid).eq('completed', true)
-        const done = new Set((data || []).map(r => r.step_number))
-        setSafetyLocked(![1, 2, 3, 4].every(n => done.has(n)))
+        const [{ data }, { data: me }] = await Promise.all([
+          sb.from('lab_safety_progress').select('step_number').eq('user_id', uid).eq('completed', true),
+          sb.from('users').select('required_safety_steps').eq('id', uid).maybeSingle(),
+        ])
+        const done = (data || []).map(r => r.step_number)
+        setSafetyLocked(!safetyComplete(me?.required_safety_steps, done))
       } catch { setSafetyLocked(false) }
     }
     checkSafety()

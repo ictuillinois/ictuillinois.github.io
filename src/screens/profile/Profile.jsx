@@ -2,6 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { passwordError } from '../../lib/passwordPolicy'
+import { SAFETY_STEPS, requiredSafetySteps } from '../labsafety/safetySteps'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
@@ -1553,7 +1554,7 @@ export function LabUsersPanel({ toast, session }) {
       if (perr) { toast(perr); return }
     }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
-    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
+    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: (form.requiredSteps?.length && form.requiredSteps.length < SAFETY_STEPS.length) ? form.requiredSteps : null, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
     if (!id && form.password && actualEmail) {
       try {
         const authUser = await createAuthUser(actualEmail, form.password)
@@ -1777,7 +1778,8 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
     // saved before the two were kept in sync.
     selectedProjectIds: labUser.assigned_project_ids || [],
     nickname: labUser.nick_name || '',
-  } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '' })
+    requiredSteps: requiredSafetySteps(labUser.required_safety_steps),
+  } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '', requiredSteps: SAFETY_STEPS.map(x => x.number) })
   const [orgProjects, setOrgProjects] = useState([])
   const [showPw, setShowPw] = useState(false)
 
@@ -1790,6 +1792,15 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
       .then(({ data }) => setOrgProjects(data || []))
   }
   useEffect(loadOrgProjects, [session?.organizationId])
+
+  function toggleStep(n) {
+    setForm(f => ({
+      ...f,
+      requiredSteps: f.requiredSteps.includes(n)
+        ? f.requiredSteps.filter(x => x !== n)
+        : [...f.requiredSteps, n].sort((a, b) => a - b),
+    }))
+  }
 
   function toggleProject(id) {
     setForm(f => ({
@@ -1849,6 +1860,35 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
             </>
           ) : (
             <div style={{ fontSize:13, color:'var(--text3)', padding:'10px 0' }}>No projects yet — add one.</div>
+          )}
+        </div>
+        <div className="field">
+          <label>Required safety steps</label>
+          <div style={{ fontSize:12, color:'var(--text3)', marginBottom:6, lineHeight:1.5 }}>
+            All steps by default. Untick any this person does not need — a lab user
+            who is rarely in the lab may only need some of the safety training.
+          </div>
+          <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'8px 12px' }}>
+            {SAFETY_STEPS.map(st => {
+              const on = form.requiredSteps.includes(st.number)
+              return (
+                <div key={st.number} onClick={() => toggleStep(st.number)}
+                  style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer', userSelect:'none', padding:'4px 0' }}>
+                  <input type="checkbox" readOnly checked={on} style={{ width:'auto', flexShrink:0 }} />
+                  <span style={{ lineHeight:1.3 }}>{st.label}</span>
+                </div>
+              )
+            })}
+          </div>
+          {/* Unticking everything is the one case that must not be taken
+              literally: it would mean no safety training at all. It saves as
+              "all steps" and says so, rather than quietly doing the opposite
+              of what a blank box looks like. */}
+          {form.requiredSteps.length === 0 && (
+            <div style={{ fontSize:12, color:'#92400e', background:'#fff8f0', border:'1px solid #f59e0b', borderRadius:8, padding:'8px 10px', marginTop:6, lineHeight:1.5 }}>
+              No steps selected — this user will be required to complete <strong>all</strong> of them.
+              Tick at least one to narrow it.
+            </div>
           )}
         </div>
         <div style={{ display:'flex', gap:10, marginTop:8 }}>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
 import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, optionOrderFor } from './safetyExam'
+import { requiredSafetySteps } from './safetySteps'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -169,7 +170,10 @@ function UserSafetyCard({ user, progress, selected, onClick }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-        {STEPS.map(s => <StepDot key={s.number} number={s.number} completed={!!userProg[s.number]?.completed} />)}
+        {/* Only the steps this user owes — a dot for a step they were never
+            assigned reads as outstanding work that will never be done. */}
+        {STEPS.filter(s => requiredSafetySteps(user?.required_safety_steps).includes(s.number))
+              .map(s => <StepDot key={s.number} number={s.number} completed={!!userProg[s.number]?.completed} />)}
       </div>
     </div>
   )
@@ -1112,14 +1116,32 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
         </div>
         <div style={{ padding: 16 }}>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 12 }}>
-            Read every page of the <strong>Laboratory Safety Guide — Chemical Hygiene Plan and Safety Policies</strong>
-            (University of Illinois, Division of Research Safety). The confirmation box appears once you reach the last page.
+            Read the <strong>Laboratory Safety Guide — Chemical Hygiene Plan and Safety Policies</strong>
+            (University of Illinois, Division of Research Safety). The confirmation box appears once you have opened it.
           </div>
-          <SimplePDFViewer
-            pdfPath="/laboratory-safety-guide.pdf"
-            localKey={`ictlab_step2_guide_${user?.id}`}
-            onLastPage={() => setGuideAtEnd(true)}
-          />
+          {/* Opens DRS's own copy rather than a 17-page reader embedded here.
+              That also means the guide is always the current published version
+              instead of whatever was bundled the day it was last copied.
+
+              The trade-off is real: the inline reader could require reaching
+              the last page before offering the confirmation. A link cannot
+              know whether it was read, only that it was opened — so the
+              confirmation now appears once the guide has been opened. */}
+          <a
+            href={SAFETY_GUIDE_URL}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setGuideAtEnd(true)}
+            style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'var(--surface2)',
+                     border:'1px solid var(--border)', borderRadius:10, textDecoration:'none', color:'var(--text)' }}
+          >
+            <span style={{ fontSize:24 }}>📄</span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:600, fontSize:14 }}>Laboratory Safety Guide</div>
+              <div style={{ fontSize:12, color:'var(--text3)' }}>Chemical Hygiene Plan and Safety Policies · opens at drs.illinois.edu</div>
+            </div>
+            <span style={{ fontSize:13, fontWeight:600, color:'var(--accent)', whiteSpace:'nowrap' }}>Open guide ↗</span>
+          </a>
           {(guideAtEnd || guideRead) && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: '#E1F5EE', border: '1px solid #9FE1CB', cursor: guideRead ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, color: '#085041' }}>
               <input type="checkbox" checked={guideRead} disabled={guideRead || savingGuide}
@@ -1251,6 +1273,10 @@ async function markVideoWatched(userId, stepNumber, orgId, key, current) {
   if (error) console.warn('[safety] watch not recorded:', error.message)
   return next
 }
+
+// DRS's published copy, not a bundled snapshot: a safety guide that silently
+// goes out of date is worse than one that takes a click to reach.
+const SAFETY_GUIDE_URL = 'https://drs.illinois.edu/site-documents/LaboratorySafetyGuide.pdf'
 
 const SAFETY_VIDEOS = {
   step1: 'ext:s3:safety-videos/ICT-Building-safety-video.mp4',
@@ -1919,7 +1945,12 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
   const { setScreen, setSidebarSubTab } = useAppStore()
   const [activeStep, setActiveStep] = useState(1)
   const userProg = progress[user?.id] || {}
-  const allApproved = STEPS.every(s => userProg[s.number]?.completed)
+  // Only the steps this user owes count toward "all done" — and only those are
+  // listed. A part-time user assigned two of three must not be told they are
+  // incomplete forever by a step nobody asked them to do.
+  const required = requiredSafetySteps(user?.required_safety_steps)
+  const mySteps = STEPS.filter(s => required.includes(s.number))
+  const allApproved = mySteps.every(s => userProg[s.number]?.completed)
 
   if (!user) return null
 
@@ -1928,7 +1959,7 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
 
       {/* Tab bar */}
       <div style={{ display: 'flex', background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
-        {STEPS.map(s => {
+        {mySteps.map(s => {
           const done   = !!userProg[s.number]?.completed
           const active = activeStep === s.number
           return (
@@ -1959,7 +1990,7 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
       </div>
 
       {/* Step content */}
-      {STEPS.map(s => {
+      {mySteps.map(s => {
         if (s.number !== activeStep) return null
         const done    = !!userProg[s.number]?.completed
         const stepRow = userProg[s.number] || null
@@ -2102,7 +2133,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
       if (isLabManager) {
         const [usersRes, progRes] = await Promise.all([
           sb.from('users')
-            .select('id, name, last_name, nick_name, photo_url, avatar, email')
+            .select('id, name, last_name, nick_name, photo_url, avatar, email, required_safety_steps')
             .eq('organization_id', session.organizationId)
             .eq('role', 'lab_user')
             .eq('is_active', true)
@@ -2140,7 +2171,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         })
         setProgress({ [session.userId]: progMap })
         const { data: me } = await sb.from('users')
-          .select('id, name, last_name, nick_name, photo_url, avatar, email')
+          .select('id, name, last_name, nick_name, photo_url, avatar, email, required_safety_steps')
           .eq('id', session.userId).maybeSingle()
         setSelectedUser(me || { id: session.userId, name: session.username, nick_name: session.username })
         // One-time backfill: sync existing certs to Documents tab for users who completed steps before auto-save was added
