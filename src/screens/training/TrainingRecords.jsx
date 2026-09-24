@@ -33,7 +33,7 @@ async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
         if (toEmail) {
           const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile' })
           const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: m.id, type: 'training_submitted' })
-          if (!emailErr) fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+          if (!emailErr) fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           else console.warn('[notif] email queue insert failed:', emailErr.message)
         }
       }
@@ -72,7 +72,7 @@ async function sendTrainingApprovedNotif(userId, approverName) {
       const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training Records →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
       const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'training_approved' })
       if (emailErr) console.warn('[notif] email queue insert failed:', emailErr.message)
-      else fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+      else fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     }
   } catch (e) {
     console.error('[notif] sendTrainingApprovedNotif unexpected error:', e)
@@ -1001,7 +1001,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
               title: `${userName} requested equipment training`,
               body: `${eq?.nickname || eq?.equipment_name || 'Equipment'} — review in Training Records → Equipment.`,
               read: false,
-            }))).catch(() => {})
+            }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           }
         })
     }
@@ -1060,7 +1060,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       title: `Training approved: ${eqName}`,
       body: `${session.username || 'Your lab manager'} approved your training. You can now book this equipment.`,
       read: false,
-    }).catch(() => {})
+    }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
     load()
   }

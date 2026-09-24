@@ -79,7 +79,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
       title: `Training approved: ${eqName}`,
       body: `${session.username} approved your training. You can now book this equipment.`,
       read: false,
-    }).catch(() => {})
+    }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     toast('Training approved ✓')
     setSaving(false); load()
   }
@@ -306,7 +306,7 @@ export function UserTrainingSchedule({ session }) {
               title: `${session.username} accepted training time`,
               body: `${eqName} training on ${fmtDT(sched.proposed_date)} confirmed.`,
               read: false,
-            }))).catch(() => {})
+            }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           }
         })
     }
@@ -316,7 +316,7 @@ export function UserTrainingSchedule({ session }) {
       title: `Training confirmed: ${eqName}`,
       body: `Your training for ${eqName} on ${fmtDT(sched.proposed_date)} is confirmed.`,
       read: false,
-    }).catch(() => {})
+    }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     toast('Training date accepted ✓'); load()
   }
 
@@ -337,7 +337,7 @@ export function UserTrainingSchedule({ session }) {
               title: `${session.username} proposed a new training time`,
               body: `New time proposed for ${eqName}: ${fmtDT(new Date(date))}.`,
               read: false,
-            }))).catch(() => {})
+            }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           }
         })
     }
@@ -660,7 +660,7 @@ export function ExamTab({ session }) {
                 title: `${session.username} passed the exam for ${eqName}`,
                 body: `${checklist}. Review and approve in Training Records → Equipment tab.`,
                 read: false,
-              }))).catch(() => {})
+              }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
             }
           })
       }
