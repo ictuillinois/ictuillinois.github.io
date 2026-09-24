@@ -1,9 +1,13 @@
--- Which tables the app subscribes to, and whether realtime is actually on.
+-- Which tables THIS project subscribes to, and whether realtime is on.
 --
 -- A subscription to a table that is not in the supabase_realtime publication
--- does not error — it connects, waits, and never fires. Every "live" feature
--- built on it silently degrades to "updates when you navigate", which is how
--- lab_safety_progress went unnoticed.
+-- does not error — it connects, waits, and never fires. The "live" feature
+-- built on it silently becomes a refresh-only one. ICT-Lab had five such
+-- tables (tasks, task_comments, re_messages, support_messages,
+-- admin_notifications) and nobody had noticed.
+--
+-- Regenerate after adding a subscription:
+--   grep -rhoE "table: '[a-z_]+'" src | sed "s/table: '//;s/'//" | sort -u
 
 WITH subscribed(tbl) AS (VALUES
   ('admin_notifications'),
@@ -21,9 +25,9 @@ WITH subscribed(tbl) AS (VALUES
 )
 SELECT s.tbl AS table_name,
        CASE
-         WHEN t.table_name IS NULL              THEN 'table does not exist here'
-         WHEN p.tablename  IS NULL              THEN '❌ REALTIME OFF — subscriptions never fire'
-         ELSE                                        '✅ realtime on'
+         WHEN t.table_name IS NULL THEN 'table does not exist here'
+         WHEN p.tablename  IS NULL THEN '❌ REALTIME OFF — subscriptions never fire'
+         ELSE                           '✅ realtime on'
        END AS status
 FROM subscribed s
 LEFT JOIN information_schema.tables t
