@@ -36,3 +36,8 @@ supabase/.temp
 
 # Source document for the Step 3 quiz
 /Lab_User_Quiz_9-22-26.docx
+
+# Source copy — the served one lives in public/
+/Departmental-Driver-Approval-Form.pdf
+/campus-unlicensed-motorized-vehicle-operators-brief.pdf
+/Golf Cart Manual 09-8-23.pdf
