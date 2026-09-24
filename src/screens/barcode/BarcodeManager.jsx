@@ -686,7 +686,13 @@ export default function BarcodeManager() {
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
   const [orgTypes, setOrgTypes] = useState(DEFAULT_TYPES)
-  const tab = sidebarSubTab || 'equipment'
+  // Hiding the sidebar entry is not enough on its own: 'equipment' is the
+  // default when no sub-tab is set, and a lab user's stored sub-tab may still
+  // be 'equipment' from before this rule existed. Either would drop them onto
+  // a tab they are not meant to see.
+  const canEquipment = session?.role === 'admin' || session?.role === 'user' || session?.userId === null
+  const requested = sidebarSubTab || (canEquipment ? 'equipment' : 'records')
+  const tab = (!canEquipment && requested === 'equipment') ? 'records' : requested
 
   const isAdminOrLabManager = session?.role === 'admin' || session?.role === 'user'
   const { labels: typeLabels, colors: typeColors } = buildTypeMap(orgTypes)
