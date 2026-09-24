@@ -128,8 +128,10 @@ function getScreenTabs(screen, session) {
   if (screen === 'barcodeqr') return [
     // Equipment barcodes are generated and printed by whoever manages the
     // equipment, not by the people who scan them.
-    ...(isAdmin || isLabManager ? [{ key: 'equipment', icon: '🔲', label: 'Equipment Barcode' }] : []),
-    { key: 'records',   icon: '📋', label: 'Records' },
+    ...(isAdmin || isLabManager ? [
+      { key: 'equipment', icon: '🔲', label: 'Equipment Barcode' },
+      { key: 'records',   icon: '📋', label: 'Records' },
+    ] : []),
     { key: 'materials', icon: '🏷️', label: 'Material Labels' },
     ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
