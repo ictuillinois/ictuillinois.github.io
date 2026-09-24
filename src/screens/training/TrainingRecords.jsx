@@ -6,6 +6,7 @@ import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './Training
 import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
+import VehicleAgreement from './VehicleAgreement'
 import { AvatarDisplay } from '../../components/Avatars'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
@@ -501,6 +502,10 @@ function FreshTraining({ labUsers, session, hideChrome = false, onChanged }) {
 // TAB 2 — VEHICLE TRAINING
 // ══════════════════════════════════════════════════════════════
 function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
+  // Two things live under Vehicle now: the training records a manager keeps,
+  // and the use agreement a lab user signs. Tabs rather than one long column,
+  // because a lab user only ever needs the agreement half.
+  const [vehTab, setVehTab] = useState(canEdit(session) ? 'training' : 'agreement')
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -573,8 +578,37 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
     : statusFilter === 'trained' ? searchFiltered.filter(u => trainedCountMap[u.id] > 0)
     : searchFiltered.filter(u => trainedCountMap[u.id] === 0)
 
+  const isVehManager = canEdit(session)
+
   return (
     <div>
+      {/* Training / Agreement switch. A lab user lands on the agreement — the
+          training records are the manager's ledger, not theirs. */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid var(--border)' }}>
+        {[['training', 'Training records'], ['agreement', 'Use agreement']].map(([k, label]) => (
+          <button key={k} onClick={() => setVehTab(k)}
+            style={{
+              padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 13.5, fontWeight: vehTab === k ? 700 : 500,
+              color: vehTab === k ? 'var(--accent)' : 'var(--text2)',
+              borderBottom: `2px solid ${vehTab === k ? 'var(--accent)' : 'transparent'}`,
+              marginBottom: -1,
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {vehTab === 'agreement' && (
+        <VehicleAgreement
+          labUsers={labUsers}
+          session={session}
+          isManager={isVehManager}
+          onChanged={onChanged}
+        />
+      )}
+
+      {vehTab === 'training' && <>
       {!hideChrome && <SectionHeader title="Training Records" count={labUsers.length} />}
       {!hideChrome && canEdit(session) && (
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
@@ -711,6 +745,7 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
           </div>
         </div>
       )}
+      </>}
     </div>
   )
 }

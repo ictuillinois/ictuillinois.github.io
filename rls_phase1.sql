@@ -1462,6 +1462,7 @@ DECLARE
     'task_progress_log_policy',
     'task_dependencies_policy',
     'reminder_sends_policy',
+    'vehicle_agreements_policy',
     'tasks_policy','task_attachments_policy','task_comments_policy','user_out_of_lab_policy',
     'task_reminders_policy','reminders_policy','lab_safety_progress_policy',
     'ict_layout_policy',
