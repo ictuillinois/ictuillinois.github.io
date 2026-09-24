@@ -93,11 +93,23 @@ export function isCorrect(q, given) {
   return given === q.correct
 }
 
-// Has this question been answered at all? `[]` is truthy, so a multi-select
-// with nothing ticked would otherwise count as answered and let someone submit
-// a blank one.
+// Has this question been answered?
+//
+// For a multi-select that means the RIGHT NUMBER of boxes, not at least one:
+// one tick out of two reads as a finished answer and the user moves on having
+// silently half-answered. Requiring the count reveals how many are correct —
+// which is what "choose two" tells a candidate in any exam — but never which,
+// since any two selections satisfy it.
+//
+// `[]` is truthy, so a length check is the only thing that catches an empty
+// multi-select at all.
+export function requiredPicks(q) {
+  return Array.isArray(q.correct) ? q.correct.length : 1
+}
+
 export function isAnswered(q, given) {
-  return q.type === 'multi' ? Array.isArray(given) && given.length > 0 : !!given
+  if (q.type !== 'multi') return !!given
+  return Array.isArray(given) && given.length === requiredPicks(q)
 }
 
 // Score a bank of questions. Returns everything the UI and the DB row need, so

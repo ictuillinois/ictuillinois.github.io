@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
-import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, scoreQuiz, isCorrect, isAnswered, passMark, optionOrderFor } from './safetyExam'
+import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, scoreQuiz, isCorrect, isAnswered, requiredPicks, passMark, optionOrderFor } from './safetyExam'
 import { STEP3_QUIZ_QUESTIONS, STEP3_QUIZ_PASS_COUNT } from './step3Quiz'
 import { requiredSafetySteps } from './safetySteps'
 import { useAppStore } from '../../store/useAppStore'
@@ -1821,7 +1821,7 @@ function SafetyExamPanel({ questions = SAFETY_EXAM_QUESTIONS, passRatio = SAFETY
       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: q.type === 'multi' ? 6 : 14, lineHeight: 1.55 }}>{q.question}</div>
       {q.type === 'multi' && (
         <div style={{ fontSize: 12.5, color: 'var(--accent)', fontWeight: 600, marginBottom: 12 }}>
-          Select all that apply — every correct option must be ticked.
+          Select all that apply — choose {requiredPicks(q)}.
         </div>
       )}
 
@@ -1843,11 +1843,16 @@ function SafetyExamPanel({ questions = SAFETY_EXAM_QUESTIONS, passRatio = SAFETY
               name={q.id}
               checked={isPicked}
               disabled={saving}
-              onChange={() => setAnswers(a => q.type === 'multi'
-                ? { ...a, [q.id]: (a[q.id] || []).includes(key)
-                    ? (a[q.id] || []).filter(x => x !== key)
-                    : [...(a[q.id] || []), key] }
-                : { ...a, [q.id]: key })}
+              onChange={() => setAnswers(a => {
+                if (q.type !== 'multi') return { ...a, [q.id]: key }
+                const cur = a[q.id] || []
+                if (cur.includes(key)) return { ...a, [q.id]: cur.filter(x => x !== key) }
+                // Ticking a third when two are wanted would silently drop one
+                // or leave an unanswerable state; refuse it and let them
+                // untick first.
+                if (cur.length >= requiredPicks(q)) return a
+                return { ...a, [q.id]: [...cur, key] }
+              })}
               // index.css sets a global `input { width: 100% }`. Without an
               // explicit width the radio fills the whole row, centring its
               // circle and pushing the option text to the far right.
@@ -1865,8 +1870,12 @@ function SafetyExamPanel({ questions = SAFETY_EXAM_QUESTIONS, passRatio = SAFETY
           <button className="btn btn-sm" onClick={() => setCurrent(c => c - 1)} disabled={saving}>← Back</button>
         )}
         <div style={{ marginLeft: 'auto' }}>
-          {!(q.type === 'multi' ? (picked || []).length : picked) ? (
-            <span style={{ fontSize: 12.5, color: 'var(--text3)', fontStyle: 'italic' }}>Choose an answer to continue</span>
+          {!isAnswered(q, picked) ? (
+            <span style={{ fontSize: 12.5, color: 'var(--text3)', fontStyle: 'italic' }}>
+              {q.type === 'multi'
+                ? `Select ${requiredPicks(q)} to continue — ${(picked || []).length} of ${requiredPicks(q)} chosen`
+                : 'Choose an answer to continue'}
+            </span>
           ) : isLast ? (
             <button className="btn btn-primary" onClick={onSubmit} disabled={!answeredAll || saving}>
               {saving ? 'Submitting…' : 'Submit answers'}
