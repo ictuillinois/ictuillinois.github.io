@@ -281,6 +281,13 @@ export function UserTrainingSchedule({ session }) {
     setLoading(false)
   }
 
+  // A requested-training banner is news: the lab user has already submitted and
+  // can do nothing until a manager responds, so it should be dismissible. The
+  // request itself stays active — this hides a notice, it does not withdraw
+  // anything, which is why it is localStorage and not a column.
+  const visibleRequests = requests.filter(r => !dismissed.has(r.id))
+  function dismiss(id) { dismissConfirmed(id) }
+
   function dismissConfirmed(id) {
     const next = new Set([...dismissed, id])
     setDismissed(next)
@@ -349,20 +356,31 @@ export function UserTrainingSchedule({ session }) {
   const confirmed = schedules.filter(s => s.status === 'confirmed')
 
   if (loading) return <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-  if (schedules.length === 0 && requests.length === 0) return null
+  if (schedules.length === 0 && visibleRequests.length === 0) return null
 
   return (
     <div style={{ marginBottom: 20 }}>
-      {requests.map(req => {
+      {visibleRequests.map(req => {
         const eq = equipment.find(e => e.id === req.equipment_id)
         return (
-          <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e', marginBottom: 4 }}>
-              ⏳ Training requested: {eq?.nickname || req.equipment_name}
+          <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e', marginBottom: 4 }}>
+                ⏳ Training requested: {eq?.nickname || req.equipment_name}
+              </div>
+              <div style={{ fontSize: 13, color: '#92400e' }}>
+                {req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}awaiting a training date from your lab manager.
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: '#92400e' }}>
-              {req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}awaiting a training date from your lab manager.
-            </div>
+            <button
+              onClick={() => dismiss(req.id)}
+              title="Dismiss this notice — your request stays active"
+              aria-label="Dismiss"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#92400e',
+                       fontSize: 20, lineHeight: 1, padding: '0 2px', flexShrink: 0, opacity: 0.6 }}
+              onMouseEnter={e => e.currentTarget.style.opacity = 1}
+              onMouseLeave={e => e.currentTarget.style.opacity = 0.6}
+            >×</button>
           </div>
         )
       })}
