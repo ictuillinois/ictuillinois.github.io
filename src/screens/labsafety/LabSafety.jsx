@@ -2175,6 +2175,28 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
   useEffect(() => { if (targetUser) setSelectedUser(targetUser) }, [targetUser?.id])
   useEffect(() => { load() }, [])
 
+  // Live: a manager watching this screen sees a quiz pass land without
+  // reloading. Layout and Dashboard already subscribe to this table for the
+  // lab user's own lock; the screen the MANAGER sits on never did, so a result
+  // submitted while they had it open stayed invisible until they navigated.
+  //
+  // Scoped to the organisation for a manager and to the one row for a lab
+  // user, so nobody is woken by another org's traffic.
+  useEffect(() => {
+    const orgId = session?.organizationId
+    const uid = session?.userId
+    if (!orgId && !uid) return
+    const filter = isLabManager && orgId
+      ? `organization_id=eq.${orgId}`
+      : `user_id=eq.${uid}`
+    const ch = sb.channel(`safety_screen_${uid || orgId}`)
+      .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'lab_safety_progress', filter },
+          () => load())
+      .subscribe()
+    return () => { sb.removeChannel(ch) }
+  }, [session?.organizationId, session?.userId, isLabManager])
+
   async function load() {
     setLoading(true)
     try {
@@ -2196,11 +2218,11 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
         const progMap = {}
         ;(progRes.data || []).forEach(r => {
           if (!progMap[r.user_id]) progMap[r.user_id] = {}
-          progMap[r.user_id][r.step_number] = {
-            completed: r.completed,
-            certificate_url: r.certificate_url,
-            submitted_at: r.submitted_at,
-          }
+          // Spread the row rather than naming fields: this map dropped
+          // exam_passed and exam_attempts even though the query fetched them,
+          // so the manager's badge read "Not attempted yet" for someone who
+          // had passed. Listing columns twice is what let them diverge.
+          progMap[r.user_id][r.step_number] = { ...r }
         })
         setProgress(progMap)
         if (allUsers.length === 1) setSelectedUser(allUsers[0])
@@ -2211,11 +2233,7 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
           .eq('user_id', session.userId)
         const progMap = {}
         ;(prog || []).forEach(r => {
-          progMap[r.step_number] = {
-            completed: r.completed,
-            certificate_url: r.certificate_url,
-            submitted_at: r.submitted_at,
-          }
+          progMap[r.step_number] = { ...r }
         })
         setProgress({ [session.userId]: progMap })
         const { data: me } = await sb.from('users')
