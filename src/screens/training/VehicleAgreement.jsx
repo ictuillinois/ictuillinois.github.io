@@ -367,80 +367,63 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       {rows.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--text3)', padding: '12px 0' }}>Nothing signed yet.</div>
       ) : (
-        (() => {
-          // Header and cell built from ONE definition. They were two separate
-          // lists and drifted: seven headers against eight cells, so every
-          // column shifted and the Approve buttons landed past the edge of the
-          // table. A column cannot go missing a header now.
-          const anyVehicle = rows.some(r => r.vehicle_name)
-          const cols = [
-            isManager && { key: 'user',    label: 'Lab user',    render: r => nameOf(r.user_id) },
-            { key: 'doc',      label: 'Document',    render: r => docByKey(r.doc_key)?.name || r.doc_key },
-            // A column of dashes is worse than no column.
-            anyVehicle && { key: 'vehicle', label: 'Vehicle', render: r => r.vehicle_name || '—' },
-            { key: 'signed',   label: 'Submitted',   nowrap: true, render: r => (
-                <>
-                  {fmt(r.signed_at)}
-                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                    {r.file_url
-                      ? <FileLink url={r.file_url} name={r.file_name} />
-                      : (r.signature_name ? `signed “${r.signature_name}”` : 'read & confirmed')}
+        // A list, not a table. Seven columns of mixed-width content forced the
+        // document name to wrap over five lines and pushed the Approve buttons
+        // past the right edge of the container, where a manager could not see
+        // them without scrolling sideways. Rows cannot overflow.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows.map(r => {
+            const st = STATUS_STYLE[r.status] || PENDING_STYLE
+            const doc = docByKey(r.doc_key)
+            return (
+              <div key={r.id} style={{
+                border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px',
+                display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.4 }}>
+                    {doc?.name || r.doc_key}
                   </div>
-                </>
-              ) },
-            { key: 'status',   label: 'Status', render: r => {
-                const st = STATUS_STYLE[r.status] || PENDING_STYLE
-                return (
-                  <span style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
-                                 borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {r.status}
-                  </span>
-                )
-              } },
-            { key: 'decided',  label: 'Decided by', nowrap: true, render: r => r.approved_by_name || '—' },
-            // Access is dated from the approval, not the submission.
-            { key: 'access',   label: 'Access from', nowrap: true, render: r => r.status === 'approved' ? fmt(r.approved_at) : '—' },
-            isManager && { key: 'actions', label: '', nowrap: true, render: r => (
-                r.status === 'acknowledged'
-                  // Nothing to approve on a manual someone read — no artefact
-                  // exists to check, so it must not sit in a decision queue.
-                  ? <span style={{ fontSize: 12, color: 'var(--text3)' }}>no approval needed</span>
-                  : r.status === 'pending'
-                    ? <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, lineHeight: 1.6 }}>
+                    {isManager && <>{nameOf(r.user_id)} · </>}
+                    {doc?.kind === 'read' ? 'Read & confirmed' : 'Submitted'} {fmt(r.signed_at)}
+                    {r.vehicle_name && <> · {r.vehicle_name}</>}
+                    {r.status === 'approved' && <> · access from <strong>{fmt(r.approved_at)}</strong></>}
+                    {r.approved_by_name && <> · by {r.approved_by_name}</>}
+                  </div>
+                  {r.file_url && (
+                    <div style={{ fontSize: 12, marginTop: 4 }}>
+                      <FileLink url={r.file_url} name={r.file_name} />
+                    </div>
+                  )}
+                </div>
+
+                <span style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
+                               borderRadius: 6, padding: '3px 9px', fontSize: 12, fontWeight: 600,
+                               whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {r.status}
+                </span>
+
+                {isManager && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {r.status === 'acknowledged' ? (
+                      // Nothing to approve on a manual someone read — no
+                      // artefact exists to check.
+                      <span style={{ fontSize: 12, color: 'var(--text3)', alignSelf: 'center' }}>no approval needed</span>
+                    ) : r.status === 'pending' ? (
+                      <>
                         <button className="btn btn-sm btn-primary" disabled={saving} onClick={() => decide(r, 'approved')}>Approve</button>
                         <button className="btn btn-sm" disabled={saving} style={{ color: '#c84b2f' }} onClick={() => decide(r, 'denied')}>Deny</button>
-                      </div>
-                    : <button className="btn btn-sm" disabled={saving} onClick={() => decide(r, 'pending')}>Reopen</button>
-              ) },
-          ].filter(Boolean)
-
-          return (
-            <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    {cols.map(c => (
-                      <th key={c.key} style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, textTransform: 'uppercase',
-                                               letterSpacing: '0.06em', color: 'var(--text3)', fontFamily: 'var(--mono)',
-                                               borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{c.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(r => (
-                    <tr key={r.id}>
-                      {cols.map(c => (
-                        <td key={c.key} style={{ padding: '10px 12px', ...(c.nowrap ? { whiteSpace: 'nowrap' } : {}) }}>
-                          {c.render(r)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        })()
+                      </>
+                    ) : (
+                      <button className="btn btn-sm" disabled={saving} onClick={() => decide(r, 'pending')}>Reopen</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
