@@ -591,11 +591,17 @@ export default function Layout({ children }) {
       } catch { setSafetyLocked(false) }
     }
     checkSafety()
+    // Realtime is the fast path, not the only one: it needs the table in the
+    // supabase_realtime publication and a live socket, and when either is
+    // missing this check never ran again. The dashboard's copy re-runs on
+    // every navigation, so an approved lab user saw their modules unlock there
+    // while this sidebar stayed locked until a full page reload. `screen` is
+    // in the deps below so both re-check on the same trigger.
     const sub = sb.channel(`safety_sidebar_${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lab_safety_progress', filter: `user_id=eq.${uid}` }, checkSafety)
       .subscribe()
     return () => { sb.removeChannel(sub) }
-  }, [session?.userId, session?.role])
+  }, [session?.userId, session?.role, screen])
 
   useEffect(() => {
     const orgId = session?.organizationId
