@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
-import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, scoreQuiz, isCorrect, optionOrderFor } from './safetyExam'
-import { STEP3_QUIZ_QUESTIONS, STEP3_QUIZ_PASS_RATIO } from './step3Quiz'
+import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, scoreQuiz, isCorrect, isAnswered, passMark, optionOrderFor } from './safetyExam'
+import { STEP3_QUIZ_QUESTIONS, STEP3_QUIZ_PASS_COUNT } from './step3Quiz'
 import { requiredSafetySteps } from './safetySteps'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -1471,7 +1471,7 @@ function Step3VideosContent({ user, isManager }) {
     if (saving || !answeredAll) return
     setError(null)
     setSaving(true)
-    const r = scoreQuiz(STEP3_QUIZ_QUESTIONS, answers, STEP3_QUIZ_PASS_RATIO)
+    const r = scoreQuiz(STEP3_QUIZ_QUESTIONS, answers, STEP3_QUIZ_PASS_COUNT)
     setResult(r)
 
     const orgId = session?.organizationId || null
@@ -1548,7 +1548,7 @@ function Step3VideosContent({ user, isManager }) {
       {!isManager && (
         <SafetyExamPanel
           questions={STEP3_QUIZ_QUESTIONS}
-          passRatio={STEP3_QUIZ_PASS_RATIO}
+          passRatio={STEP3_QUIZ_PASS_COUNT}
           title="Lab User Quiz"
           userId={userId}
           attempt={(saved?.exam_attempts || 0) + retakeSeq}
@@ -1714,7 +1714,7 @@ function SafetyExamPanel({ questions = SAFETY_EXAM_QUESTIONS, passRatio = SAFETY
     questions.map(q => [q.id, optionOrderFor(q, userId, attempt)])
   ), [questions, userId, attempt])
   const total = questions.length
-  const needed = Math.ceil(total * passRatio)
+  const needed = passMark(total, passRatio)
 
   // Start a retake at the beginning rather than wherever the last one ended.
   useEffect(() => { if (!result) setCurrent(0) }, [result])

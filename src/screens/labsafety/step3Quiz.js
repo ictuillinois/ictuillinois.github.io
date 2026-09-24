@@ -13,11 +13,10 @@
 // `pinLast` holds "All of the above" at the bottom. Shuffled into first place
 // it refers to nothing.
 
-export const STEP3_QUIZ_PASS_RATIO = 0.9
-
-// 12 questions at 90% means 11 correct. Unlike Step 1 — where five questions
-// made 90% arithmetically identical to a perfect score — one miss is
-// survivable here.
+// The rule is "10 of 12", stated as a count rather than the 0.8333… ratio it
+// would otherwise become — the pass mark should be something you read, not
+// something you recompute. Two misses are survivable.
+export const STEP3_QUIZ_PASS_COUNT = 10
 
 export const STEP3_QUIZ_QUESTIONS = [
   {

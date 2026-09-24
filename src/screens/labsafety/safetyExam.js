@@ -102,11 +102,21 @@ export function isAnswered(q, given) {
 
 // Score a bank of questions. Returns everything the UI and the DB row need, so
 // the pass rule lives in exactly one place.
-export function scoreQuiz(questions, answers, passRatio = SAFETY_EXAM_PASS_RATIO) {
+// `pass` is a RATIO when <= 1 and an ABSOLUTE COUNT when > 1.
+//
+// The count form exists because "10 of 12" is the actual rule. Writing it as a
+// ratio would mean encoding 0.8333333333333334 and trusting the arithmetic to
+// land back on 10 — which it does, but it makes the pass mark something you
+// derive and re-check rather than something you read. Step 1's rule genuinely
+// IS a percentage, so both forms are supported.
+export function passMark(total, pass) {
+  return pass > 1 ? Math.min(Math.round(pass), total) : Math.ceil(total * pass)
+}
+
+export function scoreQuiz(questions, answers, pass = SAFETY_EXAM_PASS_RATIO) {
   const total = questions.length
   const score = questions.reduce((n, q) => n + (isCorrect(q, answers[q.id]) ? 1 : 0), 0)
-  // Ceil, so the threshold can never be met by rounding down a near miss.
-  const needed = Math.ceil(total * passRatio)
+  const needed = passMark(total, pass)
   return { score, total, needed, passed: score >= needed, percent: Math.round((score / total) * 100) }
 }
 
