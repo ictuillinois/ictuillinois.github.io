@@ -13,10 +13,10 @@
 // `pinLast` holds "All of the above" at the bottom. Shuffled into first place
 // it refers to nothing.
 
-// The rule is "10 of 12", stated as a count rather than the 0.8333… ratio it
-// would otherwise become — the pass mark should be something you read, not
-// something you recompute. Two misses are survivable.
-export const STEP3_QUIZ_PASS_COUNT = 10
+// 90% of 13 questions. ceil(13 * 0.9) = 12, so exactly one miss is allowed.
+// A ratio here rather than a count because the rule really is a percentage —
+// scoreQuiz takes either, treating a value at or below 1 as a ratio.
+export const STEP3_QUIZ_PASS_COUNT = 0.9
 
 export const STEP3_QUIZ_QUESTIONS = [
   {
@@ -130,6 +130,19 @@ export const STEP3_QUIZ_QUESTIONS = [
     question: 'Equipment use must be booked in the ICT-Lab software to avoid conflicts and so the research engineers can monitor maintenance.',
     options: { a: 'True', b: 'False' },
     correct: 'a',
+  },
+  {
+    id: 'ghs-classification',
+    type: 'single',
+    question: 'Which of the following is the primary chemical category system used to standardize chemical safety worldwide?',
+    options: {
+      a: 'EPA classification system',
+      b: 'Globally harmonized system of classification and labeling (GHS)',
+      c: 'ICT global system',
+      d: 'All of the above',
+    },
+    correct: 'b',
+    pinLast: 'd',
   },
   {
     id: 'item-breaks',
