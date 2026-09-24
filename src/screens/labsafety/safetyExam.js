@@ -79,20 +79,40 @@ export const SAFETY_EXAM_QUESTIONS = [
   },
 ]
 
-// Score a set of answers. Returns everything the UI and the DB row need, so
-// the pass rule lives in exactly one place.
-export function scoreSafetyExam(answers) {
-  const total = SAFETY_EXAM_QUESTIONS.length
-  const score = SAFETY_EXAM_QUESTIONS.reduce(
-    (n, q) => n + (answers[q.id] === q.correct ? 1 : 0), 0)
-  return {
-    score,
-    total,
-    // Ceil, so the threshold can never be met by rounding down a near miss.
-    needed: Math.ceil(total * SAFETY_EXAM_PASS_RATIO),
-    passed: score >= Math.ceil(total * SAFETY_EXAM_PASS_RATIO),
-    percent: Math.round((score / total) * 100),
+// Is one answer right? Handles all three question shapes:
+//   single / boolean — one key
+//   multi            — the EXACT set, no partial credit. "Select all that
+//                      apply" with credit for a subset would pass someone who
+//                      ticked one of two engineering controls and missed the
+//                      other, which is the part that matters.
+export function isCorrect(q, given) {
+  if (Array.isArray(q.correct)) {
+    const got = Array.isArray(given) ? given : []
+    return got.length === q.correct.length && q.correct.every(k => got.includes(k))
   }
+  return given === q.correct
+}
+
+// Has this question been answered at all? `[]` is truthy, so a multi-select
+// with nothing ticked would otherwise count as answered and let someone submit
+// a blank one.
+export function isAnswered(q, given) {
+  return q.type === 'multi' ? Array.isArray(given) && given.length > 0 : !!given
+}
+
+// Score a bank of questions. Returns everything the UI and the DB row need, so
+// the pass rule lives in exactly one place.
+export function scoreQuiz(questions, answers, passRatio = SAFETY_EXAM_PASS_RATIO) {
+  const total = questions.length
+  const score = questions.reduce((n, q) => n + (isCorrect(q, answers[q.id]) ? 1 : 0), 0)
+  // Ceil, so the threshold can never be met by rounding down a near miss.
+  const needed = Math.ceil(total * passRatio)
+  return { score, total, needed, passed: score >= needed, percent: Math.round((score / total) * 100) }
+}
+
+// Step 1's bank, kept as its own export so its call sites do not change.
+export function scoreSafetyExam(answers) {
+  return scoreQuiz(SAFETY_EXAM_QUESTIONS, answers)
 }
 
 // ── Per-user option order ───────────────────────────────────────────────────
@@ -143,14 +163,24 @@ export function academicYear(now = new Date()) {
 // The order changes per user, per attempt, and per academic year. It is stable
 // WITHIN an attempt: callers pass a fixed `attempt`, and the panel memoises on
 // it, so options never move under a click that is choosing one.
+// Works for any option count — four, five, or the two of a True/False. The
+// shuffle applies there too: with two options it only halves the benefit of
+// sharing positions, but it costs nothing and the rule stays one rule.
 export function optionOrderFor(question, userId, attempt = 0, year = academicYear()) {
   const keys = Object.keys(question.options)
   if (!userId) return keys
+
+  // "All of the above" has to stay at the bottom. Shuffled into first place it
+  // refers to nothing, and a question that reads as nonsense is a worse
+  // problem than a memorised option order.
+  const pinned = question.pinLast ? [question.pinLast].flat() : []
+  const movable = keys.filter(k => !pinned.includes(k))
+
   const next = rng(hash32(`${userId}:${question.id}:${year}:${attempt}`))
-  const out = [...keys]
+  const out = [...movable]
   for (let i = out.length - 1; i > 0; i--) {         // Fisher-Yates
     const j = Math.floor(next() * (i + 1))
     ;[out[i], out[j]] = [out[j], out[i]]
   }
-  return out
+  return [...out, ...pinned]
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { S3Provider } from '../../lib/storage/S3Provider'
-import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, optionOrderFor } from './safetyExam'
+import { SAFETY_EXAM_QUESTIONS, SAFETY_EXAM_PASS_RATIO, scoreSafetyExam, scoreQuiz, isCorrect, optionOrderFor } from './safetyExam'
+import { STEP3_QUIZ_QUESTIONS, STEP3_QUIZ_PASS_RATIO } from './step3Quiz'
 import { requiredSafetySteps } from './safetySteps'
 import { useAppStore } from '../../store/useAppStore'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -1421,15 +1422,20 @@ function Step3VideosContent({ user, isManager }) {
   const userId = user?.id
   const [watched, setWatched] = useState({})
   const [watchedList, setWatchedList] = useState([])
-  const [confirmed, setConfirmed] = useState(false)
+  const [answers, setAnswers] = useState({})
+  const [result, setResult] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const [retakeSeq, setRetakeSeq] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!userId) return
-    sb.from('lab_safety_progress').select('completed, videos_watched')
+    sb.from('lab_safety_progress')
+      .select('completed, submitted_at, videos_watched, exam_passed, exam_score, exam_total, exam_attempts')
       .eq('user_id', userId).eq('step_number', 3).maybeSingle()
       .then(({ data }) => {
+        setSaved(data || null)
         const list = Array.isArray(data?.videos_watched) ? data.videos_watched : []
         setWatchedList(list)
         // An approved step means they watched it; don't make them sit through
@@ -1438,7 +1444,6 @@ function Step3VideosContent({ user, isManager }) {
           ? STEP3_VIDEOS.map(v => v.key)
           : list
         setWatched(Object.fromEntries(done.map(k => [k, true])))
-        if (data?.completed) setConfirmed(true)
       })
   }, [userId])
 
@@ -1460,31 +1465,51 @@ function Step3VideosContent({ user, isManager }) {
     setWatchedList(next)
   }
 
-  async function handleConfirm(e) {
-    if (saving) return
-    if (!e.target.checked) { setConfirmed(false); return }
+  const answeredAll = STEP3_QUIZ_QUESTIONS.every(q => isAnswered(q, answers[q.id]))
+
+  async function submitQuiz() {
+    if (saving || !answeredAll) return
     setError(null)
     setSaving(true)
+    const r = scoreQuiz(STEP3_QUIZ_QUESTIONS, answers, STEP3_QUIZ_PASS_RATIO)
+    setResult(r)
+
     const orgId = session?.organizationId || null
-    const { error: err } = await sb.from('lab_safety_progress').upsert({
+    const attempts = (saved?.exam_attempts || 0) + 1
+    // submitted_at only on a pass: it is what puts them in the manager's
+    // approval queue, and a failed attempt is not a submission.
+    const patch = {
       user_id: userId,
       step_number: 3,
-      completed: true,
-      submitted_at: new Date().toISOString(),
       organization_id: orgId,
-    }, { onConflict: 'user_id,step_number' })
+      exam_score: r.score,
+      exam_total: r.total,
+      exam_passed: r.passed,
+      exam_attempts: attempts,
+      exam_at: new Date().toISOString(),
+      ...(r.passed ? { submitted_at: new Date().toISOString() } : {}),
+    }
+    const { error: err } = await sb.from('lab_safety_progress')
+      .upsert(patch, { onConflict: 'user_id,step_number' })
     if (err) {
-      console.error('Step 3 confirm error:', err)
-      setError('Failed to save your confirmation. Please try again.')
+      console.error('Step 3 quiz save error:', err)
+      setError('Your answers were scored but could not be saved. Please try again.')
       setSaving(false)
       return
     }
-    setConfirmed(true)
-    if (orgId) {
+    setSaved(s => ({ ...(s || {}), ...patch }))
+
+    if (r.passed && orgId) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
-      notifyManagersOfSafetySubmission(orgId, fullName, 'Lab Safety videos confirmation (Step 3)')
+      notifyManagersOfSafetySubmission(orgId, fullName, 'the Lab User Quiz (Step 3)')
     }
     setSaving(false)
+  }
+
+  function retakeQuiz() {
+    setAnswers({})
+    setResult(null)
+    setRetakeSeq(n => n + 1)
   }
 
   return (
@@ -1517,29 +1542,31 @@ function Step3VideosContent({ user, isManager }) {
         </div>
       )}
 
+      {/* The quiz replaces the old "I watched both" checkbox, mirroring Step 1:
+          ticking a box proved nothing, and a knowledge check is the thing the
+          approval is actually for. */}
       {!isManager && (
-        <div style={{
-          background: confirmed ? '#E1F5EE' : allWatched ? 'var(--surface2)' : '#f5f5f5',
-          border: `1px solid ${confirmed ? '#9FE1CB' : 'var(--border)'}`,
-          borderRadius: 10, padding: 16, opacity: allWatched ? 1 : 0.5,
-        }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: allWatched ? 'pointer' : 'not-allowed', fontSize: 14 }}>
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={allWatched ? handleConfirm : undefined}
-              disabled={!allWatched || saving || confirmed}
-              style={{ width: 16, height: 16, accentColor: '#1D9E75', cursor: allWatched ? 'pointer' : 'not-allowed' }}
-            />
-            <span>I have watched both lab safety videos in full.</span>
-          </label>
-          {!allWatched && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>
-              Watch both videos to unlock this confirmation.
-            </div>
-          )}
-          {error && <div style={{ marginTop: 8, fontSize: 12, color: '#c84b2f' }}>{error}</div>}
-        </div>
+        <SafetyExamPanel
+          questions={STEP3_QUIZ_QUESTIONS}
+          passRatio={STEP3_QUIZ_PASS_RATIO}
+          title="Lab User Quiz"
+          userId={userId}
+          attempt={(saved?.exam_attempts || 0) + retakeSeq}
+          locked={!allWatched}
+          lockedMessage="The quiz unlocks after you have watched both videos in full."
+          answers={answers}
+          setAnswers={setAnswers}
+          answeredAll={answeredAll}
+          result={result}
+          saved={saved}
+          alreadyPassed={!!(saved?.exam_passed || saved?.completed)}
+          approved={!!saved?.completed}
+          stepLabel="Step 3"
+          saving={saving}
+          error={error}
+          onSubmit={submitQuiz}
+          onRetake={retakeQuiz}
+        />
       )}
     </div>
   )
@@ -1673,7 +1700,10 @@ function Step4VideoContent({ user, isManager }) {
 // The knowledge check itself. One question on screen at a time: the whole test
 // visible at once invites scanning ahead, and with a 5-of-5 pass rule a wall of
 // questions reads as more daunting than it is.
-function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, answeredAll, result, saved,
+function SafetyExamPanel({ questions = SAFETY_EXAM_QUESTIONS, passRatio = SAFETY_EXAM_PASS_RATIO,
+                           title = 'Building Safety knowledge check',
+                           lockedMessage = 'The knowledge check unlocks after you have watched the full video.',
+                           stepLabel = 'Step 1', userId, attempt = 0, locked, answers, setAnswers, answeredAll, result, saved,
                            alreadyPassed, approved, saving, error, onSubmit, onRetake }) {
   const [current, setCurrent] = useState(0)
 
@@ -1681,10 +1711,10 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
   // re-derive the academic year on every keystroke, and an attempt spanning
   // midnight on 1 August would reorder the options mid-question.
   const orders = useMemo(() => Object.fromEntries(
-    SAFETY_EXAM_QUESTIONS.map(q => [q.id, optionOrderFor(q, userId, attempt)])
-  ), [userId, attempt])
-  const total = SAFETY_EXAM_QUESTIONS.length
-  const needed = Math.ceil(total * SAFETY_EXAM_PASS_RATIO)
+    questions.map(q => [q.id, optionOrderFor(q, userId, attempt)])
+  ), [questions, userId, attempt])
+  const total = questions.length
+  const needed = Math.ceil(total * passRatio)
 
   // Start a retake at the beginning rather than wherever the last one ended.
   useEffect(() => { if (!result) setCurrent(0) }, [result])
@@ -1697,7 +1727,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
     return (
       <div style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 10, padding: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: '#085041', marginBottom: 6 }}>
-          {approved ? '✓ Step 1 approved by your lab manager' : '✓ Knowledge check passed — awaiting lab manager approval'}
+          {approved ? `✓ ${stepLabel} approved by your lab manager` : '✓ Passed — awaiting lab manager approval'}
         </div>
         <div style={{ fontSize: 13, color: '#085041', lineHeight: 1.6 }}>
           {approved
@@ -1716,7 +1746,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
   if (locked) {
     return (
       <div style={{ background: '#f5f5f5', border: '1px solid var(--border)', borderRadius: 10, padding: 16, opacity: 0.6, fontSize: 13, color: 'var(--text3)' }}>
-        The knowledge check unlocks after you have watched the full video.
+        {lockedMessage}
       </div>
     )
   }
@@ -1729,7 +1759,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
   // close. What it does give is which topics were missed, so the retake is
   // directed rather than blind.
   if (result) {
-    const missed = SAFETY_EXAM_QUESTIONS.filter(q => answers[q.id] !== q.correct)
+    const missed = questions.filter(q => !isCorrect(q, answers[q.id]))
     return (
       <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
         <div style={{ background: '#fdf0ed', border: '1px solid #f0c9bd', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
@@ -1761,14 +1791,14 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
   }
 
   // ── taking it: one question at a time ────────────────────────────────────
-  const q = SAFETY_EXAM_QUESTIONS[current]
+  const q = questions[current]
   const picked = answers[q.id]
   const isLast = current === total - 1
 
   return (
     <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Building Safety knowledge check</div>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
         <div style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text3)' }}>
           {current + 1} / {total}
         </div>
@@ -1779,7 +1809,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
 
       {/* Progress pips: how far along, without showing what is coming. */}
       <div style={{ display: 'flex', gap: 5, marginBottom: 18 }}>
-        {SAFETY_EXAM_QUESTIONS.map((qq, n) => (
+        {questions.map((qq, n) => (
           <div key={qq.id} style={{
             height: 4, flex: 1, borderRadius: 2,
             background: n < current ? 'var(--accent)' : n === current ? 'var(--accent)' : 'var(--border)',
@@ -1788,14 +1818,19 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
         ))}
       </div>
 
-      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 14, lineHeight: 1.55 }}>{q.question}</div>
+      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: q.type === 'multi' ? 6 : 14, lineHeight: 1.55 }}>{q.question}</div>
+      {q.type === 'multi' && (
+        <div style={{ fontSize: 12.5, color: 'var(--accent)', fontWeight: 600, marginBottom: 12 }}>
+          Select all that apply — every correct option must be ticked.
+        </div>
+      )}
 
       {/* Displayed position is this user's shuffle; `key` is the true option
           so the stored answer means the same thing for everyone. */}
       {orders[q.id].map((key, pos) => {
         const text = q.options[key]
         const letter = String.fromCharCode(97 + pos)   // a, b, c, d by position
-        const isPicked = picked === key
+        const isPicked = q.type === 'multi' ? (picked || []).includes(key) : picked === key
         return (
           <label key={key} style={{
             display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 13px', marginBottom: 7,
@@ -1804,11 +1839,15 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
             borderRadius: 8, cursor: saving ? 'default' : 'pointer', fontSize: 13.5, lineHeight: 1.5,
           }}>
             <input
-              type="radio"
+              type={q.type === 'multi' ? 'checkbox' : 'radio'}
               name={q.id}
               checked={isPicked}
               disabled={saving}
-              onChange={() => setAnswers(a => ({ ...a, [q.id]: key }))}
+              onChange={() => setAnswers(a => q.type === 'multi'
+                ? { ...a, [q.id]: (a[q.id] || []).includes(key)
+                    ? (a[q.id] || []).filter(x => x !== key)
+                    : [...(a[q.id] || []), key] }
+                : { ...a, [q.id]: key })}
               // index.css sets a global `input { width: 100% }`. Without an
               // explicit width the radio fills the whole row, centring its
               // circle and pushing the option text to the far right.
@@ -1826,7 +1865,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
           <button className="btn btn-sm" onClick={() => setCurrent(c => c - 1)} disabled={saving}>← Back</button>
         )}
         <div style={{ marginLeft: 'auto' }}>
-          {!picked ? (
+          {!(q.type === 'multi' ? (picked || []).length : picked) ? (
             <span style={{ fontSize: 12.5, color: 'var(--text3)', fontStyle: 'italic' }}>Choose an answer to continue</span>
           ) : isLast ? (
             <button className="btn btn-primary" onClick={onSubmit} disabled={!answeredAll || saving}>
@@ -1839,7 +1878,7 @@ function SafetyExamPanel({ userId, attempt = 0, locked, answers, setAnswers, ans
           )}
         </div>
       </div>
-      {isLast && picked && !answeredAll && (
+      {isLast && !answeredAll && (
         <div style={{ marginTop: 8, fontSize: 12.5, color: '#c84b2f' }}>
           Some earlier questions are unanswered — use Back to finish them.
         </div>
@@ -2023,14 +2062,14 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
                 numeric score stays with the lab user: a manager does not need
                 to know whether someone scraped through or aced it to approve,
                 and showing it invites judging the mark rather than the result. */}
-            {isLabManager && s.number === 1 && (
+            {isLabManager && (s.number === 1 || s.number === 3) && (
               <div style={{
                 marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 13, lineHeight: 1.6,
                 background: stepRow?.exam_passed ? '#E1F5EE' : 'var(--surface2)',
                 border: `1px solid ${stepRow?.exam_passed ? '#9FE1CB' : 'var(--border)'}`,
                 color: stepRow?.exam_passed ? '#085041' : 'var(--text2)',
               }}>
-                <strong>Knowledge check:</strong>{' '}
+                <strong>{s.number === 1 ? 'Knowledge check' : 'Lab User Quiz'}:</strong>{' '}
                 {stepRow?.exam_passed
                   ? 'Passed'
                   : stepRow?.exam_attempts
