@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
+import { ROLE_LABELS, ROLE_ORDER, activeRolesForEmail, syncUserRoles, describeRoleChange } from '../../lib/userRoles'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import { ALL_MODULES_META, PINNED_MODULES, LAB_MANAGER_PINNED_MODULES } from '../../components/DashboardIconPicker'
@@ -578,6 +579,16 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
   const [email, setEmail]         = useState(user?.email || '')
   const [password, setPassword]   = useState('')
   const [role, setRole]         = useState(user?.role || defaultRole || 'user')
+  // Editing works on the SET of roles this email holds; creating still picks
+  // one, because there is no email to attach further rows to until it exists.
+  const [roles, setRoles]       = useState(null)   // null = still loading
+
+  useEffect(() => {
+    if (!user?.email) { setRoles(null); return }
+    activeRolesForEmail(user.email).then(({ roles: r }) => {
+      setRoles(r.length ? r : [user.role])
+    })
+  }, [user?.email, user?.role])
   const [orgId, setOrgId]       = useState(user?.organization_id || defaultOrgId || '')
   const [copied, setCopied]     = useState(false)
   const [savedCreds, setSavedCreds] = useState(null)
@@ -655,7 +666,21 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       if (password) upd.must_change_password = true
       const { error } = await sb.from('users').update(upd).eq('id', user.id)
       if (error) { toast('Error updating user: ' + error.message); return }
-      if (role === 'lab_user') await saveIconPrefs(user.id)
+
+      // Roles live in rows, so they are synced separately from this row's
+      // fields — adding one inserts, removing one deactivates.
+      if (roles) {
+        const res = await syncUserRoles({
+          email: upd.email || user.email,
+          roles,
+          template: { ...user, ...upd },
+          orgId: orgId || user.organization_id,
+        })
+        if (res.error) { toast(res.error); return }
+        if (res.added?.length || res.removed?.length) toast(`Roles: ${describeRoleChange(res)}`)
+      }
+
+      if (roles?.includes('lab_user') || role === 'lab_user') await saveIconPrefs(user.id)
       if (password) toast('User updated. Password will be required to change on next login.')
       else toast('User updated.')
       onSaved(); onClose()
@@ -753,12 +778,40 @@ function UserModal({ user, orgs, defaultOrgId, isSuperAdmin, defaultRole, onClos
       )}
 
       <div className="grid-2">
-        <div className="field"><label>Role</label>
-          <select value={role} onChange={e => setRole(e.target.value)}>
-            <option value="user">Lab Manager</option>
-            <option value="admin">Org Admin</option>
-            <option value="lab_user">Lab User</option>
-          </select>
+        <div className="field"><label>Role{user ? 's' : ''}</label>
+          {user ? (
+            roles === null ? (
+              <div style={{ fontSize: 12.5, color: 'var(--text3)', padding: '8px 0' }}>Loading roles…</div>
+            ) : (
+              <>
+                <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '6px 12px' }}>
+                  {ROLE_ORDER.map(r => (
+                    <div key={r} onClick={() => setRoles(cur =>
+                        cur.includes(r) ? cur.filter(x => x !== r) : [...cur, r])}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none', padding: '4px 0' }}>
+                      <input type="checkbox" readOnly checked={roles.includes(r)} style={{ width: 'auto', flexShrink: 0 }} />
+                      <span>{ROLE_LABELS[r]}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 4, lineHeight: 1.5 }}>
+                  Tick every role this person should have. One password — they choose a
+                  role when they sign in.
+                </div>
+                {/* Unticking everything would leave no active row: they would
+                    vanish from every list and be unable to sign in. */}
+                {roles.length === 0 && (
+                  <div style={{ fontSize: 12, color: '#c84b2f', marginTop: 4 }}>Select at least one role.</div>
+                )}
+              </>
+            )
+          ) : (
+            <select value={role} onChange={e => setRole(e.target.value)}>
+              <option value="user">Lab Manager</option>
+              <option value="admin">Org Admin</option>
+              <option value="lab_user">Lab User</option>
+            </select>
+          )}
         </div>
         {isSuperAdmin && (
           <div className="field"><label>Organization <span style={{ color: '#c84b2f' }}>*</span></label>
