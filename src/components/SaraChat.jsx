@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { useAppStore } from '../store/useAppStore'
+import { reportIssue } from '../lib/reportIssue'
 
 const FAQ = [
   {
@@ -111,6 +113,14 @@ function findAnswer(input) {
 }
 
 export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E75' }) {
+  const { session } = useAppStore()
+  // Reporting a problem is a different shape from asking a question: it takes
+  // a description and optionally a screenshot, and it ends in something being
+  // sent rather than answered. Its own mode inside the panel, not a chat turn.
+  const [reporting, setReporting]   = useState(false)
+  const [reportText, setReportText] = useState('')
+  const [reportFile, setReportFile] = useState(null)
+  const [sending, setSending]       = useState(false)
   const ACCENT = color
   const [open, setOpen]         = useState(false)
   const [messages, setMessages] = useState([])
@@ -156,6 +166,35 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
         }])
       }
     }, 650)
+  }
+
+  async function submitReport() {
+    if (!reportText.trim() && !reportFile) return
+    setSending(true)
+    const res = await reportIssue({
+      session,
+      message: reportText.trim() || '(screenshot only — no description given)',
+      file: reportFile,
+      screen: useAppStore.getState?.().screen || null,
+    })
+    setSending(false)
+    setReporting(false); setReportText(''); setReportFile(null)
+
+    if (!res.ok) {
+      setMessages(prev => [...prev, { from: 'sara',
+        text: `I couldn't send that — ${res.error}.\nPlease try again, or use Contact support below.` }])
+      return
+    }
+    // Say plainly if part of it failed. "Sent!" when the screenshot silently
+    // did not upload leaves them believing we can see something we cannot.
+    const caveat = res.problems?.length
+      ? `\n\nOne thing to note: ${res.problems.join(', ')}. Your report itself was saved.`
+      : ''
+    setMessages(prev => [...prev, { from: 'sara',
+      text: `Thanks — your report has been sent to the lab administrators ✅${caveat}`
+          + `\n\nThey have been notified by email and in the app, so someone should pick it up shortly. `
+          + `You can carry on working and check back later — there is nothing else you need to do.`,
+      followups: STARTERS.slice(0, 3) }])
   }
 
   function handleChip(id) {
@@ -249,6 +288,42 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
             )}
           </div>
 
+          {reporting ? (
+            <div style={{ padding: 12, borderTop: '1px solid #f3f4f6', flexShrink: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Report a problem</div>
+              <textarea value={reportText} onChange={e => setReportText(e.target.value)} rows={3}
+                placeholder="What went wrong? What were you trying to do?"
+                style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '8px 10px',
+                         fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }} />
+              <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
+                <label style={{ cursor: 'pointer', color: ACCENT, fontWeight: 600 }}>
+                  📎 Attach a screenshot
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => setReportFile(e.target.files?.[0] || null)} />
+                </label>
+                {reportFile && <span style={{ marginLeft: 8 }}>{reportFile.name}</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button onClick={submitReport} disabled={sending || (!reportText.trim() && !reportFile)}
+                  style={{ flex: 1, border: 'none', borderRadius: 20, padding: '8px 14px', fontSize: 13, fontWeight: 700,
+                           color: '#fff', cursor: sending ? 'default' : 'pointer',
+                           background: (reportText.trim() || reportFile) && !sending ? ACCENT : '#e5e7eb' }}>
+                  {sending ? 'Sending…' : 'Send report'}
+                </button>
+                <button onClick={() => { setReporting(false); setReportText(''); setReportFile(null) }}
+                  style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 20,
+                           padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          ) : (<>
+          <div style={{ padding: '8px 12px 0', flexShrink: 0 }}>
+            <button onClick={() => setReporting(true)}
+              style={{ border: `1px solid ${ACCENT}`, background: '#fff', color: ACCENT, borderRadius: 20,
+                       padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              ⚠ Report a problem
+            </button>
+          </div>
+
           {/* Input row */}
           <div style={{ padding: '10px 12px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
             <input
@@ -267,6 +342,7 @@ export default function SaraChat({ bottomOffset = 24, onContact, color = '#1D9E7
               style={{ width: 36, height: 36, borderRadius: '50%', background: input.trim() ? ACCENT : '#e5e7eb', border: 'none', color: input.trim() ? '#fff' : '#9ca3af', cursor: input.trim() ? 'pointer' : 'default', fontSize: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
             >↑</button>
           </div>
+          </>)}
 
           {/* Contact footer */}
           {onContact && (
