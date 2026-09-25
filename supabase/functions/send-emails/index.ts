@@ -14,7 +14,9 @@
 //
 // Required secrets (Edge Functions → Manage secrets):
 //   RESEND_API_KEY   your NEW Resend key (never the leaked one)
-//   RESEND_FROM      verified sender, e.g.  LabHive <noreply@labhive.app>
+//   RESEND_FROM      verified sender, e.g.  ICT-Lab <noreply@labhive.app>
+//                    MUST be a domain verified in Resend. ictlab.app is not
+//                    registered and will be rejected.
 // (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
 //
 // Invoked every minute by a Supabase Cron job (see email_queue_setup.sql).
@@ -28,7 +30,14 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
-const RESEND_FROM = Deno.env.get("RESEND_FROM") ?? "ICT-Lab <noreply@ictlab.app>";
+// labhive.app, not ictlab.app. ictlab.app is not a registered domain — it has
+// no nameservers, so Resend can never verify it and every send was rejected
+// with "Domain not verified". labhive.app is verified on the same account and
+// is what actually serves this app (ictlab.labhive.app).
+//
+// The display name still reads ICT-Lab, so recipients see the right sender;
+// only the domain changes.
+const RESEND_FROM = Deno.env.get("RESEND_FROM") ?? "ICT-Lab <noreply@labhive.app>";
 const BATCH = 50;        // max emails per run
 const MAX_ATTEMPTS = 5;  // give up after this many failures per row
 
