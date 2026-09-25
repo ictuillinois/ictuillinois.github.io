@@ -36,7 +36,7 @@ async function notifyManagersOfSafetySubmission(orgId, uploaderName, stepLabel) 
         if (prefs?.email_training_submitted === true) {
           const toEmail = m.phone || m.email
           if (toEmail) {
-            const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'Go to Safety tab →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile' })
+            const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'Go to Safety tab →', ctaUrl: 'https://ictlab.labhive.app/?screen=training', prefsUrl: 'https://ictlab.labhive.app/?screen=profile' })
             const { error: emailErr } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: m.id, type: 'safety_step_submitted' })
             if (!emailErr) fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
             else console.warn('[notif] email queue insert failed:', emailErr.message)

@@ -50,8 +50,8 @@ async function announceGrant(targetUser, addedKeys) {
       const htmlBody = buildEmailHtml({
         title, body,
         ctaLabel: 'Open ICT-Lab →',
-        ctaUrl: 'https://ictlab.app/?screen=profile',
-        prefsUrl: 'https://ictlab.app/?screen=profile',
+        ctaUrl: 'https://ictlab.labhive.app/?screen=profile',
+        prefsUrl: 'https://ictlab.labhive.app/?screen=profile',
         orgContact,
       })
       const { error } = await sb.from('email_notifications_queue')

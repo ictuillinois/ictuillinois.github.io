@@ -72,8 +72,8 @@ export default function CustomerServiceModal({ onClose }) {
         title: emailTitle,
         body: emailBody,
         ctaLabel: 'View in Customer Service Panel →',
-        ctaUrl: 'https://ictlab.app/?screen=dashboard',
-        prefsUrl: 'https://ictlab.app/?screen=dashboard',
+        ctaUrl: 'https://ictlab.labhive.app/?screen=dashboard',
+        prefsUrl: 'https://ictlab.labhive.app/?screen=dashboard',
       })
       await sb.from('email_notifications_queue').insert({
         to_email: 'ictengineers@mx.uillinois.edu',

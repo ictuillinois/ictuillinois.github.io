@@ -17,7 +17,7 @@ import { buildEmailHtml } from './emailTemplate'
 // queue must not discard the report itself.
 
 const SUPPORT_EMAIL = 'ictengineers@mx.uillinois.edu'
-const APP_URL       = 'https://ictlab.app'
+const APP_URL       = 'https://ictlab.labhive.app'
 
 export async function reportIssue({ session, message, file, screen }) {
   const problems = []

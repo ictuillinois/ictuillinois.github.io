@@ -30,7 +30,7 @@ async function sendMessageEmail(userId, senderName, messageBody) {
   }
   const title = `New message from ${senderName}`
   const body = messageBody.slice(0, 200) + (messageBody.length > 200 ? '…' : '')
-  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Message in ICT-Lab →', ctaUrl: 'https://ictlab.app/?screen=remessages', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
+  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Message in ICT-Lab →', ctaUrl: 'https://ictlab.labhive.app/?screen=remessages', prefsUrl: 'https://ictlab.labhive.app/?screen=profile', orgContact })
   await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject: title, body, html_body: htmlBody, user_id: userId, type: 'message_reply' })
 }
 

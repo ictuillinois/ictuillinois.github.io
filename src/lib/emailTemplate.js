@@ -1,7 +1,7 @@
-const LOGO_URL = 'https://ictlab.app/ict-logo.png'
-const APP_URL  = 'https://ictlab.app/'
+const LOGO_URL = 'https://ictlab.labhive.app/ict-logo.png'
+const APP_URL  = 'https://ictlab.labhive.app/'
 
-export function buildEmailHtml({ title, body, ctaLabel = 'View in ICT-Lab →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null, credentials = null }) {
+export function buildEmailHtml({ title, body, bodyHtml = null, ctaLabel = 'View in ICT-Lab →', ctaUrl = APP_URL, prefsUrl = APP_URL, orgContact = null, credentials = null }) {
   const credentialsBlock = credentials ? `
         <tr>
           <td style="padding:0 36px 20px;">
@@ -60,7 +60,12 @@ export function buildEmailHtml({ title, body, ctaLabel = 'View in ICT-Lab →', 
         <tr>
           <td style="padding:32px 36px 24px;">
             <h2 style="margin:0 0 14px;font-size:17px;font-weight:700;color:#111827;line-height:1.4;">${escHtml(title)}</h2>
-            <p style="margin:0 0 28px;font-size:14px;color:#4B5563;line-height:1.7;">${escHtml(body)}</p>
+            ${bodyHtml
+              // bodyHtml is inserted RAW, so it is only ever passed content we
+              // author. `body` stays escaped and is what the plain-text part
+              // uses, so a mail client without HTML still reads correctly.
+              ? bodyHtml
+              : `<p style="margin:0 0 28px;font-size:14px;color:#4B5563;line-height:1.7;">${escHtml(body)}</p>`}
           </td>
         </tr>
 

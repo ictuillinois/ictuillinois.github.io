@@ -15,7 +15,7 @@ async function sendTrainingEmail(userId, prefKey, subject, title, body) {
     const { data: org } = await sb.from('organizations').select('contact_name, contact_email').eq('id', user.organization_id).maybeSingle()
     orgContact = org
   }
-  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training in ICT-Lab →', ctaUrl: 'https://ictlab.app/?screen=training', prefsUrl: 'https://ictlab.app/?screen=profile', orgContact })
+  const htmlBody = buildEmailHtml({ title, body, ctaLabel: 'View Training in ICT-Lab →', ctaUrl: 'https://ictlab.labhive.app/?screen=training', prefsUrl: 'https://ictlab.labhive.app/?screen=profile', orgContact })
   const { error } = await sb.from('email_notifications_queue').insert({ to_email: toEmail, subject, body, html_body: htmlBody, user_id: userId, type: prefKey })
   if (error) console.warn('Training email queue failed:', error.message)
 }

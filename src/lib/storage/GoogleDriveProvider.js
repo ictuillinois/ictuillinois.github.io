@@ -5,7 +5,11 @@
 import { GOOGLE_CLIENT_ID } from './config'
 import { sb } from '../supabase'
 
-const REDIRECT_URI = 'https://ictlab.app/oauth-callback'
+// Must EXACTLY match an Authorized redirect URI registered in the provider's
+// console, or the flow fails with redirect_uri_mismatch. Changed from
+// ictlab.app — a domain with no nameservers, so the callback could never have
+// landed anywhere. Adding this URI in the console is a separate step.
+const REDIRECT_URI = 'https://ictlab.labhive.app/oauth-callback'
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const TOKEN_KEY = 'ictlab_gdrive_token'
 const FOLDER_KEY = 'ictlab_gdrive_folder_id'

@@ -5,7 +5,11 @@
 
 import { ONEDRIVE_CLIENT_ID } from './config'
 
-const REDIRECT_URI = 'https://ictlab.app/oauth-callback'
+// Must EXACTLY match an Authorized redirect URI registered in the provider's
+// console, or the flow fails with redirect_uri_mismatch. Changed from
+// ictlab.app — a domain with no nameservers, so the callback could never have
+// landed anywhere. Adding this URI in the console is a separate step.
+const REDIRECT_URI = 'https://ictlab.labhive.app/oauth-callback'
 const SCOPE = 'Files.ReadWrite.AppFolder offline_access'
 const TOKEN_KEY = 'ictlab_onedrive_token'
 const VERIFIER_KEY = 'ictlab_onedrive_verifier'

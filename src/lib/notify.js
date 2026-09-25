@@ -29,8 +29,8 @@ export async function sendTaskNotification(userId, type, title, body, taskId = n
     const htmlBody = buildEmailHtml({
       title, body,
       ctaLabel: 'View Task in ICT-Lab →',
-      ctaUrl: 'https://ictlab.app/?screen=pm',
-      prefsUrl: 'https://ictlab.app/?screen=profile',
+      ctaUrl: 'https://ictlab.labhive.app/?screen=pm',
+      prefsUrl: 'https://ictlab.labhive.app/?screen=profile',
       orgContact,
     })
     const { error } = await sb.from('email_notifications_queue')
