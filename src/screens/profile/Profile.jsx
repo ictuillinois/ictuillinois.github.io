@@ -5,6 +5,7 @@ import { passwordError } from '../../lib/passwordPolicy'
 import { ROLE_LABELS, ROLE_ORDER, syncUserRoles, describeRoleChange } from '../../lib/userRoles'
 import { SAFETY_STEPS, requiredSafetySteps } from '../labsafety/safetySteps'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
+import { applyDefaultIcons } from '../../lib/defaultIcons'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
@@ -1491,7 +1492,6 @@ export function LabUsersPanel({ toast, session }) {
   const [showModal, setShowModal] = useState(false)
   const [editLabUser, setEditLabUser] = useState(null)
   const [iconLabUser, setIconLabUser] = useState(null)
-  const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
   const [importing, setImporting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -1575,7 +1575,11 @@ export function LabUsersPanel({ toast, session }) {
       const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
       queueWelcomeEmail(sb, { name: dispName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password })
       setShowModal(false); setEditLabUser(null)
-      setPendingIconSetup({ userId: newUser.id, displayName: dispName })
+      // The organisation's default icons are applied straight away. Asking
+      // here pre-ticked the whole pool and wanted the same answer every time,
+      // which made the org-level default look like it did nothing. Widening
+      // one person's icons is a separate job, in Lab Management.
+      applyDefaultIcons(newUser.id, session?.organizationId, 'lab_user')
     }
   }
 
@@ -1688,7 +1692,6 @@ export function LabUsersPanel({ toast, session }) {
       }
       {showModal && <LabUserModal labUser={editLabUser} session={session} onClose={() => { setShowModal(false); setEditLabUser(null) }} onSave={saveLabUser} />}
       {iconLabUser && <LabUserIconManager labUser={iconLabUser} orgId={session?.organizationId} onClose={(saved) => { setIconLabUser(null); if (saved) toast(`Icons updated for ${iconLabUser.email || iconLabUser.name} ✓`) }} />}
-      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="labUser" onDone={() => { setPendingIconSetup(null); load(); toast('Lab user created & icons saved ✓') }} />}
       {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: sLastName(deleteTarget) || sFirstName(deleteTarget) || 'this user' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteLabUser} deleting={deleting} />}
     </div>
   )
@@ -1911,7 +1914,6 @@ function LabManagerListPanel({ toast, session }) {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editLabManager, setEditLabManager] = useState(null)
-  const [pendingIconSetup, setPendingIconSetup] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [accessTarget, setAccessTarget] = useState(null)
@@ -1937,7 +1939,7 @@ function LabManagerListPanel({ toast, session }) {
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
     if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditLabManager(null); load(); toast('Lab manager saved ✓') }
-    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditLabManager(null); setPendingIconSetup({ userId: newUser.id, displayName: fullName }) }
+    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditLabManager(null); applyDefaultIcons(newUser.id, session?.organizationId, 'user') }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function deleteLabManager(id) {
@@ -2031,7 +2033,6 @@ function LabManagerListPanel({ toast, session }) {
       }
       {showModal && <LabManagerModal labManagers={editLabManager} onClose={() => { setShowModal(false); setEditLabManager(null) }} onSave={saveLabManager} onRoleChange={setMemberRole} onSaveRoles={saveMemberRoles} />}
       {accessTarget && <AccessModal user={accessTarget} toast={toast} session={session} onClose={() => setAccessTarget(null)} />}
-      {pendingIconSetup && <IconSetupModal userId={pendingIconSetup.userId} displayName={pendingIconSetup.displayName} organizationId={session?.organizationId} userRole="user" onDone={() => { setPendingIconSetup(null); load(); toast('Lab manager created & icons saved ✓') }} />}
       {deleteTarget && <DeleteUserModal user={{ id: deleteTarget.id, name: deleteTarget.name || 'this member' }} onClose={() => setDeleteTarget(null)} onConfirm={deleteLabManager} deleting={deleting} />}
     </div>
   )
