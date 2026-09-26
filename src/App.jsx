@@ -28,6 +28,7 @@ class ScreenErrorBoundary extends Component {
   }
 }
 import Login from './screens/auth/Login'
+import ResetPassword from './screens/auth/ResetPassword'
 import AdminLogin from './screens/auth/AdminLogin'
 import Layout from './components/Layout'
 import Toast from './components/Toast'
@@ -77,6 +78,11 @@ window.addEventListener('unhandledrejection', (e) => {
   setTimeout(() => { lastRejectionMsg = '' }, 4000)
   try { useAppStore.getState().toast(`Something didn't complete: ${msg}`, true) } catch {}
 })
+
+// A password-reset link arrives as #access_token=...&type=recovery. Read it
+// from the fragment at module load, before the auth library consumes and
+// clears it.
+const IS_RECOVERY = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type') === 'recovery'
 
 const SCAN_EQ_ID   = new URLSearchParams(window.location.search).get('eq')
 const SCAN_ITEM_QR = new URLSearchParams(window.location.search).get('item')
@@ -142,6 +148,7 @@ export default function App() {
   const [showIconPicker, setShowIconPicker] = useState(null)
   const [showTrainingPrompt, setShowTrainingPrompt] = useState(false)
   const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [recovering, setRecovering] = useState(IS_RECOVERY)
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
   const [termsAccepted, setTermsAccepted] = useState(false)
 
@@ -350,6 +357,29 @@ export default function App() {
       </Suspense>
     )
   }
+
+  // Before the login screen AND before the app: a recovery link creates a real
+
+  // session, so without this branch the link would sign someone straight in
+
+  // with the password they came to replace.
+
+  if (recovering) return (
+
+    <ResetPassword onDone={() => {
+
+      // Clear the token from the address bar so a refresh does not re-enter
+
+      // this screen with a token that has already been used.
+
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+
+      setRecovering(false)
+
+    }} />
+
+  )
+
 
   if (!session) return (
     <>
