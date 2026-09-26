@@ -15,8 +15,11 @@ export default function Login() {
   const [resetting, setResetting] = useState(false)
 
   async function sendReset() {
-    const addr = (email || '').trim().toLowerCase()
-    if (!addr) { setError('Enter your email address above first, then choose Forgot password.'); return }
+    const addr = (identifier || '').trim().toLowerCase()
+    if (!addr || !addr.includes('@')) {
+      setError('Enter your email address above first, then choose Forgot password.')
+      return
+    }
     setResetting(true)
     setError(null)
     const { error: err } = await sb.auth.resetPasswordForEmail(addr, {
