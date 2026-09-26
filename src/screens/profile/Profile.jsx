@@ -6,6 +6,7 @@ import { ROLE_LABELS, ROLE_ORDER, syncUserRoles, describeRoleChange } from '../.
 import { SAFETY_STEPS, requiredSafetySteps } from '../labsafety/safetySteps'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { applyDefaultIcons } from '../../lib/defaultIcons'
+import { generateTempPassword } from '../../lib/tempPassword'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { orgCapabilityPool, orgPoolForRole } from '../../lib/modulePools'
@@ -1546,19 +1547,21 @@ export function LabUsersPanel({ toast, session }) {
   async function saveLabUser(form, id) {
     if (!form.firstName.trim() && !form.lastName.trim()) { toast('Name is required.'); return }
     const actualEmail = form.emailAddr?.trim().toLowerCase()
-    if (!id) {
-      if (!form.password) { toast('Password is required.'); return }
-      if (!actualEmail) { toast('Email is required for lab user login.'); return }
-    }
+    // Creating: generated, not asked for. The password is emailed to the new
+    // user and replaced on their first sign-in, so there was never a decision
+    // in typing one. Editing still accepts a password — that is how a manager
+    // resets someone who is locked out.
+    const newPassword = id ? null : generateTempPassword()
+    if (!id && !actualEmail) { toast('Email is required for lab user login.'); return }
     if (form.password) {
       const perr = passwordError(form.password)
       if (perr) { toast(perr); return }
     }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
     const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: (form.requiredSteps?.length && form.requiredSteps.length < SAFETY_STEPS.length) ? form.requiredSteps : null, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
-    if (!id && form.password && actualEmail) {
+    if (!id && actualEmail) {
       try {
-        const authUser = await createAuthUser(actualEmail, form.password)
+        const authUser = await createAuthUser(actualEmail, newPassword)
         if (authUser) payload.auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
@@ -1573,7 +1576,7 @@ export function LabUsersPanel({ toast, session }) {
       await syncProjectAssignments(newUser.id, form.selectedProjectIds, session?.organizationId)
       if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab user added: ${payload.name}`, 'new_user', session.userId)
       const dispName = `${form.firstName} ${form.lastName}`.trim() || form.emailAddr || 'New user'
-      queueWelcomeEmail(sb, { name: dispName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password })
+      queueWelcomeEmail(sb, { name: dispName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: newPassword })
       setShowModal(false); setEditLabUser(null)
       // The organisation's default icons are applied straight away. Asking
       // here pre-ticked the whole pool and wanted the same answer every time,
@@ -1827,11 +1830,15 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
           <div className="field"><label>Nickname <span style={{ fontWeight:400, color:'var(--text3)' }}>(optional)</span></label><input value={form.nickname} onChange={e=>setForm(f=>({...f,nickname:e.target.value}))} placeholder="e.g. Alex" /></div>
           <div className="field"><label>Email Address</label><input type="email" value={form.emailAddr} onChange={e=>setForm(f=>({...f,emailAddr:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         </div>
-        <div className="field">
-          <label>Password{labUser ? ' (leave blank to keep current)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
+        {/* Editing only. On create the password is generated and emailed, so
+            there was nothing to decide here — and a manager inventing one that
+            the new user immediately replaces is a step with no purpose. When
+            editing, this is how you reset someone who is locked out. */}
+        {labUser && <div className="field">
+          <label>Password (leave blank to keep current)</label>
           <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={labUser ? 'Leave blank to keep unchanged' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
           <PasswordStrengthHint password={form.password} />
-        </div>
+        </div>}
         <div className="grid-2">
           <div className="field">
             <label>Supervisor</label>
@@ -1923,23 +1930,21 @@ function LabManagerListPanel({ toast, session }) {
     const fullName = [form.firstName?.trim(), form.lastName?.trim()].filter(Boolean).join(' ')
     if (!fullName) { toast('Name is required.'); return }
     const actualEmail = form.email?.trim().toLowerCase()
-    if (!id) {
-      if (!form.password) { toast('Password is required.'); return }
-      if (!actualEmail) { toast('Email is required for lab manager login.'); return }
-    }
+    const newPassword = id ? null : generateTempPassword()
+    if (!id && !actualEmail) { toast('Email is required for lab manager login.'); return }
     if (form.password) {
       const perr = passwordError(form.password)
       if (perr) { toast(perr); return }
     }
     const payload = { name: fullName, email: actualEmail || null, phone: form.phone || null, role: 'user', is_active: true, admin_level: 0, pin: '', organization_id: session?.organizationId || null, must_change_password: !id && !!form.password, terms_accepted_version: null }
-    if (!id && form.password && actualEmail) {
+    if (!id && actualEmail) {
       try {
-        const authUser = await createAuthUser(actualEmail, form.password)
+        const authUser = await createAuthUser(actualEmail, newPassword)
         if (authUser) payload.auth_id = authUser.id
       } catch (err) { toast('Error creating login account: ' + (err.message || 'Try again.')); return }
     }
     if (id) { const { error } = await sb.from('users').update(payload).eq('id', id); if (error) { toast('Error: ' + error.message); return }; setShowModal(false); setEditLabManager(null); load(); toast('Lab manager saved ✓') }
-    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: form.password }); setShowModal(false); setEditLabManager(null); applyDefaultIcons(newUser.id, session?.organizationId, 'user') }
+    else { const { data: newUser, error } = await sb.from('users').insert(payload).select('id').single(); if (error) { toast('Error: ' + error.message); return }; if (session?.organizationId) notifyOrgManagers(session.organizationId, `New lab manager added: ${fullName}`, 'new_manager', session.userId); queueWelcomeEmail(sb, { name: fullName, toEmail: actualEmail, orgId: session?.organizationId, userId: newUser.id, password: newPassword }); setShowModal(false); setEditLabManager(null); applyDefaultIcons(newUser.id, session?.organizationId, 'user') }
   }
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function deleteLabManager(id) {
@@ -2077,11 +2082,12 @@ function LabManagerModal({ labManagers, onClose, onSave, onRoleChange, onSaveRol
         </div>
         <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="netid@illinois.edu" /></div>
         <div className="grid-2">
-          <div className="field">
-            <label>Password{labManagers ? ' (leave blank to keep)' : <> <span style={{ color: '#c84b2f' }}>*</span></>}</label>
+          {/* Editing only — see the lab user modal above. */}
+          {labManagers && <div className="field">
+            <label>Password (leave blank to keep)</label>
             <PasswordInput show={showPw} onToggle={() => setShowPw(s => !s)} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder={labManagers ? 'Type to change' : 'e.g. Lab2026! — upper, lower, number, symbol'} autoComplete="new-password" />
             <PasswordStrengthHint password={form.password} />
-          </div>
+          </div>}
           <div className="field"><label>Phone</label><input value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} /></div>
         </div>
         {labManagers && onRoleChange && (
