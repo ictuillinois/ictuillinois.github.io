@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import CustomerServiceModal from '../../components/CustomerServiceModal'
 import { IconAlert, IconEye, IconEyeOff, IconMail } from '../../components/Icons'
 
-export default function Login() {
+export default function Login({ linkError = null }) {
   const { setSession } = useAppStore()
   const [identifier, setIdentifier] = useState(() => localStorage.getItem('ictlab_remembered_email') || '')
   const [keepSignedIn, setKeepSignedIn] = useState(() => localStorage.getItem('ictlab_keep_signed_in') !== 'false')
@@ -35,7 +35,7 @@ export default function Login() {
     setResetSent(true)
   }
   const [password, setPassword]     = useState('')
-  const [error, setError]           = useState('')
+  const [error, setError]     = useState(linkError || '')
   const [loading, setLoading]       = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [failCount, setFailCount]   = useState(0)

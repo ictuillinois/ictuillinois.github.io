@@ -79,10 +79,35 @@ window.addEventListener('unhandledrejection', (e) => {
   try { useAppStore.getState().toast(`Something didn't complete: ${msg}`, true) } catch {}
 })
 
-// A password-reset link arrives as #access_token=...&type=recovery. Read it
-// from the fragment at module load, before the auth library consumes and
-// clears it.
-const IS_RECOVERY = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type') === 'recovery'
+// A password-reset link comes back in one of three shapes, and until now only
+// the first was recognised — the other two both rendered as a plain login page
+// with no message, which is indistinguishable from the button not working:
+//   implicit flow   #access_token=...&type=recovery
+//   PKCE flow       ?code=...
+//   a spent link    #error=access_denied&error_code=otp_expired
+// The third is the common one in practice. A recovery token is single-use, and
+// corporate mail scanners follow links before the human does, spending it on
+// the way through. That has to SAY so rather than silently showing a login box.
+//
+// Read from the URL at module load, before the auth library consumes the
+// fragment and clears it.
+const HASH_PARAMS  = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+const QUERY_PARAMS = new URLSearchParams(window.location.search)
+
+const IS_RECOVERY =
+  HASH_PARAMS.get('type')  === 'recovery' ||
+  QUERY_PARAMS.get('type') === 'recovery' ||
+  !!QUERY_PARAMS.get('code')
+
+// Why the link did not work, in the user's words rather than none at all.
+const LINK_ERROR = (() => {
+  const desc = HASH_PARAMS.get('error_description') || HASH_PARAMS.get('error')
+  if (!desc) return null
+  const clean = desc.replace(/\.$/, '')
+  return HASH_PARAMS.get('error_code') === 'otp_expired'
+    ? `${clean}. A reset link works once and expires after an hour — send yourself a new one below.`
+    : `${clean}.`
+})()
 
 const SCAN_EQ_ID   = new URLSearchParams(window.location.search).get('eq')
 const SCAN_ITEM_QR = new URLSearchParams(window.location.search).get('item')
@@ -152,6 +177,15 @@ export default function App() {
   const [showSupport, setShowSupport] = useState(() => new URLSearchParams(window.location.search).get('support') === '1')
   const [termsAccepted, setTermsAccepted] = useState(false)
 
+  // Supabase also announces a recovery token through the auth event, which is
+  // the only signal available if the library reaches the fragment before the
+  // module-level read above does.
+  useEffect(() => {
+    const { data } = sb.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+    })
+    return () => data?.subscription?.unsubscribe()
+  }, [])
   useEffect(() => {
     if (!session) { setTermsAccepted(false); return }
     if (session.userId === null) { setTermsAccepted(true); return }
@@ -383,7 +417,7 @@ export default function App() {
 
   if (!session) return (
     <>
-      <Login />
+      <Login linkError={LINK_ERROR} />
       {showSupport && <CustomerServiceModal onClose={() => setShowSupport(false)} />}
     </>
   )
