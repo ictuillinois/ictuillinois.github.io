@@ -37,6 +37,14 @@ ALTER TABLE equipment_inventory
   -- list, maintenance, sop, booking, training, exam (see equipmentAccess.js).
   -- 'training' hidden = no training needed; booking stops requiring it.
   -- NOT NULL matters: lab users' queries use not.cs, which drops NULL rows.
-  ADD COLUMN IF NOT EXISTS lab_user_hidden_areas     TEXT[] NOT NULL DEFAULT '{}';
+  ADD COLUMN IF NOT EXISTS lab_user_hidden_areas     TEXT[] NOT NULL DEFAULT '{}',
+  -- FALSE = "Waiting for decision" on the button beside Edit. The edit
+  -- form will not save until a lab manager or admin ticks an option.
+  ADD COLUMN IF NOT EXISTS lab_user_decided          BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Items already set to Lab only were a decision; everything else starts as
+-- Waiting for decision (and stays visible to lab users until decided).
+UPDATE equipment_inventory SET lab_user_decided = TRUE
+ WHERE lab_user_access = FALSE AND lab_user_decided = FALSE;
 
 NOTIFY pgrst, 'reload schema';

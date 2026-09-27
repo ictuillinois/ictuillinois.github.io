@@ -2,7 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { LAB_USER_AREAS, ALL_AREA_KEYS, accessLabel, accessPatch, forLabUsers, labUserCan, visibleAreas } from '../../lib/equipmentAccess'
+import { LAB_ONLY_KEY, LAB_ONLY_OPTION, LAB_USER_AREAS, ALL_AREA_KEYS, ACCESS_LABEL, accessPatch, accessState, forLabUsers, labUserCan, tickedOptions } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import * as XLSX from 'xlsx'
 
@@ -37,7 +37,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
   const blank = {
     equipment_name: '', nickname: '', location: '', category: '',
     ref_id: '', model_number: '', serial_number: '', manufacturer: '',
-    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_areas: ALL_AREA_KEYS,
+    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_areas: [],
     maintenance_interval_days: '', last_maintenance_date: '', next_maintenance_date: '',
     website: '', maintenance_assignees: [],
   }
@@ -57,7 +57,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     out_of_service: item.out_of_service || false,
     // Missing (null/undefined) means visible: every row predating the column
     // was visible to lab users, and ticking nothing must not hide them.
-    lab_user_areas: visibleAreas(item),
+    lab_user_areas: tickedOptions(item),
     maintenance_interval_days: item.maintenance_interval_days || '',
     last_maintenance_date: item.last_maintenance_date || '',
     next_maintenance_date: item.next_maintenance_date || '',
@@ -104,11 +104,16 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
 
   async function save() {
     if (!form.equipment_name.trim()) { toast('Equipment name is required.'); return }
+    // Nothing ticked is "Waiting for decision" — not something to save.
+    if (!isSolo && !(form.lab_user_areas || []).length) {
+      toast('Choose Lab user access: Calibration & maintenance for lab only, or where lab users can see it.')
+      return
+    }
     setSaving(true)
     const payload = {
       ...form,
       out_of_service: form.out_of_service || false,
-      ...accessPatch(form.lab_user_areas),
+      ...(isSolo ? {} : accessPatch(form.lab_user_areas)),
       date_received: form.date_received || null,
       maintenance_interval_days: form.maintenance_interval_days ? parseInt(form.maintenance_interval_days) : null,
       last_maintenance_date: form.last_maintenance_date || null,
@@ -206,36 +211,43 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
             {form.out_of_service && <div style={{ fontSize: 12, color: 'var(--accent2)', marginTop: 4 }}>This equipment will be flagged in the equipment list and cannot be booked.</div>}
           </div>
 
-          {/* Lab user access — solo workspaces have no lab users. Nothing
-              ticked = Lab only. There is no separate on/off box: a second
-              switch over the same list could disagree with it. */}
+          {/* Lab user access — solo workspaces have no lab users. One tick
+              is required. Calibration & maintenance = Lab only and excludes
+              the four lab user areas; ticking either side clears the other. */}
           {!isSolo && (() => {
-            const areas = form.lab_user_areas || []
-            const toggle = (key, on) => setForm(f => {
-              const rest = (f.lab_user_areas || []).filter(k => k !== key)
+            const ticked = form.lab_user_areas || []
+            const labOnly = ticked.includes(LAB_ONLY_KEY)
+            const pick = (key, on) => setForm(f => {
+              const cur = f.lab_user_areas || []
+              if (key === LAB_ONLY_KEY) return { ...f, lab_user_areas: on ? [LAB_ONLY_KEY] : [] }
+              const rest = cur.filter(k => k !== key && k !== LAB_ONLY_KEY)
               return { ...f, lab_user_areas: on ? [...rest, key] : rest }
             })
+            const box = (opt, checked) => (
+              <label key={opt.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
+                <input type="checkbox" checked={checked} style={{ width: 'auto', marginTop: 2 }}
+                  onChange={e => pick(opt.key, e.target.checked)} />
+                <span style={{ color: 'var(--text2)' }}>
+                  {opt.label}
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)' }}>{opt.icon}</span>
+                </span>
+              </label>
+            )
             return (
               <div className="field">
-                <div style={{ color: 'var(--text2)', fontWeight: 500, marginBottom: 4 }}>Lab user access</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
-                  {areas.length === 0
-                    ? 'Nothing ticked — Lab only. Lab users will not see this equipment anywhere.'
-                    : 'Where lab users can see this equipment:'}
+                <div style={{ color: 'var(--text2)', fontWeight: 500, marginBottom: 4 }}>
+                  Lab user access <span style={{ color: '#c84b2f' }}>*</span>
+                </div>
+                <div style={{ fontSize: 12, color: ticked.length ? 'var(--text3)' : '#92400e', marginBottom: 8 }}>
+                  {!ticked.length ? 'Waiting for decision — tick at least one.'
+                    : labOnly ? 'Lab only — lab users will not see this equipment anywhere.'
+                    : 'Lab users can see this equipment in the ticked areas.'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
-                  {LAB_USER_AREAS.map(a => (
-                    <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
-                      <input type="checkbox" checked={areas.includes(a.key)} style={{ width: 'auto', marginTop: 2 }}
-                        onChange={e => toggle(a.key, e.target.checked)} />
-                      <span style={{ color: 'var(--text2)' }}>
-                        {a.label}
-                        <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)' }}>{a.icon}</span>
-                      </span>
-                    </label>
-                  ))}
+                  {box(LAB_ONLY_OPTION, labOnly)}
+                  {LAB_USER_AREAS.map(a => box(a, ticked.includes(a.key)))}
                 </div>
-                {areas.length > 0 && !areas.includes('training') && (
+                {ticked.length > 0 && !labOnly && !ticked.includes('training') && (
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
                     No training needed — lab users can book it without a training record.
                   </div>
@@ -375,7 +387,7 @@ function EquipmentList({ session }) {
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
-    q = forLabUsers(q, session, 'maintenance')
+    q = forLabUsers(q, session)
     const { data } = await q
     setItems(data || [])
     const ids = (data || []).map(e => e.id)
@@ -388,13 +400,13 @@ function EquipmentList({ session }) {
     setLoading(false)
   }
 
-  // One-click shortcut beside Edit: anything ticked -> Lab only; Lab only ->
-  // every area. Finer choices are made in the edit form. Flips the row at
-  // once and reverts if the write fails; .select() because an update matching
-  // zero rows (RLS) returns 200 with nothing changed.
+  // One-click shortcut beside Edit: Waiting or Lab users -> Lab only; Lab only
+  // -> Lab users in every area. Finer choices are made in the edit form.
+  // Flips the row at once and reverts if the write fails; .select() because
+  // an update matching zero rows (RLS) returns 200 with nothing changed.
   async function toggleLabAccess(item) {
-    const before = { lab_user_access: item.lab_user_access, lab_user_hidden_areas: item.lab_user_hidden_areas }
-    const patch = accessPatch(visibleAreas(item).length ? [] : ALL_AREA_KEYS)
+    const before = { lab_user_decided: item.lab_user_decided, lab_user_access: item.lab_user_access, lab_user_hidden_areas: item.lab_user_hidden_areas }
+    const patch = accessPatch(accessState(item) === 'lab_only' ? ALL_AREA_KEYS : [LAB_ONLY_KEY])
     setItems(list => list.map(i => i.id === item.id ? { ...i, ...patch } : i))
     const { data, error } = await sb.from('equipment_inventory')
       .update({ ...patch, updated_at: new Date().toISOString() })
@@ -650,17 +662,22 @@ function EquipmentList({ session }) {
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
                               {!isSolo && (() => {
-                                const shown = LAB_USER_AREAS.filter(a => labUserCan(item, a.key))
-                                const open = shown.length > 0
+                                const state = accessState(item)
+                                const shown = LAB_USER_AREAS.filter(a => labUserCan(item, a.key)).map(a => a.label).join(', ')
+                                const look = {
+                                  waiting:   { background: '#fef3c7', color: '#92400e', borderColor: '#fcd34d' },
+                                  lab_only:  { background: 'var(--surface2)', color: 'var(--text2)' },
+                                  lab_users: { background: 'var(--accent-light)', color: '#085041', borderColor: '#9FE1CB' },
+                                }[state]
+                                const tip = {
+                                  waiting:   'Not decided yet — lab users still see it. Click to make lab only, or Edit to choose areas',
+                                  lab_only:  'Lab managers and admins only — click to give lab users every area',
+                                  lab_users: `Lab users see it in: ${shown}. Click to make lab only`,
+                                }[state]
                                 return (
-                                  <button className="btn btn-sm" onClick={() => toggleLabAccess(item)}
-                                    data-tooltip={!open ? 'Lab managers and admins only — click to give lab users every area'
-                                      : `Lab users see it in: ${shown.map(a => a.label).join(', ')}. Click to make lab only`}
-                                    style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72,
-                                      ...(open
-                                        ? { background: 'var(--accent-light)', color: '#085041', borderColor: '#9FE1CB' }
-                                        : { background: 'var(--surface2)', color: 'var(--text2)' }) }}>
-                                    {accessLabel(item)}
+                                  <button className="btn btn-sm" onClick={() => toggleLabAccess(item)} data-tooltip={tip}
+                                    style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72, ...look }}>
+                                    {ACCESS_LABEL[state]}
                                   </button>
                                 )
                               })()}
@@ -734,7 +751,7 @@ function CalibrationTab({ session }) {
       eqQ = eqQ.eq('login_mode', 'team')
       if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     }
-    eqQ = forLabUsers(eqQ, session, 'maintenance')
+    eqQ = forLabUsers(eqQ, session)
     const { data: eqData } = await eqQ
     setEquipment(eqData || [])
 
@@ -1454,7 +1471,7 @@ function MaintenanceRecords({ session }) {
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name')
     let labManagerQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
     if (orgId) { eqQ = eqQ.eq('organization_id', orgId); labManagerQ = labManagerQ.eq('organization_id', orgId) }
-    eqQ = forLabUsers(eqQ, session, 'maintenance')
+    eqQ = forLabUsers(eqQ, session)
     const [{ data: eq }, { data: bookings }, { data: labManagerData }] = await Promise.all([
       eqQ,
       sb.from('equipment_bookings').select('equipment_id, start_time, end_time, status').eq('status', 'confirmed'),

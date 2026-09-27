@@ -138,6 +138,8 @@ NOTIFY pgrst, 'reload schema';
 -- missing column empties them. See equipment_lab_user_access.sql.
 ALTER TABLE equipment_inventory ADD COLUMN IF NOT EXISTS lab_user_access BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE equipment_inventory ADD COLUMN IF NOT EXISTS lab_user_hidden_areas TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE equipment_inventory ADD COLUMN IF NOT EXISTS lab_user_decided BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE equipment_inventory SET lab_user_decided = TRUE WHERE lab_user_access = FALSE AND lab_user_decided = FALSE;
 -- The equipment form also writes maintenance_assignees (JSONB), which no file
 -- ever created — saves failed silently. Run equipment_lab_user_access.sql
 -- (adds every column the form writes), not just the line above.
