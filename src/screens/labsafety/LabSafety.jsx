@@ -1056,7 +1056,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
     const hasForm = !!urls.form
     const hasExt1 = !!urls.ext1
     const hasExt2 = !!urls.ext2
-    const hasAny  = hasForm || hasExt1 || hasExt2
+    const hasAny  = hasForm || hasExt1 || hasExt2 || !!urls.guide
     return (
       <div>
         <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid var(--border)', fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>
@@ -1077,7 +1077,9 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: done ? '#085041' : 'var(--text3)' }}>
                   {done ? '✓' : '⏳'} {label}
                 </div>
-                {done && (
+                {/* The guide row is a confirmation, not a file — no url, so
+                    no View button that would open nothing. */}
+                {done && url && (
                   <a href={url} target="_blank" rel="noreferrer"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#1D9E75', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                     View ↗
