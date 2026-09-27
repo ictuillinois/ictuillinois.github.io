@@ -345,7 +345,10 @@ function EquipmentList({ session }) {
   }
 
   async function load() {
-    setLoading(true)
+    // No setLoading(true) here: `loading` starts true for the first load. A
+    // reload after a save or delete swapped the whole list for a spinner,
+    // collapsing the page and throwing the reader back to the top — ticking
+    // Lab user access down a long list meant scrolling back after every item.
     const isSolo = session?.loginMode === 'solo'
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
