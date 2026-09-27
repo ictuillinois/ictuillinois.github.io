@@ -1,1 +1,0 @@
-function r(e){return(e==null?void 0:e.loginMode)!=="solo"&&(e==null?void 0:e.role)==="lab_user"}function n(e,s){return r(s)?e.eq("lab_user_access",!0):e}function a(e){return(e||[]).filter(s=>s.lab_user_access!==!1)}export{n as f,r as i,a as l};

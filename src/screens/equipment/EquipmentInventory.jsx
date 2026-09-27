@@ -605,9 +605,6 @@ function EquipmentList({ session }) {
                               {item.out_of_service && (
                                 <span style={{ marginRight: 6, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>OUT OF SERVICE</span>
                               )}
-                              {item.lab_user_access === false && (
-                                <span title="Hidden from lab users" style={{ marginRight: 6, fontSize: 10, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>LAB ONLY</span>
-                              )}
                               {item.equipment_name}
                               {item.website && (
                                 <a href={item.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title={item.website} style={{ marginLeft: 6, fontSize: 10, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>🌐</a>
