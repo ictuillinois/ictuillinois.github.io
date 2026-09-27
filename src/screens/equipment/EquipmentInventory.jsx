@@ -73,8 +73,17 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       } else {
         const orgId = session?.organizationId
         if (!orgId) return
-        const { data } = await sb.from('users').select('id, name, last_name, nick_name, email').eq('role', 'user').eq('organization_id', orgId).eq('is_active', true).order('name')
-        setManagers((data || []).map(u => ({ id: u.id, name: u.nick_name?.trim() || [u.name, u.last_name].filter(Boolean).join(' ') || u.email })))
+        // Same people and same name as Lab Management → Lab Managers, which
+        // lists role user AND admin and shows `name`. This showed nick_name
+        // first, so someone could appear here under a nickname that matched
+        // nobody on that page; and name + last_name doubled the surname,
+        // because a lab manager's `name` already holds the full name.
+        const { data } = await sb.from('users').select('id, name, nick_name, email').in('role', ['user', 'admin']).eq('organization_id', orgId).eq('is_active', true).order('name')
+        setManagers((data || []).map(u => {
+          const nick = u.nick_name?.trim()
+          const name = u.name?.trim() || u.email
+          return { id: u.id, name: nick && nick !== name ? `${name} (${nick})` : name }
+        }))
       }
     }
     loadManagers()
