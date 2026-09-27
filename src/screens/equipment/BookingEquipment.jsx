@@ -4,6 +4,7 @@ import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
+import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
@@ -2270,6 +2271,7 @@ function BookingCalendar({ session }) {
     let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    q = forLabUsers(q, session)
     const { data } = await q
     setEquipment(data || [])
     equipmentRef.current = data || []

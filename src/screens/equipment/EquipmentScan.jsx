@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
+import { isLabUserSession } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 
 
@@ -320,7 +321,10 @@ export default function EquipmentScan() {
         sb.from('equipment_videos').select('*').eq('equipment_id', id).order('created_at'),
         sb.from('equipment_sop').select('*').eq('equipment_id', id).maybeSingle(),
       ])
-      setEquipment(eqRes?.data || null)
+      // A lab-only item is not found as far as a lab user is concerned —
+      // otherwise its QR label would offer them booking and the SOP.
+      const eq = eqRes?.data || null
+      setEquipment(eq && isLabUserSession(session) && eq.lab_user_access === false ? null : eq)
       setVideos(vidRes?.data || [])
       setSop(sopRes?.data || null)
     } catch(e) {}

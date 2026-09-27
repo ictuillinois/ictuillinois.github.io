@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
+import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 
@@ -591,6 +592,7 @@ export function ExamTab({ session }) {
     setLoading(true)
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('nickname')
     if (session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
+    eqQ = forLabUsers(eqQ, session)
     const { data: eq } = await eqQ
     setEquipment(eq || [])
 

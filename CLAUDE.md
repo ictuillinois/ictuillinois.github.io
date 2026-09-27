@@ -133,6 +133,12 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS allowed_modules_labmanagers J
 -- SDS tab: create sds_documents via rls_phase1.sql (it carries the policy too).
 NOTIFY pgrst, 'reload schema';
 
+-- Equipment "Lab user access" (Sept 2026) — BOTH projects. FALSE = lab-only
+-- (maintenance/calibration); lab users' equipment lists filter on it, so a
+-- missing column empties them. See equipment_lab_user_access.sql.
+ALTER TABLE equipment_inventory ADD COLUMN IF NOT EXISTS lab_user_access BOOLEAN NOT NULL DEFAULT TRUE;
+NOTIFY pgrst, 'reload schema';
+
 -- Material Reduction (Sept 2026) — without these, saving a fraction fails with
 -- PGRST204 "Could not find the 'parent_material_id' column ... in the schema
 -- cache". Separate databases: run in BOTH the ICT-Lab and LabHive projects.

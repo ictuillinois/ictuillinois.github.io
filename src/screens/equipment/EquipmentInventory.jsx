@@ -2,6 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
+import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import * as XLSX from 'xlsx'
 
@@ -36,7 +37,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
   const blank = {
     equipment_name: '', nickname: '', location: '', category: '',
     ref_id: '', model_number: '', serial_number: '', manufacturer: '',
-    date_received: '', condition: 'Good', notes: '', out_of_service: false,
+    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_access: true,
     maintenance_interval_days: '', last_maintenance_date: '', next_maintenance_date: '',
     website: '', maintenance_assignees: [],
   }
@@ -54,6 +55,9 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     notes: item.notes || '',
     website: item.website || '',
     out_of_service: item.out_of_service || false,
+    // Missing (null/undefined) means visible: every row predating the column
+    // was visible to lab users, and ticking nothing must not hide them.
+    lab_user_access: item.lab_user_access !== false,
     maintenance_interval_days: item.maintenance_interval_days || '',
     last_maintenance_date: item.last_maintenance_date || '',
     next_maintenance_date: item.next_maintenance_date || '',
@@ -104,6 +108,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     const payload = {
       ...form,
       out_of_service: form.out_of_service || false,
+      lab_user_access: form.lab_user_access !== false,
       date_received: form.date_received || null,
       maintenance_interval_days: form.maintenance_interval_days ? parseInt(form.maintenance_interval_days) : null,
       last_maintenance_date: form.last_maintenance_date || null,
@@ -111,11 +116,18 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       maintenance_assignees: form.maintenance_assignees?.length ? form.maintenance_assignees : null,
       updated_at: new Date().toISOString(),
     }
+    let err
     if (item) {
-      await sb.from('equipment_inventory').update(payload).eq('id', item.id)
+      ;({ error: err } = await sb.from('equipment_inventory').update(payload).eq('id', item.id))
     } else {
       const lm = session?.loginMode === 'solo' ? 'solo' : 'team'
-      await sb.from('equipment_inventory').insert({ ...payload, login_mode: lm, organization_id: lm === 'team' ? (session?.organizationId || null) : null, solo_owner_id: lm === 'solo' ? (session?.userId || null) : null })
+      ;({ error: err } = await sb.from('equipment_inventory').insert({ ...payload, login_mode: lm, organization_id: lm === 'team' ? (session?.organizationId || null) : null, solo_owner_id: lm === 'solo' ? (session?.userId || null) : null }))
+    }
+    if (err) {
+      console.error('Equipment save error:', err)
+      toast(`Could not save: ${err.message}`)
+      setSaving(false)
+      return
     }
     toast('Equipment saved.')
     setSaving(false)
@@ -192,6 +204,23 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
             </label>
             {form.out_of_service && <div style={{ fontSize: 12, color: 'var(--accent2)', marginTop: 4 }}>This equipment will be flagged in the equipment list and cannot be booked.</div>}
           </div>
+
+          {/* Lab user access — solo workspaces have no lab users */}
+          {!isSolo && (
+            <div className="field">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
+                <input type="checkbox" checked={form.lab_user_access !== false}
+                  onChange={e => setForm(f => ({ ...f, lab_user_access: e.target.checked }))}
+                  style={{ width: 'auto' }} />
+                <span style={{ color: 'var(--text2)', fontWeight: 500 }}>Lab user access</span>
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+                {form.lab_user_access !== false
+                  ? 'Lab users can see this equipment, book it and request training on it.'
+                  : 'Lab managers and admins only — hidden from lab users, kept here for maintenance and calibration.'}
+              </div>
+            </div>
+          )}
 
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '16px 0 12px' }}>Maintenance</div>
           <div className="grid-2">
@@ -321,6 +350,7 @@ function EquipmentList({ session }) {
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
+    q = forLabUsers(q, session)
     const { data } = await q
     setItems(data || [])
     const ids = (data || []).map(e => e.id)
@@ -556,6 +586,9 @@ function EquipmentList({ session }) {
                               {item.out_of_service && (
                                 <span style={{ marginRight: 6, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>OUT OF SERVICE</span>
                               )}
+                              {item.lab_user_access === false && (
+                                <span title="Hidden from lab users" style={{ marginRight: 6, fontSize: 10, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>LAB ONLY</span>
+                              )}
                               {item.equipment_name}
                               {item.website && (
                                 <a href={item.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title={item.website} style={{ marginLeft: 6, fontSize: 10, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>🌐</a>
@@ -646,6 +679,7 @@ function CalibrationTab({ session }) {
       eqQ = eqQ.eq('login_mode', 'team')
       if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     }
+    eqQ = forLabUsers(eqQ, session)
     const { data: eqData } = await eqQ
     setEquipment(eqData || [])
 
@@ -1365,6 +1399,7 @@ function MaintenanceRecords({ session }) {
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name')
     let labManagerQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
     if (orgId) { eqQ = eqQ.eq('organization_id', orgId); labManagerQ = labManagerQ.eq('organization_id', orgId) }
+    eqQ = forLabUsers(eqQ, session)
     const [{ data: eq }, { data: bookings }, { data: labManagerData }] = await Promise.all([
       eqQ,
       sb.from('equipment_bookings').select('equipment_id, start_time, end_time, status').eq('status', 'confirmed'),
