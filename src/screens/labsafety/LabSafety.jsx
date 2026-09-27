@@ -2084,7 +2084,10 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
                   : stepRow?.exam_attempts
                     ? 'Not passed yet'
                     : 'Not attempted yet'}
-                {stepRow?.exam_attempts > 1 && ` · ${stepRow.exam_attempts} attempts`}
+                {/* Shown from the first attempt, not the second: hiding "1"
+                    made a first-try pass look like no count was kept. */}
+                {stepRow?.exam_attempts > 0 &&
+                  ` · ${stepRow.exam_attempts} ${stepRow.exam_attempts === 1 ? 'attempt' : 'attempts'}`}
                 {!stepRow?.exam_passed && ' — approving now would bypass it.'}
               </div>
             )}
