@@ -137,6 +137,9 @@ NOTIFY pgrst, 'reload schema';
 -- (maintenance/calibration); lab users' equipment lists filter on it, so a
 -- missing column empties them. See equipment_lab_user_access.sql.
 ALTER TABLE equipment_inventory ADD COLUMN IF NOT EXISTS lab_user_access BOOLEAN NOT NULL DEFAULT TRUE;
+-- The equipment form also writes maintenance_assignees (JSONB), which no file
+-- ever created — saves failed silently. Run equipment_lab_user_access.sql
+-- (adds every column the form writes), not just the line above.
 NOTIFY pgrst, 'reload schema';
 
 -- Material Reduction (Sept 2026) — without these, saving a fraction fails with
