@@ -27,16 +27,14 @@ ALTER TABLE equipment_inventory
   -- [{ id, name, remind }] — lab managers assigned to this item's maintenance
   ADD COLUMN IF NOT EXISTS maintenance_assignees     JSONB,
   ADD COLUMN IF NOT EXISTS updated_at                TIMESTAMPTZ DEFAULT NOW(),
-  -- "Lab user access" tick box. TRUE = lab users see it in the equipment
-  -- list, booking and training lists; FALSE = lab managers and admins only
-  -- (maintenance / calibration items). Defaults TRUE so nothing disappears
-  -- until someone unticks it. Lab users' equipment queries filter on this,
-  -- so it must exist before they open the new build.
+  -- Lab user access (see src/lib/equipmentAccess.js). The edit form ticks
+  -- Calibration & maintenance (= Lab only) or any of Equipment SOP, Booking
+  -- calendar, Request training, Exam (= Lab users, in those areas).
+  -- lab_user_access FALSE = Lab only. Lab users' queries filter on it.
   ADD COLUMN IF NOT EXISTS lab_user_access           BOOLEAN NOT NULL DEFAULT TRUE,
-  -- With access on, the areas it is still hidden from lab users in:
-  -- list, maintenance, sop, booking, training, exam (see equipmentAccess.js).
-  -- 'training' hidden = no training needed; booking stops requiring it.
-  -- NOT NULL matters: lab users' queries use not.cs, which drops NULL rows.
+  -- The unticked lab user areas (sop, booking, training, exam). 'training'
+  -- unticked = no training needed; booking stops requiring it. NOT NULL
+  -- matters: lab users' queries use not.cs, which drops NULL rows.
   ADD COLUMN IF NOT EXISTS lab_user_hidden_areas     TEXT[] NOT NULL DEFAULT '{}',
   -- FALSE = "Waiting for decision" on the button beside Edit. The edit
   -- form will not save until a lab manager or admin ticks an option.

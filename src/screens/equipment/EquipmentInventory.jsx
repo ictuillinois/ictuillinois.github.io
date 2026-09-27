@@ -674,9 +674,11 @@ function EquipmentList({ session }) {
                                   lab_only:  'Lab managers and admins only — click to give lab users every area',
                                   lab_users: `Lab users see it in: ${shown}. Click to make lab only`,
                                 }[state]
+                                // Fixed width, sized to the longest label: widths that varied
+                                // with the state pushed Edit and ✕ to a different spot per row.
                                 return (
                                   <button className="btn btn-sm" onClick={() => toggleLabAccess(item)} data-tooltip={tip}
-                                    style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72, ...look }}>
+                                    style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', width: 136, justifyContent: 'center', textAlign: 'center', ...look }}>
                                     {ACCESS_LABEL[state]}
                                   </button>
                                 )
