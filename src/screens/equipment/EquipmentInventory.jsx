@@ -216,19 +216,22 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
                   style={{ width: 'auto' }} />
                 <span style={{ color: 'var(--text2)', fontWeight: 500 }}>Lab user access</span>
               </label>
-              {form.lab_user_access === false ? (
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
-                  Lab managers and admins only — hidden from lab users, kept here for maintenance and calibration.
-                </div>
-              ) : (
+              {/* Always shown. Rendering the list only while access was on
+                  hid it on exactly the Lab only items someone opens Edit to
+                  change. Off = greyed out, choices kept for when it is on. */}
+              {(() => { const off = form.lab_user_access === false; return (
                 <div style={{ marginTop: 8, marginLeft: 24 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Where lab users can see it:</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
+                    {off
+                      ? 'Lab managers and admins only — hidden from lab users. Tick Lab user access above to choose where lab users can see it:'
+                      : 'Where lab users can see it:'}
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
                     {LAB_USER_AREAS.map(a => {
                       const on = !(form.lab_user_hidden_areas || []).includes(a.key)
                       return (
-                        <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
-                          <input type="checkbox" checked={on} style={{ width: 'auto', marginTop: 2 }}
+                        <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: off ? 'default' : 'pointer', marginBottom: 0, fontSize: 13, opacity: off ? 0.45 : 1 }}>
+                          <input type="checkbox" checked={on} disabled={off} style={{ width: 'auto', marginTop: 2 }}
                             onChange={e => setForm(f => {
                               const hidden = (f.lab_user_hidden_areas || []).filter(k => k !== a.key)
                               return { ...f, lab_user_hidden_areas: e.target.checked ? hidden : [...hidden, a.key] }
@@ -241,13 +244,13 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
                       )
                     })}
                   </div>
-                  {(form.lab_user_hidden_areas || []).includes('training') && (
+                  {!off && (form.lab_user_hidden_areas || []).includes('training') && (
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
                       No training needed — lab users can book it without a training record.
                     </div>
                   )}
                 </div>
-              )}
+              ) })()}
             </div>
           )}
 
