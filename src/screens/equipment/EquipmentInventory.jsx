@@ -366,6 +366,22 @@ function EquipmentList({ session }) {
     setLoading(false)
   }
 
+  // One-click shortcut for the Lab user access tick box in the edit form.
+  // Flips the row at once and reverts if the write fails; .select() because
+  // an update matching zero rows (RLS) returns 200 with nothing changed.
+  async function toggleLabAccess(item) {
+    const next = item.lab_user_access === false
+    setItems(list => list.map(i => i.id === item.id ? { ...i, lab_user_access: next } : i))
+    const { data, error } = await sb.from('equipment_inventory')
+      .update({ lab_user_access: next, updated_at: new Date().toISOString() })
+      .eq('id', item.id).select('id')
+    if (error || !data?.length) {
+      console.error('Lab user access toggle failed:', error)
+      setItems(list => list.map(i => i.id === item.id ? { ...i, lab_user_access: !next } : i))
+      toast(`Could not change lab user access${error ? `: ${error.message}` : '.'}`)
+    }
+  }
+
   async function deleteItem(id) {
     if (!confirm('Delete this equipment?')) return
     await sb.from('equipment_inventory').update({ is_active: false }).eq('id', id)
@@ -612,6 +628,19 @@ function EquipmentList({ session }) {
                         {canEdit(session) && (
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
+                              {!isSolo && (() => {
+                                const open = item.lab_user_access !== false
+                                return (
+                                  <button className="btn btn-sm" onClick={() => toggleLabAccess(item)}
+                                    data-tooltip={open ? 'Visible to lab users — click to make lab only' : 'Lab managers and admins only — click to give lab users access'}
+                                    style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72,
+                                      ...(open
+                                        ? { background: 'var(--accent-light)', color: '#085041', borderColor: '#9FE1CB' }
+                                        : { background: 'var(--surface2)', color: 'var(--text2)' }) }}>
+                                    {open ? 'Lab users' : 'Lab only'}
+                                  </button>
+                                )
+                              })()}
                               <button data-tooltip="Edit equipment details" className="btn btn-sm" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => { setEditItem(item); setShowModal(true) }}>Edit</button>
                               <button data-tooltip="Remove this equipment from the list" className="btn btn-sm btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => deleteItem(item.id)}>✕</button>
                             </div>
