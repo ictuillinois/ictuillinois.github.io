@@ -2,7 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { LAB_USER_AREAS, forLabUsers, labUserCan } from '../../lib/equipmentAccess'
+import { LAB_USER_AREAS, ALL_AREA_KEYS, accessLabel, accessPatch, forLabUsers, labUserCan, visibleAreas } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import * as XLSX from 'xlsx'
 
@@ -37,7 +37,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
   const blank = {
     equipment_name: '', nickname: '', location: '', category: '',
     ref_id: '', model_number: '', serial_number: '', manufacturer: '',
-    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_access: true, lab_user_hidden_areas: [],
+    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_areas: ALL_AREA_KEYS,
     maintenance_interval_days: '', last_maintenance_date: '', next_maintenance_date: '',
     website: '', maintenance_assignees: [],
   }
@@ -57,8 +57,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     out_of_service: item.out_of_service || false,
     // Missing (null/undefined) means visible: every row predating the column
     // was visible to lab users, and ticking nothing must not hide them.
-    lab_user_access: item.lab_user_access !== false,
-    lab_user_hidden_areas: item.lab_user_hidden_areas || [],
+    lab_user_areas: visibleAreas(item),
     maintenance_interval_days: item.maintenance_interval_days || '',
     last_maintenance_date: item.last_maintenance_date || '',
     next_maintenance_date: item.next_maintenance_date || '',
@@ -109,8 +108,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     const payload = {
       ...form,
       out_of_service: form.out_of_service || false,
-      lab_user_access: form.lab_user_access !== false,
-      lab_user_hidden_areas: form.lab_user_hidden_areas || [],
+      ...accessPatch(form.lab_user_areas),
       date_received: form.date_received || null,
       maintenance_interval_days: form.maintenance_interval_days ? parseInt(form.maintenance_interval_days) : null,
       last_maintenance_date: form.last_maintenance_date || null,
@@ -118,6 +116,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       maintenance_assignees: form.maintenance_assignees?.length ? form.maintenance_assignees : null,
       updated_at: new Date().toISOString(),
     }
+    delete payload.lab_user_areas   // form state, not a column
     let err
     if (item) {
       ;({ error: err } = await sb.from('equipment_inventory').update(payload).eq('id', item.id))
@@ -207,52 +206,43 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
             {form.out_of_service && <div style={{ fontSize: 12, color: 'var(--accent2)', marginTop: 4 }}>This equipment will be flagged in the equipment list and cannot be booked.</div>}
           </div>
 
-          {/* Lab user access — solo workspaces have no lab users */}
-          {!isSolo && (
-            <div className="field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
-                <input type="checkbox" checked={form.lab_user_access !== false}
-                  onChange={e => setForm(f => ({ ...f, lab_user_access: e.target.checked }))}
-                  style={{ width: 'auto' }} />
-                <span style={{ color: 'var(--text2)', fontWeight: 500 }}>Lab user access</span>
-              </label>
-              {/* Always shown. Rendering the list only while access was on
-                  hid it on exactly the Lab only items someone opens Edit to
-                  change. Off = greyed out, choices kept for when it is on. */}
-              {(() => { const off = form.lab_user_access === false; return (
-                <div style={{ marginTop: 8, marginLeft: 24 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>
-                    {off
-                      ? 'Lab managers and admins only — hidden from lab users. Tick Lab user access above to choose where lab users can see it:'
-                      : 'Where lab users can see it:'}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
-                    {LAB_USER_AREAS.map(a => {
-                      const on = !(form.lab_user_hidden_areas || []).includes(a.key)
-                      return (
-                        <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: off ? 'default' : 'pointer', marginBottom: 0, fontSize: 13, opacity: off ? 0.45 : 1 }}>
-                          <input type="checkbox" checked={on} disabled={off} style={{ width: 'auto', marginTop: 2 }}
-                            onChange={e => setForm(f => {
-                              const hidden = (f.lab_user_hidden_areas || []).filter(k => k !== a.key)
-                              return { ...f, lab_user_hidden_areas: e.target.checked ? hidden : [...hidden, a.key] }
-                            })} />
-                          <span style={{ color: 'var(--text2)' }}>
-                            {a.label}
-                            <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)' }}>{a.icon}</span>
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  {!off && (form.lab_user_hidden_areas || []).includes('training') && (
-                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-                      No training needed — lab users can book it without a training record.
-                    </div>
-                  )}
+          {/* Lab user access — solo workspaces have no lab users. Nothing
+              ticked = Lab only. There is no separate on/off box: a second
+              switch over the same list could disagree with it. */}
+          {!isSolo && (() => {
+            const areas = form.lab_user_areas || []
+            const toggle = (key, on) => setForm(f => {
+              const rest = (f.lab_user_areas || []).filter(k => k !== key)
+              return { ...f, lab_user_areas: on ? [...rest, key] : rest }
+            })
+            return (
+              <div className="field">
+                <div style={{ color: 'var(--text2)', fontWeight: 500, marginBottom: 4 }}>Lab user access</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
+                  {areas.length === 0
+                    ? 'Nothing ticked — Lab only. Lab users will not see this equipment anywhere.'
+                    : 'Where lab users can see this equipment:'}
                 </div>
-              ) })()}
-            </div>
-          )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
+                  {LAB_USER_AREAS.map(a => (
+                    <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
+                      <input type="checkbox" checked={areas.includes(a.key)} style={{ width: 'auto', marginTop: 2 }}
+                        onChange={e => toggle(a.key, e.target.checked)} />
+                      <span style={{ color: 'var(--text2)' }}>
+                        {a.label}
+                        <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)' }}>{a.icon}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {areas.length > 0 && !areas.includes('training') && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                    No training needed — lab users can book it without a training record.
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '16px 0 12px' }}>Maintenance</div>
           <div className="grid-2">
@@ -385,7 +375,7 @@ function EquipmentList({ session }) {
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
-    q = forLabUsers(q, session, 'list')
+    q = forLabUsers(q, session, 'maintenance')
     const { data } = await q
     setItems(data || [])
     const ids = (data || []).map(e => e.id)
@@ -398,18 +388,20 @@ function EquipmentList({ session }) {
     setLoading(false)
   }
 
-  // One-click shortcut for the Lab user access tick box in the edit form.
-  // Flips the row at once and reverts if the write fails; .select() because
-  // an update matching zero rows (RLS) returns 200 with nothing changed.
+  // One-click shortcut beside Edit: anything ticked -> Lab only; Lab only ->
+  // every area. Finer choices are made in the edit form. Flips the row at
+  // once and reverts if the write fails; .select() because an update matching
+  // zero rows (RLS) returns 200 with nothing changed.
   async function toggleLabAccess(item) {
-    const next = item.lab_user_access === false
-    setItems(list => list.map(i => i.id === item.id ? { ...i, lab_user_access: next } : i))
+    const before = { lab_user_access: item.lab_user_access, lab_user_hidden_areas: item.lab_user_hidden_areas }
+    const patch = accessPatch(visibleAreas(item).length ? [] : ALL_AREA_KEYS)
+    setItems(list => list.map(i => i.id === item.id ? { ...i, ...patch } : i))
     const { data, error } = await sb.from('equipment_inventory')
-      .update({ lab_user_access: next, updated_at: new Date().toISOString() })
+      .update({ ...patch, updated_at: new Date().toISOString() })
       .eq('id', item.id).select('id')
     if (error || !data?.length) {
       console.error('Lab user access toggle failed:', error)
-      setItems(list => list.map(i => i.id === item.id ? { ...i, lab_user_access: !next } : i))
+      setItems(list => list.map(i => i.id === item.id ? { ...i, ...before } : i))
       toast(`Could not change lab user access${error ? `: ${error.message}` : '.'}`)
     }
   }
@@ -658,19 +650,17 @@ function EquipmentList({ session }) {
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
                               {!isSolo && (() => {
-                                const open = item.lab_user_access !== false
                                 const shown = LAB_USER_AREAS.filter(a => labUserCan(item, a.key))
-                                const partial = open && shown.length < LAB_USER_AREAS.length
+                                const open = shown.length > 0
                                 return (
                                   <button className="btn btn-sm" onClick={() => toggleLabAccess(item)}
-                                    data-tooltip={!open ? 'Lab managers and admins only — click to give lab users access'
-                                      : partial ? `Lab users see it in: ${shown.map(a => a.label).join(', ') || 'nowhere'}. Edit to change; click to make lab only`
-                                      : 'Visible to lab users everywhere — click to make lab only'}
+                                    data-tooltip={!open ? 'Lab managers and admins only — click to give lab users every area'
+                                      : `Lab users see it in: ${shown.map(a => a.label).join(', ')}. Click to make lab only`}
                                     style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72,
                                       ...(open
                                         ? { background: 'var(--accent-light)', color: '#085041', borderColor: '#9FE1CB' }
                                         : { background: 'var(--surface2)', color: 'var(--text2)' }) }}>
-                                    {!open ? 'Lab only' : partial ? 'Partial' : 'Lab users'}
+                                    {accessLabel(item)}
                                   </button>
                                 )
                               })()}
