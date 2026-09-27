@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
-import { isLabUserSession } from '../../lib/equipmentAccess'
+import { LAB_USER_AREAS, isLabUserSession, labUserCan } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 
 
@@ -324,7 +324,8 @@ export default function EquipmentScan() {
       // A lab-only item is not found as far as a lab user is concerned —
       // otherwise its QR label would offer them booking and the SOP.
       const eq = eqRes?.data || null
-      setEquipment(eq && isLabUserSession(session) && eq.lab_user_access === false ? null : eq)
+      const hidden = eq && isLabUserSession(session) && !LAB_USER_AREAS.some(a => labUserCan(eq, a.key))
+      setEquipment(hidden ? null : eq)
       setVideos(vidRes?.data || [])
       setSop(sopRes?.data || null)
     } catch(e) {}
@@ -443,6 +444,10 @@ export default function EquipmentScan() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {OPTION_META.map(opt => {
           if (opt.id === 'book' && !isEquipment) return null
+          // Lab users only get the options their access allows on this item
+          if (isLabUserSession(session) && equipment &&
+              ((opt.id === 'book' && !labUserCan(equipment, 'booking')) ||
+               (opt.id === 'sop' && !labUserCan(equipment, 'sop')))) return null
           const isActive = activeSection === opt.id
           const isNavigate = opt.id === 'openapp' || opt.id === 'book'
           const isLocked =

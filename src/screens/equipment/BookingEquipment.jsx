@@ -4,7 +4,7 @@ import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { forLabUsers } from '../../lib/equipmentAccess'
+import { forLabUsers, requiresTraining } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
@@ -2268,10 +2268,10 @@ function BookingCalendar({ session }) {
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
-    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
+    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_hidden_areas').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
-    q = forLabUsers(q, session)
+    q = forLabUsers(q, session, 'booking')
     const { data } = await q
     setEquipment(data || [])
     equipmentRef.current = data || []
@@ -2320,6 +2320,8 @@ function BookingCalendar({ session }) {
     // Block equipment not used in 3 months without approved retraining
     const blocked = Object.entries(lastBooked)
       .filter(([eqId, lastDate]) => lastDate < threeMonthsAgo && !approvedEq.has(eqId))
+      // nothing to retrain on equipment that needs no training
+      .filter(([eqId]) => requiresTraining(eqList.find(e => e.id === eqId)))
       .map(([eqId]) => eqId)
     setRetrainingBlocked(blocked)
     // Add in-app notification for newly blocked items (not already pending)
@@ -2524,8 +2526,15 @@ function BookingCalendar({ session }) {
     loadNotifications()
   }
 
+  // Equipment whose Request training area is unticked needs no training, so
+  // there is no training record to require.
+  function isUntrained(id) {
+    return session?.role === 'lab_user' && trainedEquipmentIds !== null && !trainedEquipmentIds.has(id)
+      && requiresTraining(equipment.find(e => e.id === id))
+  }
+
   function toggleEquipment(id) {
-    if (session?.role === 'lab_user' && trainedEquipmentIds !== null && !trainedEquipmentIds.has(id)) {
+    if (isUntrained(id)) {
       toast('Complete equipment training first — see Training Records → Equipment Exam.')
       return
     }
@@ -2929,7 +2938,7 @@ function BookingCalendar({ session }) {
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
                 : filteredEq.map(e => {
-                    const isUntrainedEq = session?.role === 'lab_user' && trainedEquipmentIds !== null && !trainedEquipmentIds.has(e.id)
+                    const isUntrainedEq = isUntrained(e.id)
                     return (
                   <div key={e.id} onClick={() => toggleEquipment(e.id)}
                     style={{ padding: '8px 12px', cursor: isUntrainedEq ? 'not-allowed' : 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : isUntrainedEq ? 'var(--surface2)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8, opacity: isUntrainedEq ? 0.55 : 1 }}

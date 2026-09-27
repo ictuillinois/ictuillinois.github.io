@@ -2,7 +2,7 @@ import HelpPanel from '../../components/HelpPanel'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { forLabUsers } from '../../lib/equipmentAccess'
+import { LAB_USER_AREAS, forLabUsers, labUserCan } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import * as XLSX from 'xlsx'
 
@@ -37,7 +37,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
   const blank = {
     equipment_name: '', nickname: '', location: '', category: '',
     ref_id: '', model_number: '', serial_number: '', manufacturer: '',
-    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_access: true,
+    date_received: '', condition: 'Good', notes: '', out_of_service: false, lab_user_access: true, lab_user_hidden_areas: [],
     maintenance_interval_days: '', last_maintenance_date: '', next_maintenance_date: '',
     website: '', maintenance_assignees: [],
   }
@@ -58,6 +58,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
     // Missing (null/undefined) means visible: every row predating the column
     // was visible to lab users, and ticking nothing must not hide them.
     lab_user_access: item.lab_user_access !== false,
+    lab_user_hidden_areas: item.lab_user_hidden_areas || [],
     maintenance_interval_days: item.maintenance_interval_days || '',
     last_maintenance_date: item.last_maintenance_date || '',
     next_maintenance_date: item.next_maintenance_date || '',
@@ -109,6 +110,7 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       ...form,
       out_of_service: form.out_of_service || false,
       lab_user_access: form.lab_user_access !== false,
+      lab_user_hidden_areas: form.lab_user_hidden_areas || [],
       date_received: form.date_received || null,
       maintenance_interval_days: form.maintenance_interval_days ? parseInt(form.maintenance_interval_days) : null,
       last_maintenance_date: form.last_maintenance_date || null,
@@ -214,11 +216,38 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
                   style={{ width: 'auto' }} />
                 <span style={{ color: 'var(--text2)', fontWeight: 500 }}>Lab user access</span>
               </label>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
-                {form.lab_user_access !== false
-                  ? 'Lab users can see this equipment, book it and request training on it.'
-                  : 'Lab managers and admins only — hidden from lab users, kept here for maintenance and calibration.'}
-              </div>
+              {form.lab_user_access === false ? (
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+                  Lab managers and admins only — hidden from lab users, kept here for maintenance and calibration.
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, marginLeft: 24 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>Where lab users can see it:</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
+                    {LAB_USER_AREAS.map(a => {
+                      const on = !(form.lab_user_hidden_areas || []).includes(a.key)
+                      return (
+                        <label key={a.key} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
+                          <input type="checkbox" checked={on} style={{ width: 'auto', marginTop: 2 }}
+                            onChange={e => setForm(f => {
+                              const hidden = (f.lab_user_hidden_areas || []).filter(k => k !== a.key)
+                              return { ...f, lab_user_hidden_areas: e.target.checked ? hidden : [...hidden, a.key] }
+                            })} />
+                          <span style={{ color: 'var(--text2)' }}>
+                            {a.label}
+                            <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)' }}>{a.icon}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {(form.lab_user_hidden_areas || []).includes('training') && (
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                      No training needed — lab users can book it without a training record.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -353,7 +382,7 @@ function EquipmentList({ session }) {
     let q = sb.from('equipment_inventory').select('*').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
-    q = forLabUsers(q, session)
+    q = forLabUsers(q, session, 'list')
     const { data } = await q
     setItems(data || [])
     const ids = (data || []).map(e => e.id)
@@ -627,14 +656,18 @@ function EquipmentList({ session }) {
                             <div style={{ display: 'flex', gap: 6 }}>
                               {!isSolo && (() => {
                                 const open = item.lab_user_access !== false
+                                const shown = LAB_USER_AREAS.filter(a => labUserCan(item, a.key))
+                                const partial = open && shown.length < LAB_USER_AREAS.length
                                 return (
                                   <button className="btn btn-sm" onClick={() => toggleLabAccess(item)}
-                                    data-tooltip={open ? 'Visible to lab users — click to make lab only' : 'Lab managers and admins only — click to give lab users access'}
+                                    data-tooltip={!open ? 'Lab managers and admins only — click to give lab users access'
+                                      : partial ? `Lab users see it in: ${shown.map(a => a.label).join(', ') || 'nowhere'}. Edit to change; click to make lab only`
+                                      : 'Visible to lab users everywhere — click to make lab only'}
                                     style={{ padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', minWidth: 72,
                                       ...(open
                                         ? { background: 'var(--accent-light)', color: '#085041', borderColor: '#9FE1CB' }
                                         : { background: 'var(--surface2)', color: 'var(--text2)' }) }}>
-                                    {open ? 'Lab users' : 'Lab only'}
+                                    {!open ? 'Lab only' : partial ? 'Partial' : 'Lab users'}
                                   </button>
                                 )
                               })()}
@@ -708,7 +741,7 @@ function CalibrationTab({ session }) {
       eqQ = eqQ.eq('login_mode', 'team')
       if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     }
-    eqQ = forLabUsers(eqQ, session)
+    eqQ = forLabUsers(eqQ, session, 'maintenance')
     const { data: eqData } = await eqQ
     setEquipment(eqData || [])
 
@@ -1428,7 +1461,7 @@ function MaintenanceRecords({ session }) {
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, location, category, last_maintenance_date, max_usage_hours, usage_hours_since_maintenance, condition, assigned_to, out_of_service').eq('is_active', true).order('category').order('equipment_name')
     let labManagerQ = sb.from('users').select('id, name').in('role', ['user', 'admin']).eq('is_active', true).order('name')
     if (orgId) { eqQ = eqQ.eq('organization_id', orgId); labManagerQ = labManagerQ.eq('organization_id', orgId) }
-    eqQ = forLabUsers(eqQ, session)
+    eqQ = forLabUsers(eqQ, session, 'maintenance')
     const [{ data: eq }, { data: bookings }, { data: labManagerData }] = await Promise.all([
       eqQ,
       sb.from('equipment_bookings').select('equipment_id, start_time, end_time, status').eq('status', 'confirmed'),

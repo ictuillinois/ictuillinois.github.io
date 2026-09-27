@@ -32,6 +32,11 @@ ALTER TABLE equipment_inventory
   -- (maintenance / calibration items). Defaults TRUE so nothing disappears
   -- until someone unticks it. Lab users' equipment queries filter on this,
   -- so it must exist before they open the new build.
-  ADD COLUMN IF NOT EXISTS lab_user_access           BOOLEAN NOT NULL DEFAULT TRUE;
+  ADD COLUMN IF NOT EXISTS lab_user_access           BOOLEAN NOT NULL DEFAULT TRUE,
+  -- With access on, the areas it is still hidden from lab users in:
+  -- list, maintenance, sop, booking, training, exam (see equipmentAccess.js).
+  -- 'training' hidden = no training needed; booking stops requiring it.
+  -- NOT NULL matters: lab users' queries use not.cs, which drops NULL rows.
+  ADD COLUMN IF NOT EXISTS lab_user_hidden_areas     TEXT[] NOT NULL DEFAULT '{}';
 
 NOTIFY pgrst, 'reload schema';

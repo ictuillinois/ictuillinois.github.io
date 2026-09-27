@@ -823,10 +823,10 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
 
   async function load() {
     setLoading(true)
-    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access').eq('is_active', true).order('nickname')
+    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).order('nickname')
     if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('login_mode', 'solo')
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
-    equipQuery = forLabUsers(equipQuery, session)
+    equipQuery = forLabUsers(equipQuery, session, 'training')
     const ids = labUsers.map(s => s.id)
     let recQuery = sb.from('training_equipment').select('*')
     if (ids.length) recQuery = recQuery.in('user_id', ids)
@@ -1393,7 +1393,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
             )
           })()}
           {addingRecord && (
-            <AddTrainingRecord userId={addingRecord.userId} equipment={labUserEquipment(equipment)} existingRecords={getRecords(addingRecord.userId)} session={session} onSave={addTrainingRecord} onClose={() => setAddingRecord(null)} defaultEquipmentId={addingRecord.equipmentId} defaultIsRetraining={addingRecord.isRetraining} />
+            <AddTrainingRecord userId={addingRecord.userId} equipment={labUserEquipment(equipment, 'training')} existingRecords={getRecords(addingRecord.userId)} session={session} onSave={addTrainingRecord} onClose={() => setAddingRecord(null)} defaultEquipmentId={addingRecord.equipmentId} defaultIsRetraining={addingRecord.isRetraining} />
           )}
         </div>
       )}
