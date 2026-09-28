@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { flagCount } from '../../lib/supplyOrder'
 import { IconAlert } from '../../components/Icons'
 
 export default function Inspection() {
@@ -33,31 +34,39 @@ export default function Inspection() {
   const lastQty = lastQtys?.[item.id]                    // previous inspection's count
   const currentQty = enteredQty ?? lastQty ?? 0          // effective value (template fallback)
   const currentQtyNeeded = results[index]?.qty_needed ?? ''
+  // "Report for purchase": undefined = reported (the default for short items)
+  const currentReport = results[index]?.report
 
   function setQty(val) {
     const qty = Math.max(0, val)
     const updated = [...results]
-    updated[index] = { ...item, qty, qty_needed: currentQtyNeeded, low: qty < item.min_qty }
+    updated[index] = { ...item, qty, qty_needed: currentQtyNeeded, report: currentReport, low: qty < item.min_qty }
     setInspection({ ...inspection, results: updated })
   }
 
   function clearQty() {
     // Empty box → back to showing the gray template
     const updated = [...results]
-    updated[index] = { ...item, qty: undefined, qty_needed: currentQtyNeeded, low: (lastQty ?? 0) < item.min_qty }
+    updated[index] = { ...item, qty: undefined, qty_needed: currentQtyNeeded, report: currentReport, low: (lastQty ?? 0) < item.min_qty }
     setInspection({ ...inspection, results: updated })
   }
 
   function setQtyNeeded(val) {
     const qty_needed = Math.max(0, parseInt(val) || 0)
     const updated = [...results]
-    updated[index] = { ...item, qty: enteredQty, qty_needed, low: currentQty < item.min_qty }
+    updated[index] = { ...item, qty: enteredQty, qty_needed, report: currentReport, low: currentQty < item.min_qty }
+    setInspection({ ...inspection, results: updated })
+  }
+
+  function setReport(on) {
+    const updated = [...results]
+    updated[index] = { ...item, qty: enteredQty, qty_needed: currentQtyNeeded, report: on, low: currentQty < item.min_qty }
     setInspection({ ...inspection, results: updated })
   }
 
   // Snapshot the current item, resolving an untouched box to the template value
   function snapshot(updated) {
-    updated[index] = { ...item, qty: currentQty, qty_needed: currentQtyNeeded || 0, low: currentQty < item.min_qty }
+    updated[index] = { ...item, qty: currentQty, qty_needed: currentQtyNeeded || 0, report: currentReport, low: currentQty < item.min_qty }
   }
 
   function advance() {
@@ -73,7 +82,8 @@ export default function Inspection() {
 
   function next() {
     // Count below minimum but no order amount entered → remind before moving on
-    if (currentQty < item.min_qty && currentQtyNeeded === '') {
+    // ...unless it is not being reported for purchase at all.
+    if (currentQty < item.min_qty && currentReport !== false && currentQtyNeeded === '') {
       setLowReminder(true)
       return
     }
@@ -92,7 +102,7 @@ export default function Inspection() {
       room_id: inspection.roomId,
       room_name: inspection.room.name,
       inspector: session.username,
-      flag_count: finalResults.filter(r => r.low).length,
+      flag_count: flagCount(finalResults),
       results: finalResults,
       login_mode: session?.loginMode === 'solo' ? 'solo' : 'team',
       organization_id: session?.loginMode !== 'solo' ? (session?.organizationId || null) : null,
@@ -157,8 +167,19 @@ export default function Inspection() {
                 value={currentQtyNeeded}
                 onChange={e => setQtyNeeded(e.target.value)}
                 placeholder="0"
-                style={{ width: 100, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 500, borderRadius: 'var(--radius)', padding: 8 }}
+                style={{ width: 100, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 500, borderRadius: 'var(--radius)', padding: 8, opacity: currentReport === false && currentQty < item.min_qty ? 0.45 : 1 }}
               />
+              {/* Short items are reported for purchase unless unticked — some
+                  are tracked for information only, or refilled in-house. */}
+              {currentQty < item.min_qty && (
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, marginBottom: 0, cursor: 'pointer', fontSize: 13, color: 'var(--text2)' }}>
+                  <input type="checkbox" checked={currentReport !== false} onChange={e => setReport(e.target.checked)} style={{ width: 'auto' }} />
+                  Report for purchase
+                </label>
+              )}
+              {currentQty < item.min_qty && currentReport === false && (
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Short, but left off the purchase report.</div>
+              )}
             </div>
           </div>
         )}

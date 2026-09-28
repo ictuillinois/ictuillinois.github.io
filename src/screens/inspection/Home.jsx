@@ -3,6 +3,7 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { needsOrder, statusText, orderQty, flagCount } from '../../lib/supplyOrder'
 import * as XLSX from 'xlsx-js-style'
 import Modal from '../../components/Modal'
 
@@ -33,7 +34,7 @@ function buildRecordRows(rec, includeHeader = true) {
   Object.entries(byRoom).forEach(([roomName, items]) => {
     rows.push([`ROOM: ${roomName}${rec.inspector ? '  —  Inspector: ' + rec.inspector : ''}`])
     rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
-    items.forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
+    items.forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, statusText(r), orderQty(r), r.notes || '']))
     rows.push([])
   })
   return rows
@@ -400,7 +401,7 @@ function EditRecordModal({ record, onClose, onSaved }) {
 
   async function save() {
     setSaving(true)
-    const flag_count = results.filter(r => r.low).length
+    const flag_count = flagCount(results)
     const { error } = await sb.from('inspections').update({ results, flag_count }).eq('id', record.id)
     setSaving(false)
     if (error) { toast('Save failed: ' + error.message); return }
@@ -419,13 +420,14 @@ function EditRecordModal({ record, onClose, onSaved }) {
           <div style={{ flex: 1 }}>Item</div>
           <div style={{ width: 76, textAlign: 'center' }}>Count</div>
           <div style={{ width: 76, textAlign: 'center' }}>Needed</div>
+          <div style={{ width: 56, textAlign: 'center' }} title="Report short items for purchase">Report</div>
         </div>
         {results.map((r, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--surface2)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
               <div style={{ fontSize: 11, color: r.low ? 'var(--accent2)' : 'var(--text3)', fontFamily: 'var(--mono)' }}>
-                min {r.min_qty} {r.unit}{r.low ? ' · LOW' : ''}
+                min {r.min_qty} {r.unit}{r.low ? (r.report === false ? ' · LOW · no order' : ' · LOW') : ''}
               </div>
             </div>
             <input type="number" min="0" step="any" value={r.qty ?? 0}
@@ -434,6 +436,14 @@ function EditRecordModal({ record, onClose, onSaved }) {
             <input type="number" min="0" step="any" value={r.qty_needed ?? 0}
               onChange={e => setField(i, 'qty_needed', e.target.value)}
               style={{ width: 76, textAlign: 'center', fontFamily: 'var(--mono)', padding: '6px 4px' }} />
+            {/* Short items are reported for purchase unless unticked; the box
+                only means something below minimum, so it is disabled above it. */}
+            <div style={{ width: 56, display: 'flex', justifyContent: 'center' }}>
+              <input type="checkbox" style={{ width: 'auto' }}
+                checked={needsOrder(r)} disabled={!r.low}
+                title={r.low ? 'Report for purchase' : 'Not below minimum'}
+                onChange={e => setResults(prev => prev.map((x, j) => j === i ? { ...x, report: e.target.checked } : x))} />
+            </div>
           </div>
         ))}
       </div>
@@ -532,7 +542,7 @@ function ExportData() {
     // Info block
     const allResults   = roomRecords.flatMap(r => r.results || [])
     const totalItems   = allResults.length
-    const lowItems     = allResults.filter(i => i.low).length
+    const lowItems     = allResults.filter(needsOrder).length
     const okItems      = totalItems - lowItems
     const firstRec     = roomRecords[0]
     const reportDate   = firstRec
@@ -587,7 +597,7 @@ function ExportData() {
           const linkText = links.length ? (links[0].label || 'Buy now') + (links.length > 1 ? ` +${links.length - 1}` : '') : ''
           return [
             idx + 1, r.name || '', r.unit || '', r.qty ?? '', r.min_qty ?? '',
-            r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '', linkText,
+            statusText(r), orderQty(r), r.notes || '', linkText,
           ]
         }),
         theme: 'grid',
@@ -780,7 +790,7 @@ function ExportData() {
       // ── Rows 5-8: Info block matching PDF layout ──
       const allResults = roomRecords.flatMap(r => r.results || [])
       const totalItems = allResults.length
-      const lowItems   = allResults.filter(i => i.low).length
+      const lowItems   = allResults.filter(needsOrder).length
       const okItems    = totalItems - lowItems
       const firstRec   = roomRecords[0]
       const reportDate = firstRec
@@ -850,8 +860,8 @@ function ExportData() {
         // Item rows
         ;(rec.results || []).forEach((r, idx) => {
           const itemRow = ws.getRow(dr); itemRow.height = 16
-          const isLow = r.low; const isAlt = idx % 2 === 1
-          const rowData = [r.name, r.unit, r.qty ?? '', r.min_qty ?? '', isLow ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '', '']
+          const isLow = needsOrder(r); const isAlt = idx % 2 === 1
+          const rowData = [r.name, r.unit, r.qty ?? '', r.min_qty ?? '', statusText(r), orderQty(r), r.notes || '', '']
           rowData.forEach((val, ci) => {
             const cell = itemRow.getCell(ci + 1)
             cell.value = val ?? ''
@@ -1043,7 +1053,7 @@ function ExportData() {
         const t = new Date(rec.inspected_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         rows.push([`ROOM: ${rec.room_name}  —  ${rec.inspector}  —  ${t}`])
         rows.push(['Item', 'Unit', 'Count', 'Min Qty', 'Status', 'Needs to Order', 'Notes'])
-        ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'LOW' : 'OK', r.qty_needed || '', r.notes || '']))
+        ;(rec.results || []).forEach(r => rows.push([r.name, r.unit, r.qty, r.min_qty, statusText(r), orderQty(r), r.notes || '']))
         rows.push([])
       })
       rows.forEach((row, ri) => { const wsRow = ws.getRow(dataStart + ri); row.forEach((v, ci) => { wsRow.getCell(ci + 1).value = v ?? '' }) })

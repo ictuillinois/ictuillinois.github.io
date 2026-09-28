@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style'
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
+import { needsOrder, statusText } from '../../lib/supplyOrder'
 
 function safeSheetName(name) { return name.replace(/[:\\\/?*\[\]]/g, '-').substring(0, 31) }
 function fmtLinks(links) { return (links || []).map(l => `${l.label || 'Link'}: ${l.url}`).join(' | ') }
@@ -27,7 +28,7 @@ function applyRowStyle(ws, rowIdx, numCols, style) {
 }
 
 function buildInspectionSheet(rec, results) {
-  const rlow = results.filter(r => r.low)
+  const rlow = results.filter(needsOrder)
   const dateStr = new Date(rec.inspected_at).toLocaleString()
   const rows = []
   const styles = {}   // rowIndex → style
@@ -56,8 +57,8 @@ function buildInspectionSheet(rec, results) {
   rows.push(['FULL INVENTORY']); styles[rows.length - 1] = STYLE_SECTION
   rows.push(['Item', 'Unit', 'Count', 'Minimum', 'Status', 'Notes', 'Purchase Links']); styles[rows.length - 1] = STYLE_HEADER; alignRows.push(rows.length - 1)
   results.forEach(r => {
-    rows.push([r.name, r.unit, r.qty, r.min_qty, r.low ? 'NEEDS RESTOCK' : 'OK', r.notes || '', fmtLinks(r.links)])
-    if (r.low) styles[rows.length - 1] = STYLE_LOW
+    rows.push([r.name, r.unit, r.qty, r.min_qty, needsOrder(r) ? 'NEEDS RESTOCK' : statusText(r), r.notes || '', fmtLinks(r.links)])
+    if (needsOrder(r)) styles[rows.length - 1] = STYLE_LOW
     alignRows.push(rows.length - 1)
     if (firstUrl(r)) linkCells.push({ r: rows.length - 1, url: firstUrl(r) })
   })
@@ -109,7 +110,7 @@ export default function Results() {
   if (!lastRecord) return null
 
   const results = lastRecord.results || []
-  const low = results.filter(r => r.low)
+  const low = results.filter(needsOrder)
 
   // Next room in the rooms list (after the one just inspected) that has supplies
   const curRoomIdx = rooms.findIndex(r => r.id === lastRecord.room_id)
@@ -210,11 +211,11 @@ export default function Results() {
           <thead><tr><th>Item</th><th>Count</th><th>Min</th><th>Status</th></tr></thead>
           <tbody>
             {results.map((r, i) => (
-              <tr key={i} className={r.low ? 'flag-red' : ''}>
+              <tr key={i} className={needsOrder(r) ? 'flag-red' : ''}>
                 <td><strong>{r.name}</strong></td>
                 <td style={{ fontFamily: 'var(--mono)' }}>{r.qty} {r.unit}</td>
                 <td style={{ fontFamily: 'var(--mono)', color: 'var(--text3)' }}>{r.min_qty}</td>
-                <td><span className={`badge badge-${r.low ? 'low' : 'ok'}`}>{r.low ? 'LOW' : 'OK'}</span></td>
+                <td><span className={`badge badge-${needsOrder(r) ? 'low' : 'ok'}`}>{statusText(r)}</span></td>
               </tr>
             ))}
           </tbody>
