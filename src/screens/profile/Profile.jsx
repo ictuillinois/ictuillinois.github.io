@@ -1486,6 +1486,36 @@ function PersonAvatar({ user, size = 56 }) {
   return <AvatarDisplay photoUrl={user?.photo_url} value={user?.avatar} size={size} fallback={emoji} />
 }
 
+// Deletes one users row. Returns an error message, or null on success.
+//
+// Both delete buttons used to ignore every error and toast success, so a row
+// the database refused to delete (a booking or training record still pointing
+// at it, or RLS) stayed on every list while the admin believed it was gone.
+// And they removed the LOGIN first: a refused delete left a user who appears
+// everywhere but can no longer sign in. Now the row goes first, confirmed by
+// .select() — a delete matching zero rows returns 200 — and the login only
+// after, and only when no other row still uses it: one auth account owns a
+// row per role (Login links every row sharing an email), so deleting someone's
+// lab manager row must not lock them out of their lab user row.
+async function deleteUserRow(id) {
+  const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
+  await sb.from('user_screen_access').delete().eq('user_id', id)
+  await sb.from('user_dashboard_prefs').delete().eq('user_id', id)
+  const { data: gone, error } = await sb.from('users').delete().eq('id', id).select('id')
+  if (error) {
+    console.error('User delete failed:', error)
+    return error.code === '23503'
+      ? 'other records (bookings, training, projects…) still refer to this account. Deactivate it instead.'
+      : error.message
+  }
+  if (!gone?.length) return 'the database did not remove the account (permission denied).'
+  if (u?.auth_id) {
+    const { count } = await sb.from('users').select('id', { count: 'exact', head: true }).eq('auth_id', u.auth_id)
+    if (!count) try { await sb.rpc('delete_auth_user', { p_auth_id: u.auth_id }) } catch (_) {}
+  }
+  return null
+}
+
 export function LabUsersPanel({ toast, session }) {
   const [labUsers, setLabUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1590,12 +1620,9 @@ export function LabUsersPanel({ toast, session }) {
   async function clearPhotoFlag(s) { await sb.from('users').update({ photo_denial_flagged: false }).eq('id', s.id); load(); toast('Photo flag cleared.') }
   async function deleteLabUser(id) {
     setDeleting(true)
-    const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
-    await sb.from('user_screen_access').delete().eq('user_id', id)
-    await sb.from('user_dashboard_prefs').delete().eq('user_id', id)
-    if (u?.auth_id) try { await sb.rpc('delete_auth_user', { p_auth_id: u.auth_id }) } catch (_) {}
-    await sb.from('users').delete().eq('id', id)
-    setDeleting(false); setDeleteTarget(null); load(); toast('Lab user deleted.')
+    const err = await deleteUserRow(id)
+    setDeleting(false); setDeleteTarget(null); load()
+    toast(err ? `Could not delete: ${err}` : 'Lab user deleted.')
   }
 
   async function parseExcel(file) {
@@ -1949,12 +1976,9 @@ function LabManagerListPanel({ toast, session }) {
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
   async function deleteLabManager(id) {
     setDeleting(true)
-    const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
-    await sb.from('user_screen_access').delete().eq('user_id', id)
-    await sb.from('user_dashboard_prefs').delete().eq('user_id', id)
-    if (u?.auth_id) try { await sb.rpc('delete_auth_user', { p_auth_id: u.auth_id }) } catch (_) {}
-    await sb.from('users').delete().eq('id', id)
-    setDeleting(false); setDeleteTarget(null); load(); toast('Member deleted.')
+    const err = await deleteUserRow(id)
+    setDeleting(false); setDeleteTarget(null); load()
+    toast(err ? `Could not delete: ${err}` : 'Member deleted.')
   }
   // Role change must REMAP name/email columns: labManagers store name=full,
   // email=login; lab users (legacy labUser convention) store email=firstName,
