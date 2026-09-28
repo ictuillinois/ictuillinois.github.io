@@ -88,6 +88,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'labmanagement') return [
     { key: 'labusers',  icon: '👥', label: 'Lab Users' },
     { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
+    { key: 'orgadmins',       icon: '🏛️', label: 'Organization Admins' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
     { key: 'guide',     icon: '📖', label: 'Lab Manager Guide' },
   ]

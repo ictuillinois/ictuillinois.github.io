@@ -1938,12 +1938,15 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
   )
 }
 
-export function LabManagersPanel({ toast, session }) {
+// role: 'user' = Lab Managers tab, 'admin' = Organization Admins tab. One
+// panel for both so the cards, Edit and role rules stay identical.
+export function LabManagersPanel({ toast, session, role = 'user' }) {
   // Access Control merged into the cards — "Access" button per lab manager
-  return <LabManagerListPanel toast={toast} session={session} />
+  return <LabManagerListPanel toast={toast} session={session} role={role} />
 }
 
-function LabManagerListPanel({ toast, session }) {
+function LabManagerListPanel({ toast, session, role = 'user' }) {
+  const isAdminTab = role === 'admin'
   const [labManagers, setLabManagers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -1952,7 +1955,7 @@ function LabManagerListPanel({ toast, session }) {
   const [deleting, setDeleting] = useState(false)
   const [accessTarget, setAccessTarget] = useState(null)
   useEffect(() => { load() }, [])
-  async function load() { setLoading(true); let q = sb.from('users').select('*').in('role', ['user', 'admin']).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setLabManagers(data || []); setLoading(false) }
+  async function load() { setLoading(true); let q = sb.from('users').select('*').eq('role', role).order('name'); if (session?.organizationId) q = q.eq('organization_id', session.organizationId); const { data } = await q; setLabManagers(data || []); setLoading(false) }
   async function saveLabManager(form, id) {
     const fullName = [form.firstName?.trim(), form.lastName?.trim()].filter(Boolean).join(' ')
     if (!fullName) { toast('Name is required.'); return }
@@ -2023,11 +2026,12 @@ function LabManagerListPanel({ toast, session }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labManagers.length} lab manager{labManagers.length !== 1 ? 's' : ''} &amp; org admin{labManagers.filter(s=>s.role==='admin').length !== 1 ? 's' : ''}</div>
-        <button className="btn btn-sm btn-primary" onClick={() => { setEditLabManager(null); setShowModal(true) }}>+ Add lab manager</button>
+        <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labManagers.length} {isAdminTab ? 'organization admin' : 'lab manager'}{labManagers.length !== 1 ? 's' : ''}</div>
+        {/* Adding creates a lab manager (role 'user'); org admins are made by the super admin */}
+        {!isAdminTab && <button className="btn btn-sm btn-primary" onClick={() => { setEditLabManager(null); setShowModal(true) }}>+ Add lab manager</button>}
       </div>
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        : labManagers.length === 0 ? <div className="empty-state"><div className="empty-icon">👨‍💼</div>No lab managers yet.</div>
+        : labManagers.length === 0 ? <div className="empty-state"><div className="empty-icon">👨‍💼</div>{isAdminTab ? 'No organization admins.' : 'No lab managers yet.'}</div>
         : (
         /* Supply-Inventory-style card grid: photo strip on top,
            action buttons under each member */
