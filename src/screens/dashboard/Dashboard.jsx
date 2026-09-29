@@ -151,7 +151,7 @@ function IconHint() {
   // Reads the store rather than taking a prop: CardGridView has no session
   // prop, and referencing an undeclared `session` there is a ReferenceError,
   // not an undefined — it would take the whole dashboard down.
-  const { session } = useAppStore()
+  const { session, setScreen, setPendingProfileTab } = useAppStore()
   const key = `ilab_icon_hint_${session?.userId || 'anon'}`
   const [show, setShow] = useState(() => {
     try { return localStorage.getItem(key) !== 'done' } catch { return false }
@@ -168,7 +168,12 @@ function IconHint() {
       <span style={{ fontSize: 16 }}>💡</span>
       <span style={{ flex: 1, minWidth: 200 }}>
         Your lab manager decides which icons you can use. You can add or remove them yourself
-        under <strong>Profile → Dashboard Icons</strong>.
+        under{' '}
+        {/* A link, not just bold text: it takes them straight to the tab it names */}
+        <button type="button" onClick={() => { setPendingProfileTab('dashboard'); setScreen('profile') }}
+          style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 700, color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}>
+          Profile → Dashboard Icons
+        </button>.
       </span>
       <button onClick={dismiss} className="btn btn-sm" style={{ flexShrink: 0 }}>Got it</button>
     </div>
