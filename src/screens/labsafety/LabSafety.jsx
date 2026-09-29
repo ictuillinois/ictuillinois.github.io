@@ -1281,8 +1281,14 @@ async function markVideoWatched(userId, stepNumber, orgId, key, current) {
 // goes out of date is worse than one that takes a click to reach.
 const SAFETY_GUIDE_URL = 'https://drs.illinois.edu/site-documents/LaboratorySafetyGuide.pdf'
 
+// The watched marker for Step 1 names the video version, so replacing the
+// video asks anyone who has not yet passed to watch the new one. Those who
+// passed are unaffected — a pass unlocks the step on its own.
+const STEP1_WATCH_KEY = 'step1-2026-09'
+
 const SAFETY_VIDEOS = {
-  step1: 'ext:s3:safety-videos/ICT-Building-safety-video.mp4',
+  // Replaced Sept 29 2026; the old ICT-Building-safety-video.mp4 is deleted.
+  step1: 'ext:s3:safety-videos/ICT-Building safety video.mp4',
   part1: 'ext:s3:safety-videos/Lab safety part 1.mp4',
   part2: 'ext:s3:safety-videos/Lab safety part 2.mp4',
 }
@@ -1603,13 +1609,13 @@ function Step4VideoContent({ user, isManager }) {
         setWatchedList(list)
         // Someone who already passed has plainly watched it; don't make them
         // sit through the video again on a row that predates this column.
-        if (list.includes('step1') || data.exam_passed || data.completed) setVideoWatched(true)
+        if (list.includes(STEP1_WATCH_KEY) || data.exam_passed || data.completed) setVideoWatched(true)
       })
   }, [userId])
 
   async function handleVideoEnded() {
     setVideoWatched(true)                        // unlock the questions at once
-    const next = await markVideoWatched(userId, 1, session?.organizationId || null, 'step1', watchedList)
+    const next = await markVideoWatched(userId, 1, session?.organizationId || null, STEP1_WATCH_KEY, watchedList)
     setWatchedList(next)
   }
 
