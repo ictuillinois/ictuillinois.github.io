@@ -27,6 +27,10 @@ supabase/.branches
 supabase/.temp
 
 # Source videos — too large for git; they live in the safety-videos storage bucket
+# Any video in the repo root, whatever its name — each replacement so far
+# arrived under a new spelling and slipped past the per-file rules.
+/*.mp4
+/*.mov
 /Lab safety part *.mp4
 /ICT Building safety video.mp4
 
