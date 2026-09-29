@@ -194,3 +194,7 @@ export const IconExternal = (p) => (
 export const IconFolder = (p) => (
   <Icon {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></Icon>
 )
+
+export const IconArrowUp = (p) => (
+  <Icon {...p}><path d="M12 19V5M6 11l6-6 6 6"/></Icon>
+)

@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { MaterialDetail, MaterialModal } from './ProjectMaterials'
 import MaterialIcon from '../../components/MaterialIcon'
-import { IconSieve, IconPlus } from '../../components/Icons'
+import { IconSieve, IconPlus, IconArrowUp } from '../../components/Icons'
 
 // One project's materials on their own page (screen 'projectmaterials'),
 // opened from the new-tab sign beside "2 · Project Materials".
@@ -17,6 +17,8 @@ import { IconSieve, IconPlus } from '../../components/Icons'
 // the project's material list (MaterialDetail → MaterialCard / ReductionRow).
 // Each pick is a browser-history step (?material=), so Back walks back
 // through what was opened. Nothing here opens another tab.
+
+const smooth = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 
 function readParams() {
   const q = new URLSearchParams(window.location.search)
@@ -40,8 +42,20 @@ export default function ProjectMaterialsPage() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(() => readParams().materialId)
   const [showAdd, setShowAdd] = useState(false)
+  const topRef = useRef(null)
+  const detailRef = useRef(null)
+  // Set by a click on a folder; the effect below then scrolls to its
+  // details, which sit below every folder and are easy to miss on a long list.
+  const scrollToDetail = useRef(false)
 
   useEffect(() => { load() }, [projectId])
+
+  useEffect(() => {
+    if (!scrollToDetail.current || !selected) return
+    scrollToDetail.current = false
+    // After paint, so the newly picked card is laid out before measuring
+    requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: smooth(), block: 'start' }))
+  }, [selected])
 
   // Back / Forward step through the folders picked on this page
   useEffect(() => {
@@ -124,7 +138,7 @@ export default function ProjectMaterialsPage() {
         <button type="button" className={'pmt-folder' + (isSel ? ' sel' : onPath.has(m.id) ? ' onpath' : '')}
           aria-pressed={isSel} aria-expanded={kids.length ? open : undefined}
           // Clicking the open material again folds it; a reduction stays picked
-          onClick={() => pick(isSel && depth === 0 ? null : m.id)}>
+          onClick={() => { scrollToDetail.current = true; pick(isSel && depth === 0 ? null : m.id) }}>
           <span className={'pmt-fi lvl' + Math.min(depth, 2)}>
             {depth === 0 ? <MaterialIcon type={m.material_type} size={22} /> : <IconSieve size={18} />}
           </span>
@@ -154,7 +168,7 @@ export default function ProjectMaterialsPage() {
   const reductionTotal = materials.length - roots.length
 
   return (
-    <div>
+    <div ref={topRef}>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div className="section-title">{project.name} — Materials</div>
         <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setScreen('projects')}>All projects</button>
@@ -196,8 +210,17 @@ export default function ProjectMaterialsPage() {
           </div>
 
           {picked ? (
+            <div ref={detailRef} style={{ display: 'grid', gap: 8, scrollMarginTop: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--text3)' }}>Details</span>
+                <button className="filter-btn" style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  onClick={() => topRef.current?.scrollIntoView({ behavior: smooth(), block: 'start' })}>
+                  <IconArrowUp size={15} />Top
+                </button>
+              </div>
             <MaterialDetail material={picked} materials={materials} project={project} readOnly={readOnly}
-              onChanged={reloadMaterials} onDelete={() => deleteTopLevel(picked)} onOpenMaterial={id => pick(id)} />
+              onChanged={reloadMaterials} onDelete={() => deleteTopLevel(picked)} onOpenMaterial={id => { scrollToDetail.current = true; pick(id) }} />
+            </div>
           ) : roots.length > 0 && (
             <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
               Pick a folder to see its details here.
