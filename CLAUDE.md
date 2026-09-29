@@ -1391,6 +1391,11 @@ evaluate false for rows the user genuinely owns — a notification was hidden fr
 the very identity it was addressed to. **Use `my_user_ids()` / `my_org_ids()`**
 (set-returning, `is_active`-aware) for all ownership and org scoping.
 
+**Backup tables made with `CREATE TABLE … AS` have RLS OFF.** In `public`
+that exposes every row to the publishable key. Enable RLS (no policy) and
+revoke anon/authenticated in the same script that creates one —
+`lab_safety_progress_backup_20260921` sat open for eight days (Sept 2026).
+
 `_apply_rls` **fails open**: a broken policy disables RLS rather than erroring.
 After any change to `rls_phase1.sql`, run the exposure check — an empty result
 is the only proof nothing silently opened up:

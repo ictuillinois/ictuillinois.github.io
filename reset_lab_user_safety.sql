@@ -16,6 +16,14 @@
 DROP TABLE IF EXISTS lab_safety_progress_backup_20260921;
 CREATE TABLE lab_safety_progress_backup_20260921 AS
 SELECT * FROM lab_safety_progress;
+-- Lock it immediately. A table made with CREATE TABLE AS has RLS OFF, and in
+-- `public` that means anyone holding the publishable key can read it through
+-- the API: user ids, exam scores and certificate links. The first run of this
+-- file left it that way for eight days (Supabase linter 0013, Sept 29).
+-- RLS on with no policy = readable only from the SQL editor / service role,
+-- which is all an undo needs.
+ALTER TABLE lab_safety_progress_backup_20260921 ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON lab_safety_progress_backup_20260921 FROM anon, authenticated;
 
 -- 2. What is about to go, before it goes.
 SELECT count(*) AS rows_to_delete,
