@@ -45,6 +45,7 @@ const Results              = lazy(() => import('./screens/inspection/Results'))
 const History              = lazy(() => import('./screens/inspection/History'))
 const ProjectMaterial      = lazy(() => import('./screens/projects/ProjectMaterial'))
 const ProjectDetail        = lazy(() => import('./screens/projects/ProjectDetail'))
+const ProjectMaterialsPage = lazy(() => import('./screens/projects/ProjectMaterialsPage'))
 const BookingEquipment     = lazy(() => import('./screens/equipment/BookingEquipment'))
 const EquipmentInventory   = lazy(() => import('./screens/equipment/EquipmentInventory'))
 const EquipmentHub         = lazy(() => import('./screens/equipment/EquipmentHub'))
@@ -161,7 +162,7 @@ function TrainingOnboardingModal({ onGoToTraining, onDismiss }) {
 const INTERNAL = new Set([
   'dashboard', 'profile', 'orgadmin',
   'home', 'inspection', 'results', 'history',
-  'projects', 'project-detail',
+  'projects', 'project-detail', 'projectmaterials',
   'booking', 'barcodeqr',
   'training', 'remessages', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'equipmentscan',
 ])
@@ -430,6 +431,7 @@ export default function App() {
     history:          <History />,
     projects:         <ProjectMaterial />,
     'project-detail': <ProjectDetail />,
+    projectmaterials: <ProjectMaterialsPage />,
     booking:          <BookingEquipment />,
     equipment:        <EquipmentInventory />,
     equipmenthub:     <EquipmentHub />,

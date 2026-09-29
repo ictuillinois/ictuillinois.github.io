@@ -37,7 +37,7 @@ const TYPE_LABEL = {
 // Reduction" tab on a material. Same component rather than a second one: the
 // create path carries the NOT_COPIED rules and the session scope-stamping, and
 // a copy of that is a copy that drifts.
-export default function MaterialReductionModal({ session, isSolo, viewingWorkspaceOwnerId, onClose, onCreated, inline = false, parentMaterial = null, parentProject = null }) {
+export default function MaterialReductionModal({ session, isSolo, viewingWorkspaceOwnerId, onClose, onCreated, inline = false, parentMaterial = null, parentProject = null, initialProjectId = '' }) {
   const { toast } = useAppStore()
   const fixed = !!parentMaterial
   const [projects, setProjects] = useState(parentProject ? [parentProject] : [])
@@ -46,7 +46,9 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
   const [matLoading, setMatLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const [projectId, setProjectId] = useState(parentProject?.id || '')
+  // initialProjectId: opened from a project that is already open, so start
+  // there — the list stays changeable, unlike a fixed parentMaterial.
+  const [projectId, setProjectId] = useState(parentProject?.id || initialProjectId || '')
   const [materialId, setMaterialId] = useState(parentMaterial?.id || '')
   const [type, setType] = useState(parentMaterial?.material_type || '')
   const [method, setMethod] = useState('')
@@ -57,6 +59,7 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
   const [err, setErr] = useState('')
 
   useEffect(() => { if (!fixed) loadProjects() }, [fixed])
+  useEffect(() => { if (!fixed && initialProjectId) loadMaterials(initialProjectId) }, [])
 
   async function loadProjects() {
     // Scope the PROJECT list the same way the Projects screen does. Materials

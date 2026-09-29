@@ -896,7 +896,7 @@ export default function Dashboard() {
     return base
   })()
   // Screens not managed by user_screen_access (always allowed if in activeModules)
-  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement'])
+  const UNMANAGED_SCREENS = new Set(['profile', 'dashboard', 'pm', 'barcodeqr', 'orgadmin', 'home', 'equipment', 'labmanagement', 'projectmaterials'])
   const modules = (() => {
     let list = userAccess
       ? allModules.filter(m => m.external || !m.screen || UNMANAGED_SCREENS.has(m.screen) || userAccess.has(m.screen))

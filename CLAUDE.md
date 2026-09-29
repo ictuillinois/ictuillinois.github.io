@@ -363,8 +363,8 @@ ALTER TABLE solo_users ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 's
 - **`INTERNAL`** in `App.jsx` — controls whether navigating to the screen is *allowed* without a `user_screen_access` entry
 
 **Current values (must match):**
-- `UNMANAGED_SCREENS` (Dashboard.jsx): `profile`, `dashboard`, `pm`, `barcode`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `labmanagement`
-- `INTERNAL` (App.jsx): `dashboard`, `profile`, `inspection`, `results`, `project-detail`, `pm`, `barcode`, `equipmentscan`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `projects`, `training`, `history`, `equipmenthub`, `booking`, `remessages`, `labmanagement`
+- `UNMANAGED_SCREENS` (Dashboard.jsx): `profile`, `dashboard`, `pm`, `barcode`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `labmanagement`, `projectmaterials`
+- `INTERNAL` (App.jsx): `dashboard`, `profile`, `inspection`, `results`, `project-detail`, `pm`, `barcode`, `equipmentscan`, `barcodeqr`, `orgadmin`, `home`, `equipment`, `projects`, `training`, `history`, `equipmenthub`, `booking`, `remessages`, `labmanagement`, `projectmaterials`
 
 ### 7. clearSession must always remove the login-mode localStorage key
 
@@ -1539,3 +1539,31 @@ lock did, and re-ran only on mount; the dashboard's copy of the same check had
 `screen` in its deps and re-ran on every navigation. An approved lab user got
 their modules on the dashboard while the sidebar stayed locked. Realtime is
 the fast path; navigation should still re-check.
+
+## Project Workspace toolbar + Project Materials page (Sept 2026)
+
+**Toolbar (MaterialInventoryTab in ProjectMaterial.jsx).** The Projects ·
+Materials · Search row sits directly under the page title, with the status
+filters and Export all on the same row (Export set apart by a divider). The
+add buttons appear UNDER that row, only where they belong:
+- `Add material to {project}` + `Material Reduction` — only while a project
+  card is open (and the user may edit it). Both modals start on that project.
+- `Non-Project Material` — only on the Materials view.
+They are plain `filter-btn` pills, green only while their form is open. Line
+icons from Icons.jsx, no emoji.
+
+**Project Materials page** — screen `projectmaterials`,
+`src/screens/projects/ProjectMaterialsPage.jsx`, opened by the small sign
+beside "2 · Project Materials" via `lib/projectMaterialsTab.js`
+(`/?screen=projectmaterials&project=<id>`).
+- Web: its own browser tab, at most ONE per project (named window).
+  Native app: navigates in place — window.open would leave the app.
+- Materials are folders; reductions branch off their parent
+  (`parent_material_id`), recursively. Only the picked material's branches
+  open; the rest stay listed, folded.
+- Picking any folder shows its details below using `MaterialDetail`, which is
+  the SAME `MaterialCard` / `ReductionRow` the project's material list uses.
+  Do not give this page its own copy of the card.
+- Each pick is a history step (`?material=`), so Back walks back through it.
+- Tree CSS lives in index.css under `.pmt-*`. `folder()` is a render
+  function, not a nested component — nested, it remounts every render.

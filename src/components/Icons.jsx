@@ -156,3 +156,41 @@ export const IconTrash = (p) => (
     <path d="M10 10.5v6M14 10.5v6"/>
   </Icon>
 )
+
+// ── Project Workspace (Sept 2026) ──
+export const IconPlus = (p) => (
+  <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>
+)
+
+export const IconFlask = (p) => (
+  <Icon {...p}><path d="M9 3h6M10 3v6.5L5.2 18a2 2 0 0 0 1.8 3h10a2 2 0 0 0 1.8-3L14 9.5V3M7.6 15h8.8"/></Icon>
+)
+
+export const IconBox = (p) => (
+  <Icon {...p}><path d="M21 7.5 12 3 3 7.5 12 12l9-4.5zM3 7.5v9L12 21l9-4.5v-9M12 12v9"/></Icon>
+)
+
+export const IconBoxPlus = (p) => (
+  <Icon {...p}><path d="M19 10.5V7.5L11 3.5 3 7.5 11 11.5l8-4M3 7.5v9l8 4v-9M17 15v6M14 18h6"/></Icon>
+)
+
+export const IconSearch = (p) => (
+  <Icon {...p}><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></Icon>
+)
+
+// A stack of sieves, coarse to fine — what material reduction does.
+export const IconSieve = (p) => (
+  <Icon {...p}><path d="M3 5h18M5 9.5h14M7.5 14h9M10 18.5h4"/><path d="M3 5l2 4.5M21 5l-2 4.5" opacity=".55"/></Icon>
+)
+
+export const IconDownload = (p) => (
+  <Icon {...p}><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></Icon>
+)
+
+export const IconExternal = (p) => (
+  <Icon {...p}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></Icon>
+)
+
+export const IconFolder = (p) => (
+  <Icon {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></Icon>
+)

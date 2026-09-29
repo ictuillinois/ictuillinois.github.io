@@ -1349,9 +1349,15 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
 // component's body is a brand-new type on every render, so React unmounts and
 // remounts it — the expanded state and the selected sub-tab would reset each
 // time the parent re-rendered.
-function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, isSolo, onChanged, onOpen, depth = 0 }) {
+// "Fractionation · 1/2 in" — how a reduction was made, for its row caption.
+function reductionCaption(x) {
+  return (x.reduction_method === 'fractionation' ? 'Fractionation' : x.reduction_method || 'Reduction')
+    + (x.reduction_value ? ` \u00b7 ${x.reduction_value}` : '')
+}
+
+function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, isSolo, onChanged, onOpen, depth = 0, defaultOpen = false }) {
   const { toast } = useAppStore()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [sub, setSub] = useState('info')
   const [busy, setBusy] = useState(false)
 
@@ -1448,9 +1454,7 @@ function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnl
     : null
   const children = allMaterials.filter(x => x.parent_material_id === material.id)
 
-  const methodLabel = x =>
-    (x.reduction_method === 'fractionation' ? 'Fractionation' : x.reduction_method || 'Reduction')
-    + (x.reduction_value ? ` \u00b7 ${x.reduction_value}` : '')
+  const methodLabel = reductionCaption
 
   const capStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }
   const rowProps = { allMaterials, project, readOnly, isSolo, onChanged, depth }
@@ -1459,7 +1463,7 @@ function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnl
     <div style={{ padding: '18px 16px', fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>
       This material has not been reduced, and was not derived from another.
       <div style={{ marginTop: 6 }}>
-        Use <strong>⚗️ Material Reduction</strong> above the project list to split it into sieve fractions.
+        Use <strong>+ Add Reduction</strong> on this material to split it into sieve fractions.
       </div>
     </div>
   )
@@ -1489,17 +1493,166 @@ function MaterialReductionTab({ material, allMaterials, onOpen, project, readOnl
   )
 }
 
-export default function ProjectMaterials({ project, readOnly = false }) {
-  const { toast, session, viewingWorkspaceOwnerId } = useAppStore()
+// One material's card: the header row and, when open, its numbered tabs.
+// Shared by the project's material list and the Project Materials page, so a
+// material can never look different depending on where it was opened.
+export function MaterialCard({ m, idx = 0, materials, project, readOnly = false, isOpen, onToggle, onChanged, onDelete, onOpenMaterial }) {
+  const { session, viewingWorkspaceOwnerId } = useAppStore()
   const isSoloUser = session?.loginMode === 'solo'
+  const [matTab, setMatTab] = useState('info')
+  useEffect(() => { if (isOpen) setMatTab('info') }, [isOpen, m.id])
+  const firstPhoto = m.photos?.[0]
+  const reductions = materials.filter(x => x.parent_material_id === m.id).length
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
+      {/* Material card header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: onToggle ? 'pointer' : 'default', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}
+        onClick={onToggle}>
+        {/* Thumbnail */}
+        <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {firstPhoto
+            ? <img src={firstPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <MaterialIcon type={m.material_type} size={30} />
+          }
+        </div>
+        {/* Info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{m.name || typeLabel(m.material_type)}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: typeBg(m.material_type), color: typeColor(m.material_type) }}>
+              {typeLabel(m.material_type)}
+            </span>
+            {reductions > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                ⚗️ {reductions} reduction{reductions !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
+            {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
+            {m.source_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconMapPin size={12} />{m.source_name}</span>}
+            {m.container_type && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconScale size={12} />{m.container_type}</span>}
+            {m.sampling_date && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCalendar size={12} />{m.sampling_date}</span>}
+            {m.photos?.length > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCamera size={12} />{m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
+          </div>
+        </div>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          {!readOnly && onDelete && (
+            <button className="btn btn-sm" title="Delete material" onClick={e => { e.stopPropagation(); onDelete() }}
+              style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#c84b2f' }}
+              onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = '' }}>
+              <IconTrash size={15} />
+            </button>
+          )}
+          {onToggle && (
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+              <IconChevronDown size={16} />
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded — numbered tab panel */}
+      {isOpen && (() => {
+        // The reduction tab appears only once there is a reduction to
+        // show — either this material came from one, or something came
+        // from it. Numbering is derived, so adding the first reduction
+        // shifts "+ Add Reduction" from 4 to 5 on its own.
+        const hasReduction = !!m.parent_material_id || reductions > 0
+        const MAT_TABS = [
+          { key: 'info',    label: 'Material Info' },
+          ...(readOnly ? [] : [{ key: 'edit', label: 'Material' }]),
+          { key: 'storage', label: 'Material Storage' },
+          ...(hasReduction ? [{ key: 'reduction', label: 'Material Reduction' }] : []),
+          ...(readOnly ? [] : [{ key: 'addreduction', label: '+ Add Reduction' }]),
+        ].map((t, i) => ({ ...t, label: `${i + 1} · ${t.label}` }))
+        return (
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
+          {/* Tab bar */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', overflowX: 'auto' }}>
+            {MAT_TABS.map(t => (
+              <button key={t.key} onClick={e => { e.stopPropagation(); setMatTab(t.key) }}
+                style={{ padding: '10px 14px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: matTab === t.key ? 'var(--accent3)' : 'var(--text2)', borderBottom: `2px solid ${matTab === t.key ? 'var(--accent3)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab 1: Material Info */}
+          {matTab === 'info' && <MaterialInfoView m={m} editHint={!readOnly} />}
+
+          {/* Tab 2: Edit form inline */}
+          {matTab === 'edit' && !readOnly && (
+            <MaterialModal
+              inline
+              projectId={project.id}
+              projectName={project.name}
+              material={m}
+              onClose={() => setMatTab('info')}
+              onSaved={() => { onChanged?.(); setMatTab('info') }}
+            />
+          )}
+
+          {/* Tab 3: QR label */}
+          {matTab === 'storage' && <MaterialQRTab material={m} project={project} parent={materials.find(x => x.id === m.parent_material_id) || null} />}
+          {/* Tab 4: reduction — shows BOTH directions: what this
+              material was derived from, and what has been derived
+              from it. */}
+          {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={onOpenMaterial} project={project} readOnly={readOnly} isSolo={isSoloUser} onChanged={onChanged} />}
+          {/* Tab 5: create a reduction from this material. Same
+              component as the toolbar modal, with the parent fixed
+              — a second implementation of the create path would drift
+              from the NOT_COPIED rules and the scope stamping. */}
+          {matTab === 'addreduction' && !readOnly && (
+            <MaterialReductionModal
+              inline
+              parentMaterial={m}
+              parentProject={project}
+              session={session}
+              isSolo={isSoloUser}
+              viewingWorkspaceOwnerId={viewingWorkspaceOwnerId}
+              onClose={() => setMatTab('info')}
+              onCreated={() => { onChanged?.(); setMatTab('reduction') }}
+            />
+          )}
+        </div>
+      )
+      })()}
+    </div>
+  )
+}
+
+// The details for one picked folder on the Project Materials page: a material
+// gets its full card, a reduction gets its reduction row, both already open.
+// Neither is a new implementation — they are the same components the
+// project's material list uses.
+export function MaterialDetail({ material, materials, project, readOnly = false, onChanged, onDelete, onOpenMaterial }) {
+  const { session } = useAppStore()
+  if (!material.parent_material_id) {
+    return (
+      <MaterialCard key={material.id} m={material} materials={materials} project={project} readOnly={readOnly}
+        isOpen onChanged={onChanged} onDelete={onDelete} onOpenMaterial={onOpenMaterial} />
+    )
+  }
+  return (
+    <ReductionRow key={material.id} item={material} icon="📦" caption={reductionCaption(material)}
+      allMaterials={materials} project={project} readOnly={readOnly}
+      isSolo={session?.loginMode === 'solo'} onChanged={onChanged} defaultOpen />
+  )
+}
+
+export default function ProjectMaterials({ project, readOnly = false }) {
+  const { toast } = useAppStore()
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editMaterial, setEditMaterial] = useState(null)
   const [expanded, setExpanded] = useState(null)
-  const [matTab, setMatTab] = useState('info')
 
-  useEffect(() => { setMatTab('info') }, [expanded])
   useEffect(() => { load() }, [project.id])
 
   async function load() {
@@ -1544,127 +1697,10 @@ export default function ProjectMaterials({ project, readOnly = false }) {
       ) : (
         topLevel.map((m, idx) => {
           const isOpen = expanded === m.id
-          const firstPhoto = m.photos?.[0]
           return (
-            <div key={m.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: 12, overflow: 'hidden' }}>
-              {/* Material card header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}
-                onClick={() => setExpanded(isOpen ? null : m.id)}>
-                {/* Thumbnail */}
-                <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {firstPhoto
-                    ? <img src={firstPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <MaterialIcon type={m.material_type} size={30} />
-                  }
-                </div>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{m.name || typeLabel(m.material_type)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: typeBg(m.material_type), color: typeColor(m.material_type) }}>
-                      {typeLabel(m.material_type)}
-                    </span>
-                    {(() => {
-                      const n = materials.filter(x => x.parent_material_id === m.id).length
-                      return n > 0 ? (
-                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 99, background: 'var(--accent-light)', color: 'var(--accent)' }}>
-                          ⚗️ {n} reduction{n !== 1 ? 's' : ''}
-                        </span>
-                      ) : null
-                    })()}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {m.material_type === 'asphalt_binder' && m.ab_binder_pg && <span>PG: {m.ab_binder_pg}</span>}
-                    {m.material_type === 'plant_mix' && m.pm_binder_pg && <span>PG: {m.pm_binder_pg}</span>}
-                    {m.source_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconMapPin size={12} />{m.source_name}</span>}
-                    {m.container_type && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconScale size={12} />{m.container_type}</span>}
-                    {m.sampling_date && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCalendar size={12} />{m.sampling_date}</span>}
-                    {m.photos?.length > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconCamera size={12} />{m.photos.length} photo{m.photos.length > 1 ? 's' : ''}</span>}
-                  </div>
-                </div>
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                  {!readOnly && (
-                    <button className="btn btn-sm" title="Delete material" onClick={e => { e.stopPropagation(); deleteMaterial(m.id) }}
-                      style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#c84b2f' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.borderColor = '' }}>
-                      <IconTrash size={15} />
-                    </button>
-                  )}
-                  <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text3)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
-                    <IconChevronDown size={16} />
-                  </span>
-                </div>
-              </div>
-
-              {/* Expanded — 3-tab panel */}
-              {isOpen && (() => {
-                // The reduction tab appears only once there is a reduction to
-                // show — either this material came from one, or something came
-                // from it. Numbering is derived, so adding the first reduction
-                // shifts "+ Add Reduction" from 4 to 5 on its own.
-                const hasReduction = !!m.parent_material_id || materials.some(x => x.parent_material_id === m.id)
-                const MAT_TABS = [
-                  { key: 'info',    label: 'Material Info' },
-                  ...(readOnly ? [] : [{ key: 'edit', label: 'Material' }]),
-                  { key: 'storage', label: 'Material Storage' },
-                  ...(hasReduction ? [{ key: 'reduction', label: 'Material Reduction' }] : []),
-                  ...(readOnly ? [] : [{ key: 'addreduction', label: '+ Add Reduction' }]),
-                ].map((t, i) => ({ ...t, label: `${i + 1} · ${t.label}` }))
-                return (
-                <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
-                  {/* Tab bar */}
-                  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', overflowX: 'auto' }}>
-                    {MAT_TABS.map(t => (
-                      <button key={t.key} onClick={e => { e.stopPropagation(); setMatTab(t.key) }}
-                        style={{ padding: '10px 14px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: matTab === t.key ? 'var(--accent3)' : 'var(--text2)', borderBottom: `2px solid ${matTab === t.key ? 'var(--accent3)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Tab 1: Material Info */}
-                  {matTab === 'info' && <MaterialInfoView m={m} editHint={!readOnly} />}
-
-                  {/* Tab 2: Edit form inline */}
-                  {matTab === 'edit' && !readOnly && (
-                    <MaterialModal
-                      inline
-                      projectId={project.id}
-                      projectName={project.name}
-                      material={m}
-                      onClose={() => setMatTab('info')}
-                      onSaved={() => { load(); setMatTab('info') }}
-                    />
-                  )}
-
-                  {/* Tab 3: QR label */}
-                  {matTab === 'storage' && <MaterialQRTab material={m} project={project} parent={materials.find(x => x.id === m.parent_material_id) || null} />}
-                  {/* Tab 4: reduction — shows BOTH directions: what this
-                      material was derived from, and what has been derived
-                      from it. */}
-                  {matTab === 'reduction' && <MaterialReductionTab material={m} allMaterials={materials} onOpen={setExpanded} project={project} readOnly={readOnly} isSolo={isSoloUser} onChanged={load} />}
-                  {/* Tab 5: create a reduction from this material. Same
-                      component as the top-of-page modal, with the parent fixed
-                      — a second implementation of the create path would drift
-                      from the NOT_COPIED rules and the scope stamping. */}
-                  {matTab === 'addreduction' && !readOnly && (
-                    <MaterialReductionModal
-                      inline
-                      parentMaterial={m}
-                      parentProject={project}
-                      session={session}
-                      isSolo={isSoloUser}
-                      viewingWorkspaceOwnerId={viewingWorkspaceOwnerId}
-                      onClose={() => setMatTab('info')}
-                      onCreated={() => { load(); setMatTab('reduction') }}
-                    />
-                  )}
-                </div>
-              )
-              })()}
-            </div>
+            <MaterialCard key={m.id} m={m} idx={idx} materials={materials} project={project} readOnly={readOnly}
+              isOpen={isOpen} onToggle={() => setExpanded(isOpen ? null : m.id)}
+              onChanged={load} onDelete={() => deleteMaterial(m.id)} onOpenMaterial={setExpanded} />
           )
         })
       )}

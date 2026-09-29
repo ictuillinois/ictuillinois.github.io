@@ -1,7 +1,8 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
-import { IconEye, IconCalendar, IconUser } from '../../components/Icons'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal } from '../../components/Icons'
+import { openProjectMaterials } from '../../lib/projectMaterialsTab'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
@@ -268,14 +269,14 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
 }
 
 // ── New Material Modal ──────────────────────────────────────────
-function NewMaterialModal({ material, onClose, onCreated, requireProject = false }) {
+function NewMaterialModal({ material, onClose, onCreated, requireProject = false, projectId = '' }) {
   const isEdit = !!material
   const { session, toast } = useAppStore()
   const [form, setForm] = useState({
     name: material?.name || '',
     sampling_date: material?.sampling_date || '',
     storage_date: material?.storage_date || '',
-    project_id: material?.project_id || '',
+    project_id: material?.project_id || projectId || '',
   })
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
@@ -2171,7 +2172,7 @@ function WorkspaceTab({ session, isSolo, allowedNames, userProjectGroup, userAss
 
 // ── Material Inventory Tab ─────────────────────────────────────
 function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
-  const { toast, sharedWorkspaces, viewingWorkspaceOwnerId, setViewingWorkspaceOwnerId } = useAppStore()
+  const { toast, sharedWorkspaces, viewingWorkspaceOwnerId, setViewingWorkspaceOwnerId, setScreen } = useAppStore()
   const [allProjects, setAllProjects] = useState([])
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
@@ -2237,6 +2238,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   }
 
   const [showReduction, setShowReduction] = useState(false)
+  // Bumped after adding to the open project, so its materials tab reloads —
+  // it only loads when the project id changes, which it does not here.
+  const [materialsRefresh, setMaterialsRefresh] = useState(0)
   const [exportingAll, setExportingAll] = useState(false)
 
   // All projects in one sheet. Scoped the same way the project list is, so an
@@ -2314,27 +2318,64 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   ]
 
   const viewingShared = isSolo && !!viewingWorkspaceOwnerId
+  const pillIcon = { display: 'inline-flex', alignItems: 'center', gap: 6 }
+  const pillPressed = { background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }
   const viewingOwnerName = sharedWorkspaces.find(ws => ws.ownerId === viewingWorkspaceOwnerId)?.ownerName
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-        {!viewingShared && (
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        {['projects', 'materials', 'search'].map(m => (
+          <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')} style={pillIcon}
+            onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null); setSelectedMaterialId(null); setMatPanelTab('info') }}>
+            {m === 'projects' ? <><IconFlask size={15} />Projects</> : m === 'materials' ? <><IconBox size={15} />Materials</> : <><IconSearch size={15} />Search</>}
+          </button>
+        ))}
+        {viewMode === 'projects' && (
           <>
-            <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowNewModal(true)}>
-              + Add project's material
-            </button>
-            <button className={`btn btn-sm ${isSolo ? 'btn-purple' : 'btn-primary'}`} onClick={() => setShowMaterialModal(true)}>
-              + Non-Project Material
-            </button>
-            {/* Derives new materials (today: sieve fractions) from an existing
-                one, copying the parent's answers across. */}
-            <button className="btn btn-sm" onClick={() => setShowReduction(true)}>
-              ⚗️ Material Reduction
+            <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+            {['all','my','active','on hold','completed'].map(f => (
+              <button key={f} className={'filter-btn' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
+                {f === 'all' ? 'All' : f === 'my' ? 'My Project/s' : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+            {/* Every project in one sheet, with Project / Project ID as the
+                leading columns. Per-project exports live on the Project Info
+                tab; this is the across-the-board version. Same row as the
+                filters but set apart: it acts on every project rather than
+                narrowing the list. */}
+            <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 12px' }} />
+            <button className="filter-btn" style={pillIcon}
+              onClick={exportAllMaterials} disabled={exportingAll}
+              title="Download every project's materials — one sheet per project">
+              <IconDownload size={15} />{exportingAll ? 'Exporting…' : 'Export all (Excel)'}
             </button>
           </>
         )}
       </div>
+
+      {/* Add buttons sit under the row, and only where they belong: adding to
+          a project needs an open project; a non-project material belongs to
+          the Materials view. Plain pills until clicked — green only while
+          their form is open. */}
+      {!viewingShared && ((viewMode === 'projects' && activeProject && isProjectAssigned(activeProject)) || viewMode === 'materials') && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+          {viewMode === 'projects' ? (
+            <>
+              <button className="filter-btn" style={{ ...pillIcon, ...(showNewModal ? pillPressed : {}) }} onClick={() => setShowNewModal(true)}>
+                <IconPlus size={15} />Add material to {activeProject.name}
+              </button>
+              <button className="filter-btn" style={{ ...pillIcon, ...(showReduction ? pillPressed : {}) }} onClick={() => setShowReduction(true)}>
+                <IconSieve size={15} />Material Reduction
+              </button>
+            </>
+          ) : (
+            <button className="filter-btn" style={{ ...pillIcon, ...(showMaterialModal ? pillPressed : {}) }} onClick={() => setShowMaterialModal(true)}>
+              <IconBoxPlus size={15} />Non-Project Material
+            </button>
+          )}
+        </div>
+      )}
 
       {isSolo && sharedWorkspaces.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '10px 14px', background: '#EEEDFE', borderRadius: 10, border: '1px solid #CECBF6', flexWrap: 'wrap' }}>
@@ -2354,33 +2395,6 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {['projects', 'materials', 'search'].map(m => (
-          <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')}
-            onClick={() => { setViewMode(m); setActiveProjectId(null); setActiveProject(null); setSelectedMaterialId(null); setMatPanelTab('info') }}>
-            {m === 'projects' ? '🧪 Projects' : m === 'materials' ? '📦 Materials' : '🔍 Search'}
-          </button>
-        ))}
-        {viewMode === 'projects' && (
-          <>
-            <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
-            {['all','my','active','on hold','completed'].map(f => (
-              <button key={f} className={'filter-btn' + (filter === f ? ' active' : '')} onClick={() => setFilter(f)}>
-                {f === 'all' ? 'All' : f === 'my' ? 'My Project/s' : f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-            {/* Every project in one sheet, with Project / Project ID as the
-                leading columns. Per-project exports live on the Project Info
-                tab; this is the across-the-board version. */}
-            <button className="btn btn-sm" style={{ marginLeft: 'auto' }}
-              onClick={exportAllMaterials} disabled={exportingAll}
-              title="Download every project's materials — one sheet per project">
-              {exportingAll ? 'Exporting…' : '⬇️ Export all (Excel)'}
-            </button>
-          </>
-        )}
-      </div>
-
       <input ref={photoFileRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { uploadProjectPhoto(e.target.files?.[0]); e.target.value = '' }} />
 
@@ -2391,8 +2405,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       {showReduction && (
         <MaterialReductionModal
           session={session} isSolo={isSolo} viewingWorkspaceOwnerId={viewingWorkspaceOwnerId}
+          initialProjectId={viewMode === 'projects' && activeProject ? activeProject.id : ''}
           onClose={() => setShowReduction(false)}
-          onCreated={() => { loadAllMaterials(); loadProjects() }}
+          onCreated={() => { loadAllMaterials(); loadProjects(); setMaterialsRefresh(n => n + 1) }}
         />
       )}
 
@@ -2581,15 +2596,24 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
           </div>
           <ScrollTabs style={{ borderBottom: '1px solid var(--border)' }} bg='var(--surface)'>
             {subTabs.map(t => (
-              <button key={t.key} onClick={() => setSubTab(t.key)}
+              <Fragment key={t.key}>
+              <button onClick={() => setSubTab(t.key)}
                 style={{ padding: '12px 16px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent3)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent3)' : 'transparent'}`, whiteSpace: 'nowrap', transition: 'all 0.15s' }}>
                 {t.label}
               </button>
+              {t.key === 'materials' && (
+                <button onClick={() => openProjectMaterials(activeProject.id, setScreen)}
+                  title="Open this project's materials in a new tab" aria-label="Open this project's materials in a new tab"
+                  style={{ alignSelf: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, marginLeft: -8, marginRight: 8, padding: 0, borderRadius: 6, border: '1px solid #9FE1CB', background: 'var(--accent-light)', color: '#085041', cursor: 'pointer' }}>
+                  <IconExternal size={14} />
+                </button>
+              )}
+              </Fragment>
             ))}
           </ScrollTabs>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', padding: 24 }}>
             {subTab === 'info'      && <ProjectInfo project={activeProject} users={users} onSaved={loadActiveProject} isSolo={isSolo} readOnly={viewingShared || !isProjectAssigned(activeProject)} />}
-            {subTab === 'materials' && <ProjectMaterials project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
+            {subTab === 'materials' && <ProjectMaterials key={materialsRefresh} project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
             {subTab === 'storage'   && <MaterialStorage project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
           </div>
         </div>
@@ -2598,8 +2622,9 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
       {showNewModal && (
         <NewMaterialModal
           requireProject
+          projectId={activeProject?.id}
           onClose={() => setShowNewModal(false)}
-          onCreated={(data) => { setShowNewModal(false); loadAllMaterials(); if (data?.project_id) setActiveProjectId(data.project_id) }}
+          onCreated={(data) => { setShowNewModal(false); loadAllMaterials(); setMaterialsRefresh(n => n + 1); if (data?.project_id) setActiveProjectId(data.project_id) }}
         />
       )}
 
