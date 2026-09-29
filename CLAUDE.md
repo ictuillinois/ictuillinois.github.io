@@ -1556,8 +1556,11 @@ icons from Icons.jsx, no emoji.
 `src/screens/projects/ProjectMaterialsPage.jsx`, opened by the small sign
 beside "2 · Project Materials" via `lib/projectMaterialsTab.js`
 (`/?screen=projectmaterials&project=<id>`).
-- Web: its own browser tab, at most ONE per project (named window).
-  Native app: navigates in place — window.open would leave the app.
+- Opens IN THE SAME TAB (pushState + setScreen). A separate tab per project
+  was built first and dropped: users lost track of which tab held what.
+  "All projects" returns to the workspace and reopens the project on its
+  materials tab (sessionStorage `ictlab_reopen_project`, read once).
+  Both screens listen for popstate so Back/Forward keep screen and URL in step.
 - Materials are folders; reductions branch off their parent
   (`parent_material_id`), recursively. Only the picked material's branches
   open; the rest stay listed, folded.

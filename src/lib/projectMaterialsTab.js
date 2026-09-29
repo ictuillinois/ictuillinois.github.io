@@ -1,11 +1,13 @@
-// Opens one project's materials on their own page (screen 'projectmaterials').
+// Opens one project's materials on their own page (screen 'projectmaterials')
+// IN THE SAME TAB. A separate tab was tried first and dropped: several tabs of
+// the same app open at once is how people lose track of what they were doing
+// where. "All projects" on that page returns to the workspace, with the
+// project it came from open again.
 //
-// Web: a separate browser tab, at most ONE per project — the window name makes
-// a second click bring back the tab already open instead of stacking another.
-// The Project Workspace tab stays exactly as it was.
-//
-// Native app (Capacitor): there are no browser tabs, and window.open would
-// leave the app for the system browser, so it navigates in place instead.
+// The page is still a real URL (?screen=projectmaterials&project=<id>), so it
+// can be reloaded or bookmarked, and the browser's Back button leaves it.
+const REOPEN_KEY = 'ictlab_reopen_project'
+
 export function projectMaterialsUrl(projectId, materialId = null) {
   const url = new URL(window.location.href)
   url.search = ''
@@ -17,11 +19,24 @@ export function projectMaterialsUrl(projectId, materialId = null) {
 }
 
 export function openProjectMaterials(projectId, setScreen) {
-  const url = projectMaterialsUrl(projectId)
-  if (window.Capacitor?.isNativePlatform?.()) {
-    window.history.pushState({}, '', url)
-    setScreen('projectmaterials')
-    return
-  }
-  window.open(url, `project-materials-${projectId}`)
+  window.history.pushState({}, '', projectMaterialsUrl(projectId))
+  setScreen('projectmaterials')
+}
+
+// Back to the Project Workspace, asking it to reopen `projectId`.
+export function backToProjects(projectId, setScreen) {
+  try { if (projectId) sessionStorage.setItem(REOPEN_KEY, projectId) } catch {}
+  const url = new URL(window.location.href)
+  url.search = ''
+  window.history.pushState({}, '', url)
+  setScreen('projects')
+}
+
+// Read once by the workspace on mount; cleared so it only happens once.
+export function takeReopenProject() {
+  try {
+    const id = sessionStorage.getItem(REOPEN_KEY)
+    sessionStorage.removeItem(REOPEN_KEY)
+    return id
+  } catch { return null }
 }

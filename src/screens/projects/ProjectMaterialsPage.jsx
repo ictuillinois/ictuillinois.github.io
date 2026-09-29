@@ -4,9 +4,11 @@ import { sb } from '../../lib/supabase'
 import { MaterialDetail, MaterialModal } from './ProjectMaterials'
 import MaterialIcon from '../../components/MaterialIcon'
 import { IconSieve, IconPlus, IconArrowUp } from '../../components/Icons'
+import { backToProjects } from '../../lib/projectMaterialsTab'
 
 // One project's materials on their own page (screen 'projectmaterials'),
-// opened from the new-tab sign beside "2 · Project Materials".
+// opened in the same tab from the sign beside "2 · Project Materials";
+// "All projects" returns to the workspace with this project reopened.
 //
 // Materials are folders; each reduction branches off the folder it came from
 // (project_materials.parent_material_id), as deep as the reductions go. Only
@@ -16,7 +18,7 @@ import { IconSieve, IconPlus, IconArrowUp } from '../../components/Icons'
 // Picking any folder shows its details below, using the SAME components as
 // the project's material list (MaterialDetail → MaterialCard / ReductionRow).
 // Each pick is a browser-history step (?material=), so Back walks back
-// through what was opened. Nothing here opens another tab.
+// through what was opened, and past the first pick, back to the workspace.
 
 const smooth = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 
@@ -59,7 +61,11 @@ export default function ProjectMaterialsPage() {
 
   // Back / Forward step through the folders picked on this page
   useEffect(() => {
-    const onPop = () => setSelected(readParams().materialId)
+    const onPop = () => {
+      // Back past this page's first entry lands on the workspace URL
+      if (new URLSearchParams(window.location.search).get('screen') !== 'projectmaterials') { setScreen('projects'); return }
+      setSelected(readParams().materialId)
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -160,7 +166,7 @@ export default function ProjectMaterialsPage() {
   if (error || !project) return (
     <div className="empty-state" style={{ padding: 40 }}>
       <div>{error || 'Project not found.'}</div>
-      <button className="btn btn-sm" style={{ marginTop: 16 }} onClick={() => setScreen('projects')}>Go to projects</button>
+      <button className="btn btn-sm" style={{ marginTop: 16 }} onClick={() => backToProjects(null, setScreen)}>Go to projects</button>
     </div>
   )
 
@@ -171,7 +177,7 @@ export default function ProjectMaterialsPage() {
     <div ref={topRef}>
       <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div className="section-title">{project.name} — Materials</div>
-        <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setScreen('projects')}>All projects</button>
+        <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => backToProjects(project.id, setScreen)}>All projects</button>
       </div>
 
       <div className="pmt-page">

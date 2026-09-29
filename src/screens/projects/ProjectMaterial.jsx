@@ -1,7 +1,7 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal } from '../../components/Icons'
-import { openProjectMaterials } from '../../lib/projectMaterialsTab'
+import { openProjectMaterials, takeReopenProject } from '../../lib/projectMaterialsTab'
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
@@ -2185,9 +2185,12 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showMaterialModal, setShowMaterialModal] = useState(false)
-  const [activeProjectId, setActiveProjectId] = useState(null)
+  // Coming back from a project's materials page reopens that project, on its
+  // materials tab, so the user lands where they left off.
+  const [reopenId] = useState(() => takeReopenProject())
+  const [activeProjectId, setActiveProjectId] = useState(reopenId)
   const [activeProject, setActiveProject] = useState(null)
-  const [subTab, setSubTab] = useState('info')
+  const [subTab, setSubTab] = useState(reopenId ? 'materials' : 'info')
   const [photoTarget, setPhotoTarget] = useState(null)
   const photoFileRef = useRef(null)
 
@@ -2221,6 +2224,13 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   useEffect(() => { loadProjects() }, [filter, viewingWorkspaceOwnerId])
   useEffect(() => { loadUsers(); loadAllMaterials() }, [])
   useEffect(() => { if (activeProjectId) loadActiveProject() }, [activeProjectId])
+  // Back from here onto a project's materials page (after "All projects")
+  // changes only the address; follow it so the screen matches the URL.
+  useEffect(() => {
+    const onPop = () => { if (new URLSearchParams(window.location.search).get('screen') === 'projectmaterials') setScreen('projectmaterials') }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   async function loadAllMaterials() {
     let q = sb.from('project_materials').select('id, name, material_type, sampling_date, storage_date, project_id, photos, barcode_id, barcode_scanned_at, storage_confirmed, storage_notes, locations, parent_material_id, projects(id, name, project_id, lab_user_ids)').order('created_at', { ascending: false })
@@ -2603,7 +2613,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
               </button>
               {t.key === 'materials' && (
                 <button onClick={() => openProjectMaterials(activeProject.id, setScreen)}
-                  title="Open this project's materials in a new tab" aria-label="Open this project's materials in a new tab"
+                  title="Open this project's materials page" aria-label="Open this project's materials page"
                   style={{ alignSelf: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, marginLeft: -8, marginRight: 8, padding: 0, borderRadius: 6, border: '1px solid #9FE1CB', background: 'var(--accent-light)', color: '#085041', cursor: 'pointer' }}>
                   <IconExternal size={14} />
                 </button>
