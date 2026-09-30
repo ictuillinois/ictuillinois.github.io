@@ -1585,11 +1585,11 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, is
     { key: 'info',     label: 'Info' },
     ...(readOnly ? [] : [{ key: 'material', label: 'Material' }]),
     { key: 'storage',  label: 'Reduction material label' },
-    { key: 'tested',   label: 'Tested materials label' },
     // Only when this fraction has been reduced further. Without it a
     // grandchild would be unreachable: it is hidden from the material list
     // (it has a parent) and nothing else links to it.
     ...(kids.length && depth < 4 ? [{ key: 'reduction', label: `Reduced into (${kids.length})` }] : []),
+    { key: 'tested',   label: 'Tested materials label' },
   ]
 
   async function remove() {
@@ -1787,9 +1787,10 @@ export function MaterialCard({ m, idx = 0, materials, project, readOnly = false,
           { key: 'info',    label: 'Material Info' },
           ...(readOnly ? [] : [{ key: 'edit', label: 'Material' }]),
           { key: 'storage', label: 'Material Storage' },
-          { key: 'tested',  label: 'Tested materials label' },
           ...(hasReduction ? [{ key: 'reduction', label: 'Material Reduction' }] : []),
           ...(readOnly ? [] : [{ key: 'addreduction', label: '+ Add Reduction' }]),
+          // Always last: 5 on a material with no reductions, 6 once it has some
+          { key: 'tested',  label: 'Tested materials label' },
         ].map((t, i) => ({ ...t, label: `${i + 1} · ${t.label}` }))
         return (
         <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
