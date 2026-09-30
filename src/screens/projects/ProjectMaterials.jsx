@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
 import MaterialIcon from '../../components/MaterialIcon'
-import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
+import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit, TESTED_LIMITS, TESTED_LOCATIONS, testedLocation, generateTestedBarcodeId, buildTestedScanUrl, testedLabelSections } from '../../lib/materialLabel'
 import MaterialLabel from '../../components/MaterialLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
@@ -545,28 +545,30 @@ function SamplingDateForm({ form, setForm }) {
 }
 
 // ── Photo upload form ─────────────────────────────────────────
+// Phone photos are 3-8 MB: downscale to 1200px and re-encode as JPEG before
+// upload. Shared by the material photos and the tested-material photo.
+function compressPhoto(file) {
+  return new Promise(resolve => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const maxPx = 1200
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(resolve, 'image/jpeg', 0.82)
+    }
+    img.src = url
+  })
+}
+
 function PhotosForm({ form, setForm, materialId }) {
   const { toast } = useAppStore()
   const [uploading, setUploading] = useState(false)
   const inputRef = useRef()
-
-  async function compress(file) {
-    return new Promise(resolve => {
-      const img = new Image()
-      const url = URL.createObjectURL(file)
-      img.onload = () => {
-        const maxPx = 1200
-        const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
-        const w = Math.round(img.width * scale), h = Math.round(img.height * scale)
-        const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-        URL.revokeObjectURL(url)
-        canvas.toBlob(resolve, 'image/jpeg', 0.82)
-      }
-      img.src = url
-    })
-  }
 
   async function handleFiles(files) {
     if (!files.length) return
@@ -575,7 +577,7 @@ function PhotosForm({ form, setForm, materialId }) {
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) continue
       try {
-        const blob = await compress(file)
+        const blob = await compressPhoto(file)
         const filename = `materials/${materialId || 'new'}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
         const { error } = await sb.storage.from('item-photos').upload(filename, blob, { contentType: 'image/jpeg', upsert: true })
         if (error) throw error
@@ -988,15 +990,6 @@ function MaterialQRTab({ material, project, parent }) {
   // string version was a fourth copy of this markup and had drifted from the
   // others; MaterialLabel styles itself inline so outerHTML carries its
   // appearance into the print window.
-  function printLabel() {
-    const el = document.getElementById(`print-label-${material.id}`)?.outerHTML
-    if (!el) return
-    const css = '@page{size:4in 6in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in}*{box-sizing:border-box}'
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Material Label</title><style>${css}</style></head><body>${el}<script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script></body></html>`
-    const win = window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank', 'width=460,height=700')
-    if (!win) return
-  }
-
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -1015,7 +1008,7 @@ function MaterialQRTab({ material, project, parent }) {
             <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Barcode ID</div>
             <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>{barcodeId}</div>
           </div>
-          <button className="btn btn-sm btn-purple" onClick={printLabel}>🖨 Print Label (4"×6")</button>
+          <button className="btn btn-sm btn-purple" onClick={() => printLabelById(`print-label-${material.id}`)}>🖨 Print Label (4"×6")</button>
           {material.locations?.length > 0 && (
             <button className="btn btn-sm" onClick={() => setShowMap(v => !v)}>
               {showMap ? 'Hide floor map' : '📍 Show on floor map'}
@@ -1033,6 +1026,231 @@ function MaterialQRTab({ material, project, parent }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Print one rendered label node. MaterialLabel styles itself inline, so its
+// outerHTML carries its whole appearance into the print window — rebuilding the
+// label as a string was how a fourth, drifted copy of it once appeared.
+function printLabelById(elementId, title = 'Material Label') {
+  const el = document.getElementById(elementId)?.outerHTML
+  if (!el) return
+  const css = '@page{size:4in 6in;margin:0}body{margin:0;padding:0;display:flex;align-items:center;justify-content:center;width:4in;height:6in}*{box-sizing:border-box}'
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${css}</style></head><body>${el}<script>window.onload=function(){window.print();setTimeout(function(){window.close()},800)}<\/script></body></html>`
+  window.open(URL.createObjectURL(new Blob([html], { type: 'text/html' })), '_blank', 'width=460,height=700')
+}
+
+const blankTest = () => ({ test_type: '', test_date: new Date().toISOString().slice(0, 10), storage_location: '', storage_location_other: '', photo_url: '' })
+
+// The "Tested materials label" tab, on a material and on each of its
+// reductions. Every tested sample is its own row in tested_materials with its
+// OWN barcode and QR (generateTestedBarcodeId) — a tested sample sits on a
+// shelf as a separate thing, so it must never scan as its parent material.
+// A material can be tested more than once, so this is a list plus a form.
+function TestedMaterialsTab({ material, project, parent, readOnly }) {
+  const { toast, session, viewingWorkspaceOwnerId } = useAppStore()
+  const isSolo = session?.loginMode === 'solo'
+  const [tests, setTests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState(blankTest)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [err, setErr] = useState('')
+  const [shown, setShown] = useState(null)     // tested id whose label is open
+  const fileRef = useRef()
+
+  useEffect(() => { load() }, [material.id])
+
+  async function load() {
+    const { data, error } = await sb.from('tested_materials').select('*')
+      .eq('material_id', material.id).order('created_at', { ascending: false })
+    setLoading(false)
+    if (error) { toast('Could not load tested materials: ' + error.message, true); return }
+    setTests(data || [])
+  }
+
+  async function addPhoto(file) {
+    if (!file?.type?.startsWith('image/')) { toast('That file is not an image.', true); return }
+    setUploading(true)
+    try {
+      const blob = await compressPhoto(file)
+      const path = `tested/${material.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
+      const { error } = await sb.storage.from('item-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+      if (error) throw error
+      setForm(f => ({ ...f, photo_url: sb.storage.from('item-photos').getPublicUrl(path).data.publicUrl }))
+    } catch (e) {
+      toast('Photo upload failed: ' + (e?.message || e), true)
+    }
+    setUploading(false)
+  }
+
+  async function save() {
+    setErr('')
+    const type = form.test_type.trim()
+    const other = form.storage_location_other.trim()
+    if (!type) return setErr('Type is required.')
+    const tooLong = overLimit('Type', type, TESTED_LIMITS.test_type)
+      || (form.storage_location === 'Other' && overLimit('Other location', other, TESTED_LIMITS.storage_location_other))
+    if (tooLong) return setErr(tooLong)
+    if (!form.test_date) return setErr('Date of test is required.')
+    if (!form.storage_location) return setErr('Storage location is required.')
+    if (form.storage_location === 'Other' && !other) return setErr('Say where it is stored.')
+
+    // The id is made here so the barcode can be derived from it in the same
+    // insert — the label's identity is fixed the moment the row exists.
+    const id = crypto.randomUUID()
+    const row = {
+      id,
+      material_id: material.id,
+      project_id: material.project_id || project?.id || null,
+      // Stamped from the session, like reductions: a material predating these
+      // columns has them NULL, and RLS WITH CHECK would reject the insert.
+      organization_id: isSolo ? null : (session?.organizationId || null),
+      solo_owner_id: isSolo ? (viewingWorkspaceOwnerId || session?.userId || null) : null,
+      test_type: type,
+      test_date: form.test_date,
+      storage_location: form.storage_location,
+      storage_location_other: form.storage_location === 'Other' ? other : null,
+      photo_url: form.photo_url || null,
+      barcode_id: generateTestedBarcodeId(project, { id }),
+      created_by: session?.userId ? String(session.userId) : null,
+    }
+    setSaving(true)
+    const { data, error } = await sb.from('tested_materials').insert(row).select().single()
+    setSaving(false)
+    if (error) return setErr('Could not save: ' + error.message)
+    setTests(t => [data, ...t])
+    setShown(data.id)
+    setForm(blankTest())
+    toast('Tested material saved — its label is ready to print.')
+  }
+
+  async function remove(t) {
+    if (!confirm(`Delete the tested material "${t.test_type}"? Its printed label will no longer scan to anything.`)) return
+    const { error } = await sb.from('tested_materials').delete().eq('id', t.id)
+    if (error) { toast('Could not delete: ' + error.message, true); return }
+    setTests(list => list.filter(x => x.id !== t.id))
+    if (shown === t.id) setShown(null)
+  }
+
+  const cap = { fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }
+  const openTest = tests.find(t => t.id === shown)
+
+  return (
+    <div>
+      {/* Everything the material already knows, read-only — never asked again */}
+      <MaterialInfoView m={material} />
+
+      <div style={{ padding: '0 16px 16px', display: 'grid', gap: 16 }}>
+        {!readOnly && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
+            <div style={cap}>New tested material</div>
+            <div className="grid-2">
+              <div className="field">
+                <label>Type <span style={{ color: '#c84b2f' }}>*</span></label>
+                <input maxLength={TESTED_LIMITS.test_type} value={form.test_type} placeholder="e.g. Hamburg wheel tracking"
+                  onChange={e => setForm(f => ({ ...f, test_type: e.target.value }))} />
+                <CharLimitHint value={form.test_type} max={TESTED_LIMITS.test_type} />
+              </div>
+              <div className="field">
+                <label>Date of test <span style={{ color: '#c84b2f' }}>*</span></label>
+                <input type="date" value={form.test_date} onChange={e => setForm(f => ({ ...f, test_date: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label>Storage location <span style={{ color: '#c84b2f' }}>*</span></label>
+                <select value={form.storage_location} onChange={e => setForm(f => ({ ...f, storage_location: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {TESTED_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              {form.storage_location === 'Other' && (
+                <div className="field">
+                  <label>Other location <span style={{ color: '#c84b2f' }}>*</span></label>
+                  <input maxLength={TESTED_LIMITS.storage_location_other} value={form.storage_location_other}
+                    onChange={e => setForm(f => ({ ...f, storage_location_other: e.target.value }))} />
+                  <CharLimitHint value={form.storage_location_other} max={TESTED_LIMITS.storage_location_other} />
+                </div>
+              )}
+            </div>
+
+            {/* Material photo: kept with the record, not printed on the label */}
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Material photo</label>
+              <div role="button" tabIndex={0}
+                onClick={() => fileRef.current?.click()}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); addPhoto(e.dataTransfer.files?.[0]) }}
+                style={{ display: 'flex', gap: 14, alignItems: 'center', border: '1.5px dashed var(--border)', borderRadius: 10, padding: 12, cursor: 'pointer', background: 'var(--surface2)', fontSize: 13, color: 'var(--text3)' }}>
+                {form.photo_url
+                  ? <img src={form.photo_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                  : <div style={{ width: 64, height: 64, borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', flexShrink: 0 }} />}
+                <span style={{ flex: 1 }}>{uploading ? 'Uploading…' : form.photo_url ? 'Photo added. Drop or click to replace it.' : 'Drop a picture here, or click to choose one.'}</span>
+                {form.photo_url && !uploading && (
+                  <button type="button" className="btn btn-sm" onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, photo_url: '' })) }}>Remove</button>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { addPhoto(e.target.files?.[0]); e.target.value = '' }} />
+            </div>
+
+            {err && <div style={{ color: '#c84b2f', fontSize: 13, marginTop: 12 }}>{err}</div>}
+            <div style={{ marginTop: 14 }}>
+              <button className="btn btn-sm btn-primary" onClick={save} disabled={saving || uploading}>
+                {saving ? 'Saving…' : 'Save & generate label'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div style={cap}>Tested materials ({tests.length})</div>
+          {loading ? <div className="spinner" style={{ margin: '8px 0' }} />
+            : tests.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text3)' }}>None yet.{readOnly ? '' : ' Fill in the form above to create the first one.'}</div>
+            ) : tests.map((t, idx) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 10, marginBottom: 6, border: `1px solid ${shown === t.id ? 'var(--accent)' : 'var(--border)'}`, background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
+                {t.photo_url
+                  ? <img src={t.photo_url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                  : <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface2)', flexShrink: 0 }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.test_type}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
+                    {[t.test_date, testedLocation(t), t.barcode_id].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <button className="btn btn-sm" onClick={() => setShown(shown === t.id ? null : t.id)}>{shown === t.id ? 'Hide label' : 'Label'}</button>
+                {!readOnly && (
+                  <button className="btn btn-sm" title="Delete this tested material" onClick={() => remove(t)}
+                    style={{ color: '#c84b2f', padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
+                    <IconTrash size={15} />
+                  </button>
+                )}
+              </div>
+            ))}
+        </div>
+
+        {openTest && (
+          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div>
+              <div style={cap}>Label preview — actual size</div>
+              <MaterialLabel id={`print-tested-${openTest.id}`} material={material} project={project} parent={parent}
+                kind="Tested Material"
+                sections={testedLabelSections(openTest, material, project, parent)}
+                scanUrl={buildTestedScanUrl(openTest, material, project)}
+                barcodeId={openTest.barcode_id || generateTestedBarcodeId(project, openTest)} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 180 }}>
+              <div>
+                <div style={{ ...cap, marginBottom: 4 }}>Barcode ID</div>
+                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '0.05em' }}>{openTest.barcode_id}</div>
+              </div>
+              <button className="btn btn-sm btn-purple" onClick={() => printLabelById(`print-tested-${openTest.id}`, 'Tested Material Label')}>🖨 Print Label (4"×6")</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1367,6 +1585,7 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, is
     { key: 'info',     label: 'Info' },
     ...(readOnly ? [] : [{ key: 'material', label: 'Material' }]),
     { key: 'storage',  label: 'Reduction material label' },
+    { key: 'tested',   label: 'Tested materials label' },
     // Only when this fraction has been reduced further. Without it a
     // grandchild would be unreachable: it is hidden from the material list
     // (it has a parent) and nothing else links to it.
@@ -1429,6 +1648,7 @@ function ReductionRow({ item, caption, icon, allMaterials, project, readOnly, is
           </div>
           {sub === 'info'    && <MaterialInfoView m={item} editHint={!readOnly} />}
           {sub === 'storage' && <MaterialQRTab material={item} project={project} parent={allMaterials.find(x => x.id === item.parent_material_id) || null} />}
+          {sub === 'tested'  && <TestedMaterialsTab material={item} project={project} parent={allMaterials.find(x => x.id === item.parent_material_id) || null} readOnly={readOnly} />}
           {sub === 'material' && !readOnly && (
             <ReductionMaterialForm
               material={item}
@@ -1567,6 +1787,7 @@ export function MaterialCard({ m, idx = 0, materials, project, readOnly = false,
           { key: 'info',    label: 'Material Info' },
           ...(readOnly ? [] : [{ key: 'edit', label: 'Material' }]),
           { key: 'storage', label: 'Material Storage' },
+          { key: 'tested',  label: 'Tested materials label' },
           ...(hasReduction ? [{ key: 'reduction', label: 'Material Reduction' }] : []),
           ...(readOnly ? [] : [{ key: 'addreduction', label: '+ Add Reduction' }]),
         ].map((t, i) => ({ ...t, label: `${i + 1} · ${t.label}` }))
@@ -1599,6 +1820,7 @@ export function MaterialCard({ m, idx = 0, materials, project, readOnly = false,
 
           {/* Tab 3: QR label */}
           {matTab === 'storage' && <MaterialQRTab material={m} project={project} parent={materials.find(x => x.id === m.parent_material_id) || null} />}
+          {matTab === 'tested'  && <TestedMaterialsTab material={m} project={project} parent={materials.find(x => x.id === m.parent_material_id) || null} readOnly={readOnly} />}
           {/* Tab 4: reduction — shows BOTH directions: what this
               material was derived from, and what has been derived
               from it. */}

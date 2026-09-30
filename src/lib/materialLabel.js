@@ -135,3 +135,52 @@ export function labelSections(material, project, parent) {
   }
   return out
 }
+
+// ── Tested materials (Sept 2026) ─────────────────────────────────────────
+// A tested sample is its own physical thing, so its label carries its OWN
+// identity — never the material's barcode or QR.
+
+export const TESTED_LIMITS = { test_type: 30, storage_location_other: 30 }
+export const TESTED_LOCATIONS = ['Tent', 'Shed', 'High bay A', 'High bay B', 'High bay C', 'MPF', 'Other']
+
+export function testedLocation(t) {
+  if (t?.storage_location === 'Other') return t.storage_location_other?.trim() || 'Other'
+  return t?.storage_location || '—'
+}
+
+// PROJECT-TST-XXXXXX from the tested row's own uuid: stable and unique, the
+// same rule generateBarcodeId follows for materials.
+export function generateTestedBarcodeId(project, tested) {
+  const projectId = (project?.project_id || project?.id?.slice(0, 8) || 'NP').toUpperCase().replace(/\s/g, '-')
+  const suffix = String(tested.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()
+  return `${projectId}-TST-${suffix}`
+}
+
+// Built on buildScanUrl so the host rule stays in one place; only what
+// identifies the tested sample differs. The scan page already shows `storage`.
+export function buildTestedScanUrl(tested, material, project) {
+  const url = new URL(buildScanUrl(material, project || {}))
+  url.searchParams.set('item', `${material.name || typeLabel(material.material_type)} — ${tested.test_type}`)
+  url.searchParams.set('barcode', tested.barcode_id || generateTestedBarcodeId(project, tested))
+  url.searchParams.set('storage', testedLocation(tested))
+  if (tested.test_date) url.searchParams.set('stored_date', tested.test_date)
+  return url.toString()
+}
+
+// Three groups, one fewer line than a reduction label, because the Tested
+// Material block adds three. A reduction label is already the tallest there
+// is (~537 of 576px); this keeps the tested label at ~511 with room for one
+// value that wraps. Do the arithmetic before adding a line.
+export function testedLabelSections(tested, material, project, parent) {
+  const type = material?.material_type
+  const isReduction = !!material?.parent_material_id
+  const spec = m => originalValues(m, type, m?.sampling_date).slice(1)
+  const materialValues = isReduction
+    ? [parent?.name || material.name || '—', `Reduced · ${reducedSpec(material, type)}`]
+    : [material?.name || '—', spec(material).join(' · ')]
+  return [
+    { title: 'Project info:', values: [project?.name || '—', material?.pi_name || '—'] },
+    { title: 'Material:', values: materialValues },
+    { title: 'Tested Material:', values: [tested.test_type || '—', tested.test_date || '—', testedLocation(tested)], strong: true },
+  ]
+}

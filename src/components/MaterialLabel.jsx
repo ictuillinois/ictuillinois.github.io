@@ -26,8 +26,10 @@ function IctLabLogo({ size }) {
 // keeps one spare line for a value that wraps (a long project name is the
 // likely one, since project names are not length-capped). 120px prints at
 // 1.25in; at 300dpi that is still ~5 dots per QR module, comfortably scannable.
-export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120 }) {
-  const sections = labelSections(material, project, parent)
+// `sections` / `kind`: the tested-material label is drawn by this same
+// renderer (testedLabelSections), so it can never drift from the others.
+export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120, sections: given, kind }) {
+  const sections = given || labelSections(material, project, parent)
   const isReduction = !!material?.parent_material_id
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(scanUrl || '')}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
   // Keep the logo well under ECC-H's error-correction budget so cameras can
@@ -37,7 +39,7 @@ export default function MaterialLabel({ id, material, project, parent, scanUrl, 
   return (
     <div id={id} style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'Arial, sans-serif', gap: 8, boxSizing: 'border-box' }}>
       <div style={{ fontSize: LABEL_TYPE.header, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center' }}>
-        ICT-Lab &mdash; {isReduction ? 'Reduction Material' : 'Material Storage'}
+        ICT-Lab &mdash; {kind || (isReduction ? 'Reduction Material' : 'Material Storage')}
       </div>
 
       <div style={{ position: 'relative', width: qrSize, height: qrSize, flexShrink: 0 }}>
@@ -56,7 +58,7 @@ export default function MaterialLabel({ id, material, project, parent, scanUrl, 
           as words; everything under them is the value as entered. */}
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
         {sections.map(sec => (
-          <div key={sec.title} style={{ borderTop: '1px solid #999', paddingTop: 5, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div key={sec.title} style={{ borderTop: sec.strong ? '2px solid #000' : '1px solid #999', paddingTop: 5, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 1 }}>
             <div style={{ fontSize: LABEL_TYPE.title, fontWeight: 700, color: '#000', textDecoration: 'underline', textUnderlineOffset: 2, lineHeight: 1.3 }}>
               {sec.title}
             </div>

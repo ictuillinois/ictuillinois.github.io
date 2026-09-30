@@ -1575,3 +1575,26 @@ beside "2 · Project Materials" via `lib/projectMaterialsTab.js`
 - Each pick is a history step (`?material=`), so Back walks back through it.
 - Tree CSS lives in index.css under `.pmt-*`. `folder()` is a render
   function, not a nested component — nested, it remounts every render.
+
+## Tested materials label (Sept 2026)
+
+Tab **Tested materials label** on every material card (after Material
+Storage) and every reduction row (after Reduction material label) —
+`TestedMaterialsTab` in ProjectMaterials.jsx.
+
+- Table `tested_materials` (`tested_materials_setup.sql`, also in
+  rls_phase1.sql + its keep array). One row per tested sample; a material can
+  be tested many times. FK to the material is ON DELETE SET NULL.
+- **A tested sample has its OWN identity**: barcode `PROJECT-TST-XXXXXX` from
+  its own uuid (`generateTestedBarcodeId`) and its own QR
+  (`buildTestedScanUrl`). Never reuse the material's barcode — two physical
+  things must never scan as one.
+- Fields: Type (max 30, `TESTED_LIMITS`), date of test, storage location
+  (`TESTED_LOCATIONS`: Tent, Shed, High bay A/B/C, MPF, Other + free text),
+  photo (item-photos bucket, NOT printed on the label).
+- The label is drawn by the same `MaterialLabel` via `sections=` +
+  `kind="Tested Material"` (`testedLabelSections`). It has one line fewer in
+  the material block than a reduction label, because the Tested block adds
+  three; a reduction label is already ~537 of 576px.
+- `printLabelById()` and `compressPhoto()` are shared — MaterialQRTab and
+  PhotosForm use them too.
