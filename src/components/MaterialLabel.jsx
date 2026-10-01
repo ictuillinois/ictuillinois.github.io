@@ -28,7 +28,9 @@ function IctLabLogo({ size }) {
 // 1.25in; at 300dpi that is still ~5 dots per QR module, comfortably scannable.
 // `sections` / `kind`: the tested-material label is drawn by this same
 // renderer (testedLabelSections), so it can never drift from the others.
-export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120, sections: given, kind }) {
+// `measure`: draw at natural height instead of a fixed 6in, so a caller can
+// tell whether the content fits the page (TestedLabels.jsx).
+export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120, sections: given, kind, measure = false }) {
   const sections = given || labelSections(material, project, parent)
   const isReduction = !!material?.parent_material_id
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(scanUrl || '')}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
@@ -37,7 +39,7 @@ export default function MaterialLabel({ id, material, project, parent, scanUrl, 
   const logoSize = Math.round(qrSize * 0.22)
 
   return (
-    <div id={id} style={{ width: '4in', height: '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'Arial, sans-serif', gap: 8, boxSizing: 'border-box' }}>
+    <div id={id} style={{ width: '4in', height: measure ? 'auto' : '6in', background: '#fff', border: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: measure ? 'flex-start' : 'center', padding: 16, fontFamily: 'Arial, sans-serif', gap: 8, boxSizing: 'border-box' }}>
       <div style={{ fontSize: LABEL_TYPE.header, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center' }}>
         ICT-Lab &mdash; {kind || (isReduction ? 'Reduction Material' : 'Material Storage')}
       </div>

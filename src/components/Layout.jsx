@@ -111,6 +111,7 @@ function getScreenTabs(screen, session) {
   if (screen === 'projects') {
     return [
       { key: 'inventory', icon: '📦', label: 'Material Inventory' },
+      { key: 'tested',    icon: '🏷️', label: 'Tested Materials' },
       ...((isAdmin || isLabManager) && !isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
     ]
   }

@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS tested_materials (
 CREATE UNIQUE INDEX IF NOT EXISTS tested_materials_barcode_uniq ON tested_materials (barcode_id) WHERE barcode_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS tested_materials_material_idx ON tested_materials (material_id);
 
+-- The "Tested" pill (Sept 2026): a label for one or more projects or
+-- non-project materials, or for something not in the app at all ("Other").
+-- material_id stays NULL for those. label_lines is the label as printed, each
+-- line with `off` if it was removed to fit, so Reprint gives the same label.
+ALTER TABLE tested_materials
+  ADD COLUMN IF NOT EXISTS items                JSONB,    -- [{ kind: 'project'|'material', id, name }]
+  ADD COLUMN IF NOT EXISTS other_material_name  TEXT,
+  ADD COLUMN IF NOT EXISTS other_project        TEXT,
+  ADD COLUMN IF NOT EXISTS additional_info      TEXT,
+  ADD COLUMN IF NOT EXISTS include_project_info BOOLEAN,
+  ADD COLUMN IF NOT EXISTS label_lines          JSONB;
+
 -- Same scoping as project_materials. Written out here because _apply_rls only
 -- exists while rls_phase1.sql runs; that file carries the same policy too.
 ALTER TABLE tested_materials ENABLE ROW LEVEL SECURITY;

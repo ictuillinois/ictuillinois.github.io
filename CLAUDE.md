@@ -1598,3 +1598,23 @@ Storage) and every reduction row (after Reduction material label) —
   three; a reduction label is already ~537 of 576px.
 - `printLabelById()` and `compressPhoto()` are shared — MaterialQRTab and
   PhotosForm use them too.
+
+### The "Tested" pill + Tested Materials list (Sept 2026)
+
+Pill **Tested** (after Materials) → `TestedLabelForm`; sidebar **Tested
+Materials** (below Material Inventory, sub-tab `tested`) →
+`TestedMaterialsRecords`. Both in `src/screens/projects/TestedLabels.jsx`.
+
+- Pick one or more projects / non-project materials, or **Other** (material
+  name, project, additional info). Then location, test name, test date, and
+  "add the selected project info?" — one item: PI + sampling date; several:
+  PI names only, **each name once**.
+- Rows go in the SAME `tested_materials` table as the per-material tab, so the
+  list shows both. Pill rows: `material_id` NULL (unless exactly one
+  non-project material), `items` JSONB, `other_*`, `label_lines`.
+- **Fit is measured, not counted:** a hidden `MaterialLabel measure` is drawn
+  at natural height and compared with 576px (6in). Over → "remove N more
+  lines" with a checkbox per line. Test name, date and location are `lock`ed
+  and always print. The trimmed `label_lines` (with `off`) are saved on print
+  so Reprint gives the same label.
+- No single project → barcode `TST-XXXXXX` (no prefix naming the wrong one).

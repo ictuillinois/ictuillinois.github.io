@@ -151,9 +151,11 @@ export function testedLocation(t) {
 // PROJECT-TST-XXXXXX from the tested row's own uuid: stable and unique, the
 // same rule generateBarcodeId follows for materials.
 export function generateTestedBarcodeId(project, tested) {
-  const projectId = (project?.project_id || project?.id?.slice(0, 8) || 'NP').toUpperCase().replace(/\s/g, '-')
   const suffix = String(tested.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()
-  return `${projectId}-TST-${suffix}`
+  // No single project (several picked, a non-project material, or Other):
+  // no prefix, rather than one that names the wrong project.
+  const projectId = (project?.project_id || project?.id?.slice(0, 8) || '').toUpperCase().replace(/\s/g, '-')
+  return projectId ? `${projectId}-TST-${suffix}` : `TST-${suffix}`
 }
 
 // Built on buildScanUrl so the host rule stays in one place; only what
@@ -183,4 +185,57 @@ export function testedLabelSections(tested, material, project, parent) {
     { title: 'Material:', values: materialValues },
     { title: 'Tested Material:', values: [tested.test_type || '—', tested.test_date || '—', testedLocation(tested)], strong: true },
   ]
+}
+
+// ── The "Tested" pill: labels not tied to one material ─────────────────────
+// A label is a list of lines, each in a section, so the page can measure it
+// and let the user drop lines until it fits on the 4x6. Lines marked `lock`
+// can never be dropped: the test name, its date and where the sample is.
+
+export const TESTED_OTHER_LIMITS = { name: 30, project: 40, info: 60 }
+export const TESTED_SECTION_ORDER = ['Tested Material:', 'Material:', 'Materials:', 'Additional info:', 'Project info:']
+
+// items: [{ kind: 'project'|'material', name, pi_name, sampling_date }]
+export function testedPillLines({ testName, testDate, location, items = [], other = null, includeInfo = false }) {
+  const out = [
+    { sec: 'Tested Material:', v: testName || '\u2014', lock: true },
+    { sec: 'Tested Material:', v: testDate || '\u2014', lock: true },
+    { sec: 'Tested Material:', v: location || '\u2014', lock: true },
+  ]
+  const matSec = items.length + (other ? 1 : 0) > 1 ? 'Materials:' : 'Material:'
+  items.forEach(i => out.push({ sec: matSec, v: i.name || '\u2014' }))
+  if (other) {
+    out.push({ sec: matSec, v: other.name || 'Other material' })
+    if (other.project) out.push({ sec: matSec, v: other.project })
+    if (other.info) out.push({ sec: 'Additional info:', v: other.info })
+  }
+  if (includeInfo && items.length) {
+    // One item: its PI and sampling date. Several: the PIs only, each name
+    // once — three projects with the same PI print that PI once.
+    const pis = [...new Set(items.map(i => (i.pi_name || '').trim()).filter(Boolean))]
+    pis.forEach(pi => out.push({ sec: 'Project info:', v: pi }))
+    if (items.length === 1 && items[0].sampling_date) out.push({ sec: 'Project info:', v: items[0].sampling_date })
+  }
+  return out
+}
+
+// Lines → the sections MaterialLabel draws. Lines with `off` were removed.
+export function linesToSections(lines) {
+  const kept = (lines || []).filter(l => !l.off)
+  return TESTED_SECTION_ORDER
+    .map(title => ({ title, values: kept.filter(l => l.sec === title).map(l => l.v), strong: title === 'Tested Material:' }))
+    .filter(sec => sec.values.length)
+}
+
+// For a label made from a material's own tab (no stored lines): the same
+// sections, as lines, with the Tested Material block locked.
+export function sectionsToLines(sections) {
+  return sections.flatMap(sec => sec.values.map(v => ({ sec: sec.title, v, lock: sec.title === 'Tested Material:' })))
+}
+
+// What was tested, in words — the records list and the QR use it.
+export function testedWhat(rec) {
+  const names = (rec.items || []).map(i => i.name)
+  if (rec.other_material_name) names.push(rec.other_material_name)
+  return names.join(', ') || '\u2014'
 }
