@@ -390,17 +390,23 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .tooltips-off [data-tooltip]::after,
 .tooltips-off [data-tooltip]::before { display: none !important; }
 /* ── Update available banner (UpdateBanner.jsx) ────────────────
-   Bottom-right so it never covers the centered Toast. On mobile it clears
-   the 72px bottom nav. */
+   Bottom CENTRE. Bottom-right put it under Sara's chat button, which hid
+   the Reload button. A Toast shares the centre but only for a few seconds,
+   and draws above this (z 9000 vs 8500), so it stays readable.
+   Centred with left/right + auto margins, not translateX: the slide-in
+   animation owns `transform`. On mobile it clears the 72px bottom nav. */
 .update-banner {
   position: fixed;
-  right: 16px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
   bottom: 24px;
   z-index: 8500;
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 340px;
+  max-width: min(420px, calc(100% - 32px));
   padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
