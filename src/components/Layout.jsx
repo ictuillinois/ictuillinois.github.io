@@ -113,6 +113,9 @@ function getScreenTabs(screen, session) {
       { key: 'inventory', icon: '📦', label: 'Material Inventory' },
       { key: 'tested',    icon: '🏷️', label: 'Tested Materials' },
       ...((isAdmin || isLabManager) && !isSolo ? [{ key: 'manage_projects', icon: '🗂️', label: 'Manage Projects' }] : []),
+      // Material types belong to projects (they are what a material IS), not to
+      // labels — moved here from QR Labels. Org-wide, so not for solo users.
+      ...((isAdmin || isLabManager) && !isSolo ? [{ key: 'material_types', icon: '🧪', label: 'Material Types' }] : []),
     ]
   }
 
@@ -137,7 +140,6 @@ function getScreenTabs(screen, session) {
     { key: 'materials', icon: '🏷️', label: 'Material Labels' },
     ...(isAdmin || isLabManager ? [
       { key: 'summary', icon: '📊', label: 'Summary' },
-      { key: 'types',   icon: '🏷️', label: 'Material Types' },
     ] : []),
   ]
 

@@ -4,7 +4,7 @@ import { useIsMobile } from '../../components/Layout'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { isNative } from '../../lib/scanner.js'
-import { SummaryTab, MaterialTypesManager, buildTypeMap, DEFAULT_TYPES } from './BarcodeScannerScreen'
+import { SummaryTab, buildTypeMap, DEFAULT_TYPES } from './BarcodeScannerScreen'
 
 // ICT-Lab hexagon logo for screen preview
 function ILabLogo({ size = 72 }) {
@@ -741,7 +741,6 @@ export default function BarcodeManager() {
       {tab === 'records'   && <RecordsTab          equipment={equipment} loading={loading} />}
       {tab === 'materials' && <MaterialLabelsTab session={session} typeLabels={typeLabels} />}
       {tab === 'summary'   && isAdminOrLabManager && <SummaryTab typeLabels={typeLabels} typeColors={typeColors} />}
-      {tab === 'types'     && isAdminOrLabManager && <MaterialTypesManager session={session} />}
     </div>
   )
 }
