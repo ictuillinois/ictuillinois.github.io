@@ -4,64 +4,11 @@ import { useAppStore } from '../../store/useAppStore'
 import jsQR from 'jsqr'
 import ScrollTabs from '../../components/ScrollTabs'
 import { formatLocation } from '../../components/FloorPlanPicker'
+// One list, in lib/materialTypes.js. This file had its own copy, and a
+// second copy is how two screens end up offering different types.
+import { DEFAULT_TYPES } from '../../lib/materialTypes'
 
-export const DEFAULT_TYPES = [
-  { key: 'aggregate',      label: 'Aggregate' },
-  { key: 'asphalt_binder', label: 'Asphalt Binder' },
-  { key: 'plant_mix',      label: 'Plant Mix' },
-  { key: 'cores',          label: 'Cores' },
-  { key: 'other',          label: 'Other' },
-]
-
-// Category-appropriate defaults — used when org has no custom material_types saved
-export const CATEGORY_DEFAULT_TYPES = {
-  'Medical / Clinical': [
-    { key: 'tissue_sample', label: 'Tissue Sample' },
-    { key: 'blood_serum',   label: 'Blood / Serum' },
-    { key: 'reagent',       label: 'Reagent / Chemical' },
-    { key: 'cell_culture',  label: 'Cell Culture' },
-    { key: 'device',        label: 'Medical Device' },
-    { key: 'other',         label: 'Other' },
-  ],
-  'Research Institute': [
-    { key: 'chemical',    label: 'Chemical / Reagent' },
-    { key: 'biological',  label: 'Biological Sample' },
-    { key: 'polymer',     label: 'Polymer / Plastic' },
-    { key: 'metal',       label: 'Metal / Alloy' },
-    { key: 'composite',   label: 'Composite' },
-    { key: 'other',       label: 'Other' },
-  ],
-  'University / Academic': [
-    { key: 'chemical',    label: 'Chemical / Reagent' },
-    { key: 'biological',  label: 'Biological Sample' },
-    { key: 'aggregate',   label: 'Aggregate' },
-    { key: 'polymer',     label: 'Polymer / Plastic' },
-    { key: 'metal',       label: 'Metal / Alloy' },
-    { key: 'other',       label: 'Other' },
-  ],
-  'Industrial / Manufacturing': [
-    { key: 'raw_material', label: 'Raw Material' },
-    { key: 'metal',        label: 'Metal / Alloy' },
-    { key: 'polymer',      label: 'Polymer / Plastic' },
-    { key: 'composite',    label: 'Composite' },
-    { key: 'liquid',       label: 'Liquid / Solvent' },
-    { key: 'other',        label: 'Other' },
-  ],
-  'Government / Defense': [
-    { key: 'metal',      label: 'Metal / Alloy' },
-    { key: 'composite',  label: 'Composite' },
-    { key: 'chemical',   label: 'Chemical' },
-    { key: 'aggregate',  label: 'Aggregate' },
-    { key: 'other',      label: 'Other' },
-  ],
-  'Teaching / Training': [
-    { key: 'chemical',   label: 'Chemical / Reagent' },
-    { key: 'aggregate',  label: 'Aggregate' },
-    { key: 'metal',      label: 'Metal / Alloy' },
-    { key: 'polymer',    label: 'Polymer / Plastic' },
-    { key: 'other',      label: 'Other' },
-  ],
-}
+export { DEFAULT_TYPES }
 
 const COLOR_PALETTE = [
   { bg: '#fef3c7', color: '#92400e' },
@@ -579,7 +526,6 @@ export function SummaryTab({ typeLabels, typeColors }) {
 // ── Material Types Manager ────────────────────────────────────────────────────
 export function MaterialTypesManager({ session }) {
   const [types, setTypes] = useState(null)
-  const [orgCategory, setOrgCategory] = useState(null)
   const [newLabel, setNewLabel] = useState('')
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -589,15 +535,15 @@ export function MaterialTypesManager({ session }) {
 
   async function load() {
     if (!session?.organizationId) return
-    const { data } = await sb.from('organizations').select('material_types, category').eq('id', session.organizationId).single()
-    const cat = data?.category || null
-    setOrgCategory(cat)
-    const catDefaults = CATEGORY_DEFAULT_TYPES[cat] || DEFAULT_TYPES
-    setTypes(data?.material_types?.length ? data.material_types : catDefaults)
+    const { data } = await sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
+    setTypes(data?.material_types?.length ? data.material_types : DEFAULT_TYPES)
   }
 
+  // ICT-Lab is one transportation lab: its defaults are the transportation
+  // types whatever the organization's category says. Following the category
+  // replaced Asphalt Binder, Plant Mix and Cores with a university list.
   function categoryDefaults() {
-    return CATEGORY_DEFAULT_TYPES[orgCategory] || DEFAULT_TYPES
+    return DEFAULT_TYPES
   }
 
   async function save(newTypes) {
@@ -642,8 +588,7 @@ export function MaterialTypesManager({ session }) {
   }
 
   function resetToDefaults() {
-    const label = orgCategory ? `category defaults for "${orgCategory}"` : 'default types'
-    if (!confirm(`Reset to ${label}? All custom types will be removed.`)) return
+    if (!confirm('Reset to the default types (Aggregate, Asphalt Binder, Plant Mix, Cores, Other)? All custom types will be removed.')) return
     save(categoryDefaults())
   }
 
@@ -656,10 +601,9 @@ export function MaterialTypesManager({ session }) {
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>Material Types</div>
-          {orgCategory && <span style={{ fontSize: 11, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px', fontWeight: 600 }}>{orgCategory}</span>}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.5 }}>
-          Customize the material type list for your organization. The defaults are based on your org's category. Changes apply immediately to all users.
+          Customize the material type list for your organization. Changes apply immediately to all users.
         </div>
       </div>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>

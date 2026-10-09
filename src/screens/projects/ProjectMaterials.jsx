@@ -9,7 +9,7 @@ import { printLabelById } from '../../lib/printLabel'
 import { useAppStore } from '../../store/useAppStore'
 import Modal from '../../components/Modal'
 import MaterialReductionModal from '../../components/MaterialReductionModal'
-import { DEFAULT_TYPES, CATEGORY_DEFAULT_TYPES } from '../../lib/materialTypes'
+import { DEFAULT_TYPES } from '../../lib/materialTypes'
 import { IconMapPin, IconScale, IconCalendar, IconCamera, IconChevronDown, IconTrash } from '../../components/Icons'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -827,10 +827,12 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
 
   useEffect(() => {
     if (isSolo || !session?.organizationId) return
-    sb.from('organizations').select('material_types, category').eq('id', session.organizationId).single()
+    sb.from('organizations').select('material_types').eq('id', session.organizationId).single()
       .then(({ data }) => {
-        const catDefaults = CATEGORY_DEFAULT_TYPES[data?.category] || DEFAULT_TYPES
-        setOrgTypes(data?.material_types?.length ? data.material_types : catDefaults)
+        // Not the category's list: ICT-Lab is one transportation lab. Following
+        // the organization category let a category change (Oct 2026) swap
+        // Asphalt Binder, Plant Mix and Cores for a university list.
+        setOrgTypes(data?.material_types?.length ? data.material_types : DEFAULT_TYPES)
       })
   }, [session?.organizationId])
 
