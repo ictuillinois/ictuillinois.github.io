@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react'
 import { sb } from '../lib/supabase'
 import Modal from './Modal'
 
-// Super admin: every recorded change to organizations, global settings, users
-// and screen access. Rows are written by a DATABASE TRIGGER
-// (change_log_setup.sql), so they include changes made from the SQL editor or
-// any screen, not only the ones the app makes on purpose. The same changes
-// raise a bell alert and go out in a daily email.
+// Super admin: every change to the MAIN settings — organization settings and
+// app-wide settings, the ones that change things for everyone — made by the
+// super admin, org admins or lab managers. Rows are written by a DATABASE
+// TRIGGER (change_log_setup.sql), so changes from the SQL editor or any screen
+// are included, not only the ones the app makes on purpose. Lab users' own
+// preferences are not recorded. The same changes raise a bell alert and go
+// out in a daily email.
 
 const TABLES = [
-  ['', 'Everything'],
-  ['organizations', 'Organizations'],
-  ['settings', 'Global settings'],
-  ['users', 'Users'],
-  ['user_screen_access', 'Screen access'],
+  ['', 'All settings'],
+  ['organizations', 'Organization settings'],
+  ['settings', 'App settings'],
 ]
 const TABLE_LABEL = Object.fromEntries(TABLES)
 
@@ -90,7 +90,7 @@ function ChangeLogModal({ onClose }) {
         <select value={table} onChange={e => { setTable(e.target.value); load(e.target.value) }} style={{ width: 'auto' }}>
           {TABLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
-        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, setting or person" style={{ flex: 1, minWidth: 180 }} />
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search organization, setting or person" style={{ flex: 1, minWidth: 180 }} />
       </div>
       <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
         {err ? <div style={{ color: '#c84b2f', fontSize: 13 }}>{err}</div>
@@ -111,7 +111,7 @@ export default function ChangeLogCard() {
           <span style={{ fontSize: 20 }}>📜</span>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14 }}>Change log</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Who changed organization settings, global settings, users or screen access, and when. Also in your bell and a daily email.</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Who changed a main setting — organization or app-wide — and when. Also in your bell and a daily email.</div>
           </div>
         </div>
         <button className="btn btn-sm" onClick={() => setOpen(true)}>Open change log</button>

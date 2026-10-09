@@ -7,13 +7,15 @@
 -- change however it is made — any screen, the SQL editor, a script — not only
 -- the paths the app knows about.
 --
--- Watched:
---   organizations       every column (material types, category, icon pools…)
---   settings            every key (global icon pools, URLs, images…);
---                       admin_password / super_admin_auth_id values hidden
---   users               added, removed, or role / active / admin level /
---                       organization / email / name changed (not logins)
---   user_screen_access  screen access granted or removed
+-- Watched: the MAIN settings — the ones that change things for everyone.
+--   organizations   every column (material types, category, icon pools,
+--                   module images, logo…)
+--   settings        every app-wide key (global icon pools, URLs, images,
+--                   maintenance mode, reminder schedules…); admin_password /
+--                   super_admin_auth_id values hidden
+-- Only changes made by the super admin, org admins and lab managers (and the
+-- SQL editor) are recorded. A lab user's or solo user's own preferences are
+-- not settings for everyone and are left out, as are users and screen access.
 --
 -- Each change → one change_log row + one super-admin bell alert. Each morning
 -- (8am Chicago) the previous day's changes are emailed to settings.admin_email.
@@ -56,6 +58,18 @@ DECLARE
 BEGIN
   -- The bell's own on/off preferences: logging them would alert about the alerts
   IF TG_TABLE_NAME = 'settings' AND rec->>'key' = 'admin_notif_prefs' THEN RETURN NULL; END IF;
+  -- One solo user's own lists, stored in settings under their id — not app-wide
+  IF TG_TABLE_NAME = 'settings' AND (rec->>'key' LIKE 'solo\_std\_types\_%'
+      OR rec->>'key' LIKE 'solo\_group\_storage\_%' OR rec->>'key' LIKE 'solo\_eq\_cats\_%') THEN
+    RETURN NULL;
+  END IF;
+  -- Only the people who set things for everyone. Lab users and solo users are
+  -- not reported; the SQL editor (no auth user) always is.
+  IF uid IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'super_admin_auth_id' AND value = uid::text)
+     AND NOT EXISTS (SELECT 1 FROM users WHERE auth_id = uid AND is_active AND role IN ('admin', 'user')) THEN
+    RETURN NULL;
+  END IF;
 
   IF TG_TABLE_NAME = 'settings' AND rec->>'key' IN ('admin_password', 'super_admin_auth_id') THEN
     secret := ARRAY['value'];
@@ -75,9 +89,6 @@ BEGIN
 
   act := CASE TG_OP WHEN 'INSERT' THEN 'added' WHEN 'DELETE' THEN 'removed' ELSE 'changed' END;
   lbl := COALESCE(rec->>'name', rec->>'key', rec->>'email', rec->>'screen_key', rec->>'id');
-  IF TG_TABLE_NAME = 'user_screen_access' THEN
-    lbl := COALESCE((SELECT name FROM users WHERE id::text = rec->>'user_id' LIMIT 1), rec->>'user_id') || ' → ' || COALESCE(rec->>'screen_key', '?');
-  END IF;
   org := CASE WHEN TG_TABLE_NAME = 'organizations' THEN (rec->>'id')::uuid
               WHEN rec ? 'organization_id' THEN NULLIF(rec->>'organization_id', '')::uuid END;
 
@@ -86,11 +97,10 @@ BEGIN
   ELSIF EXISTS (SELECT 1 FROM settings WHERE key = 'super_admin_auth_id' AND value = uid::text) THEN
     who := 'Super admin';
   ELSE
-    SELECT COALESCE(NULLIF(trim(nick_name), ''), name) || ' (' || role || ')' INTO who
-      FROM users WHERE auth_id = uid ORDER BY is_active DESC LIMIT 1;
-    IF who IS NULL AND to_regclass('public.solo_users') IS NOT NULL THEN
-      EXECUTE 'SELECT name || '' (solo)'' FROM solo_users WHERE auth_id = $1 LIMIT 1' INTO who USING uid;
-    END IF;
+    SELECT COALESCE(NULLIF(trim(nick_name), ''), name) || ' ('
+           || CASE role WHEN 'admin' THEN 'org admin' WHEN 'user' THEN 'lab manager' ELSE role END || ')' INTO who
+      FROM users WHERE auth_id = uid AND is_active AND role IN ('admin', 'user')
+      ORDER BY (role = 'admin') DESC LIMIT 1;
     who := COALESCE(who, 'User ' || uid::text);
   END IF;
 
@@ -104,7 +114,8 @@ BEGIN
   BEGIN
     INSERT INTO admin_notifications (type, title, body)
     VALUES ('setting_change',
-            initcap(TG_TABLE_NAME) || ' ' || act || ': ' || COALESCE(lbl, '—'),
+            CASE TG_TABLE_NAME WHEN 'organizations' THEN 'Organization settings' ELSE 'App settings' END
+              || ' ' || act || ': ' || COALESCE(lbl, '—'),
             CASE WHEN TG_OP = 'UPDATE' THEN array_to_string(flds, ', ') || ' — by ' ELSE 'By ' END || who);
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
@@ -118,11 +129,15 @@ END $$;
 DO $$
 DECLARE t record;
 BEGIN
+  -- Not watched (any earlier run of this file did): users and screen access
+  IF to_regclass('public.users') IS NOT NULL THEN DROP TRIGGER IF EXISTS log_change_trg ON users; END IF;
+  IF to_regclass('public.user_screen_access') IS NOT NULL THEN DROP TRIGGER IF EXISTS log_change_trg ON user_screen_access; END IF;
+  DELETE FROM change_log WHERE table_name IN ('users', 'user_screen_access');
+  DELETE FROM admin_notifications WHERE type = 'setting_change' AND (title LIKE 'Users %' OR title LIKE 'User_screen_access %');
+
   FOR t IN SELECT * FROM (VALUES
-    ('organizations',      '*'),
-    ('settings',           '*'),
-    ('users',              'role,is_active,admin_level,organization_id,email,name,last_name'),
-    ('user_screen_access', '*')
+    ('organizations', '*'),
+    ('settings',      '*')
   ) AS v(tbl, cols) LOOP
     IF to_regclass('public.' || t.tbl) IS NULL THEN
       RAISE NOTICE 'change_log: % does not exist here — skipped', t.tbl;
@@ -150,18 +165,20 @@ BEGIN
   FOR r IN SELECT * FROM change_log WHERE NOT digested ORDER BY changed_at LOOP
     vals := CASE WHEN r.action = 'changed' THEN array_to_string(r.fields, ', ') ELSE '' END;
     txt  := txt || to_char(r.changed_at AT TIME ZONE 'America/Chicago', 'Mon DD HH24:MI') || '  '
-         || initcap(r.table_name) || ' ' || r.action || ': ' || COALESCE(r.row_label, '—')
+         || CASE r.table_name WHEN 'organizations' THEN 'Organization settings' ELSE 'App settings' END
+         || ' ' || r.action || ': ' || COALESCE(r.row_label, '—')
          || CASE WHEN vals <> '' THEN ' (' || vals || ')' ELSE '' END || ' — ' || r.changed_by || E'\n';
     html := html || '<tr><td style="padding:4px 10px;color:#666;white-space:nowrap">'
          || to_char(r.changed_at AT TIME ZONE 'America/Chicago', 'Mon DD HH24:MI') || '</td><td style="padding:4px 10px"><b>'
-         || initcap(r.table_name) || ' ' || r.action || '</b>: ' || replace(replace(COALESCE(r.row_label, '—'), '<', '&lt;'), '>', '&gt;')
+         || CASE r.table_name WHEN 'organizations' THEN 'Organization settings' ELSE 'App settings' END
+         || ' ' || r.action || '</b>: ' || replace(replace(COALESCE(r.row_label, '—'), '<', '&lt;'), '>', '&gt;')
          || CASE WHEN vals <> '' THEN ' <span style="color:#666">(' || vals || ')</span>' ELSE '' END
          || '</td><td style="padding:4px 10px;color:#666">' || replace(replace(r.changed_by, '<', '&lt;'), '>', '&gt;') || '</td></tr>';
   END LOOP;
   html := html || '</table><p style="font-family:Arial,sans-serif;color:#666">Before and after values are in the Change log in the super admin panel.</p>';
 
   INSERT INTO email_notifications_queue (to_email, subject, body, html_body, type)
-  VALUES (to_addr, 'Daily change report — ' || n || ' change' || CASE WHEN n = 1 THEN '' ELSE 's' END, txt, html, 'change_digest');
+  VALUES (to_addr, 'Daily settings report — ' || n || ' change' || CASE WHEN n = 1 THEN '' ELSE 's' END, txt, html, 'change_digest');
   UPDATE change_log SET digested = TRUE WHERE NOT digested;
   RETURN n;
 END $$;
@@ -175,7 +192,7 @@ END $$;
 
 NOTIFY pgrst, 'reload schema';
 
--- Check: four triggers and the daily job.
+-- Check: two watched tables (organizations, settings) and the daily job.
 SELECT event_object_table AS watched_table, count(*) AS trigger_events
 FROM information_schema.triggers WHERE trigger_name = 'log_change_trg'
 GROUP BY 1 ORDER BY 1;

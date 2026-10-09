@@ -1624,13 +1624,17 @@ Materials** (below Material Inventory, sub-tab `tested`) →
 `change_log_setup.sql` (run in BOTH projects). Born from ICT-Lab's material
 types changing with no way to say who or when.
 
-- **Database triggers**, not app code: `log_change()` fires on
-  `organizations` (all columns), `settings` (all keys; admin_password and
-  super_admin_auth_id values hidden; `admin_notif_prefs` skipped), `users`
-  (added / removed / role, is_active, admin_level, organization_id, email,
-  name) and `user_screen_access`. So the SQL editor and unknown screens are
-  covered too. Each change → a `change_log` row (super admin SELECT only) and
-  a `setting_change` alert in SuperAdminBell.
+- **Main settings only** — the ones that change things for everyone:
+  `organizations` (all columns) and `settings` (app-wide keys; password and
+  super_admin_auth_id values hidden; `admin_notif_prefs` and solo users'
+  `solo_std_types_` / `solo_group_storage_` / `solo_eq_cats_` keys skipped).
+  Users and screen access are deliberately NOT watched.
+- **Only by the people who set things for everyone:** super admin, org admins
+  (`admin`), lab managers (`user`) and the SQL editor. A change by a lab user
+  or solo user is not recorded.
+- **Database triggers**, not app code (`log_change()`), so the SQL editor and
+  unknown screens are covered. Each change → a `change_log` row (super admin
+  SELECT only) and a `setting_change` alert in SuperAdminBell.
 - **Daily report:** pg_cron `daily-change-digest` at 13:00 UTC runs
   `queue_change_digest()` → one email to `settings.admin_email` listing
   undigested rows; none when nothing changed.
