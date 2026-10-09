@@ -10,6 +10,7 @@ const NOTIF_TYPES = [
   { key: 'support_message',    label: 'Customer Service Requests',   icon: '💬' },
   { key: 'feedback_response',  label: 'User Feedback Responses',     icon: '📝' },
   { key: 'app_error',          label: 'System Errors & Bugs',        icon: '🐛' },
+  { key: 'setting_change',     label: 'Setting Changes',             icon: '🛠️' },
 ]
 
 const DEFAULT_PREFS = {
@@ -17,6 +18,9 @@ const DEFAULT_PREFS = {
   support_message:    { app: true, email: false },
   feedback_response:  { app: true, email: false },
   app_error:          { app: true, email: false },
+  // Recorded by the change_log trigger (change_log_setup.sql). The email for
+  // these is the daily change report, not one message per change.
+  setting_change:     { app: true, email: false },
 }
 
 export default function SuperAdminBell() {
@@ -30,13 +34,15 @@ export default function SuperAdminBell() {
   const panelRef = useRef(null)
 
   const feedbackAlerts = alerts.filter(a => a.type === 'feedback_response')
-  const systemAlerts   = alerts.filter(a => a.type !== 'feedback_response')
+  const settingAlerts  = alerts.filter(a => a.type === 'setting_change')
+  const systemAlerts   = alerts.filter(a => a.type !== 'feedback_response' && a.type !== 'setting_change')
 
   const unread =
     (prefs.new_solo_user?.app      ? newUsers.length    : 0) +
     (prefs.support_message?.app    ? supportMsgs.length : 0) +
     (prefs.feedback_response?.app  ? feedbackAlerts.filter(a => !a.read).length : 0) +
-    (prefs.app_error?.app          ? systemAlerts.filter(a => !a.read).length   : 0)
+    (prefs.app_error?.app          ? systemAlerts.filter(a => !a.read).length   : 0) +
+    (prefs.setting_change?.app     ? settingAlerts.filter(a => !a.read).length  : 0)
 
   useEffect(() => {
     load()
@@ -250,6 +256,27 @@ export default function SuperAdminBell() {
                     <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>{fmt(a.created_at)}</div>
                   </div>
                   {!a.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#d97706', flexShrink: 0, alignSelf: 'center' }} />}
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Setting changes — who changed what, from the change_log trigger */}
+          {prefs.setting_change?.app && settingAlerts.length > 0 && (
+            <>
+              <SectionHeader label="Setting Changes" count={settingAlerts.filter(a => !a.read).length} />
+              {settingAlerts.map(a => (
+                <div key={a.id} onClick={() => markAlertRead(a)}
+                  style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: a.read ? 'transparent' : '#eef2ff', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = a.read ? 'transparent' : '#eef2ff'}>
+                  <div style={{ fontSize: 18, flexShrink: 0 }}>🛠️</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: a.read ? 400 : 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+                    {a.body && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.body}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>{fmt(a.created_at)}</div>
+                  </div>
+                  {!a.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#3730a3', flexShrink: 0, alignSelf: 'center' }} />}
                 </div>
               ))}
             </>

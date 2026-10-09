@@ -1496,7 +1496,7 @@ DECLARE
     'equipment_booking_settings_policy','equipment_bookings_policy','booking_notifications_policy',
     'equipment_booking_blocks_policy','eq_hub_policy','equipment_sop_notes_policy','equipment_list_policy',
     'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy',
-    'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','project_record_files_policy','project_supplies_policy',
+    'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','change_log_select','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy',
     'task_progress_log_policy',

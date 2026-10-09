@@ -1618,3 +1618,25 @@ Materials** (below Material Inventory, sub-tab `tested`) →
   and always print. The trimmed `label_lines` (with `off`) are saved on print
   so Reprint gives the same label.
 - No single project → barcode `TST-XXXXXX` (no prefix naming the wrong one).
+
+## Change log — every settings change is recorded (Oct 2026)
+
+`change_log_setup.sql` (run in BOTH projects). Born from ICT-Lab's material
+types changing with no way to say who or when.
+
+- **Database triggers**, not app code: `log_change()` fires on
+  `organizations` (all columns), `settings` (all keys; admin_password and
+  super_admin_auth_id values hidden; `admin_notif_prefs` skipped), `users`
+  (added / removed / role, is_active, admin_level, organization_id, email,
+  name) and `user_screen_access`. So the SQL editor and unknown screens are
+  covered too. Each change → a `change_log` row (super admin SELECT only) and
+  a `setting_change` alert in SuperAdminBell.
+- **Daily report:** pg_cron `daily-change-digest` at 13:00 UTC runs
+  `queue_change_digest()` → one email to `settings.admin_email` listing
+  undigested rows; none when nothing changed.
+- **Viewer:** `ChangeLogCard` (src/components/ChangeLog.jsx) at the top of
+  the super admin panel — filter, search, before/after per field.
+- To watch another table, add it to the VALUES list in the setup file and
+  re-run. Logging never blocks a change (errors become a WARNING).
+- Material Types refuses to save an empty list (empty = silent fallback to a
+  default list) and reports a save that matched no row.

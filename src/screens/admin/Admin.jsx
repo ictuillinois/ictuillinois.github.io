@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import ChangeLogCard from '../../components/ChangeLog'
 import { sb } from '../../lib/supabase'
 import { ROLE_LABELS, ROLE_ORDER, activeRolesForEmail, syncUserRoles, describeRoleChange } from '../../lib/userRoles'
 import { useAppStore } from '../../store/useAppStore'
@@ -1795,6 +1796,9 @@ export default function Admin() {
           )}
         </div>
       </div>
+
+      {/* Change log — who changed which setting, recorded by a DB trigger */}
+      {isSuperAdmin && <ChangeLogCard />}
 
       {/* Maintenance mode toggle — super admin only */}
       {isSuperAdmin && (

@@ -547,8 +547,14 @@ export function MaterialTypesManager({ session }) {
   }
 
   async function save(newTypes) {
+    // Never save an empty list. An empty list does not mean "no types": the
+    // Add material form then falls back to a default list, which is how
+    // ICT-Lab's types were silently replaced in Oct 2026.
+    if (!newTypes?.length) { toast('Keep at least one material type. Add a new one before deleting the last.'); return }
     setSaving(true)
-    const { error } = await sb.from('organizations').update({ material_types: newTypes }).eq('id', session.organizationId)
+    // .select(): an update matching no row returns 200 and changes nothing
+    const { data: savedRows, error } = await sb.from('organizations').update({ material_types: newTypes }).eq('id', session.organizationId).select('id')
+    if (!error && !savedRows?.length) { toast('Not saved: your account cannot change this organization\'s settings.'); setSaving(false); return }
     if (error) { toast('Could not save: ' + error.message); setSaving(false); return }
     setTypes(newTypes)
     setSaving(false)
