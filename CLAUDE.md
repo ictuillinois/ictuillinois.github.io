@@ -1355,6 +1355,12 @@ Every one of these shipped and went unnoticed; none produced an error.
      statement written against one fails on the other ("COALESCE could not
      convert type uuid[] to text[]"). PostgREST coerces at runtime, so only
      hand-written SQL notices.
+   - **`users.auth_id` is TEXT in ICT-Lab and UUID in LabHive.** Write
+     `auth_id::text = auth.uid()::text`, never `auth_id = auth.uid()`: the
+     uncast form fails in ICT-Lab with "operator does not exist: text =
+     uuid" — and inside a plpgsql trigger it fails at RUN time, silently, so
+     the Oct 2026 change log recorded no admin change in ICT-Lab until it
+     was cast. Never run one project's rls_phase1.sql in the other.
    - `lab_user_lockers` had `created_at` here but `assigned_at`/`notes` in
      labhive; `organizations.lab_user_default_modules` existed only in
      labhive. Check `information_schema.columns` (udt_name for array element

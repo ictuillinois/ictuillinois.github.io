@@ -768,7 +768,7 @@ $b$);
 CREATE OR REPLACE FUNCTION my_managed_org_ids() RETURNS SETOF uuid
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT organization_id FROM users
-  WHERE auth_id = auth.uid() AND is_active AND role IN ('admin', 'user') AND organization_id IS NOT NULL
+  WHERE auth_id::text = auth.uid()::text AND is_active AND role IN ('admin', 'user') AND organization_id IS NOT NULL
 $$;
 
 -- Exam results are a person's own record, not equipment content: they left

@@ -64,14 +64,14 @@ USING (
   is_super_admin()
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR (organization_id IN (SELECT oid FROM my_org_ids() AS oid)
-      AND EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.is_active
+      AND EXISTS (SELECT 1 FROM users u WHERE u.auth_id::text = auth.uid()::text AND u.is_active
                   AND u.role IN ('admin', 'user') AND u.organization_id = vehicle_agreements.organization_id))
 )
 WITH CHECK (
   is_super_admin()
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR (organization_id IN (SELECT oid FROM my_org_ids() AS oid)
-      AND EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.is_active
+      AND EXISTS (SELECT 1 FROM users u WHERE u.auth_id::text = auth.uid()::text AND u.is_active
                   AND u.role IN ('admin', 'user') AND u.organization_id = vehicle_agreements.organization_id))
 );
 

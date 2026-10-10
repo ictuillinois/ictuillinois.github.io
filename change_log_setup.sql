@@ -67,7 +67,7 @@ BEGIN
   -- not reported; the SQL editor (no auth user) always is.
   IF uid IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'super_admin_auth_id' AND value = uid::text)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE auth_id = uid AND is_active AND role IN ('admin', 'user')) THEN
+     AND NOT EXISTS (SELECT 1 FROM users WHERE auth_id::text = uid::text AND is_active AND role IN ('admin', 'user')) THEN
     RETURN NULL;
   END IF;
 
@@ -99,7 +99,7 @@ BEGIN
   ELSE
     SELECT COALESCE(NULLIF(trim(nick_name), ''), name) || ' ('
            || CASE role WHEN 'admin' THEN 'org admin' WHEN 'user' THEN 'lab manager' ELSE role END || ')' INTO who
-      FROM users WHERE auth_id = uid AND is_active AND role IN ('admin', 'user')
+      FROM users WHERE auth_id::text = uid::text AND is_active AND role IN ('admin', 'user')
       ORDER BY (role = 'admin') DESC LIMIT 1;
     who := COALESCE(who, 'User ' || uid::text);
   END IF;
