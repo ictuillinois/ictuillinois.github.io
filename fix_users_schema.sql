@@ -28,50 +28,10 @@ CREATE INDEX IF NOT EXISTS idx_users_org   ON users(organization_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_auth  ON users(auth_id);
 
--- ── create_team_user RPC (SECURITY DEFINER — bypasses RLS for admin inserts) ─
-CREATE OR REPLACE FUNCTION create_team_user(
-  p_name           text,
-  p_email          text,
-  p_auth_id        text,
-  p_role           text,
-  p_organization_id uuid,
-  p_last_name      text DEFAULT NULL
-)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  new_id uuid;
-BEGIN
-  INSERT INTO users (
-    name, last_name, email, auth_id,
-    role, organization_id,
-    is_active, admin_level, must_change_password,
-    created_at
-  ) VALUES (
-    p_name, p_last_name, p_email, p_auth_id,
-    p_role, p_organization_id,
-    true, 0, true,
-    now()
-  )
-  RETURNING id INTO new_id;
-  RETURN new_id;
-END;
-$$;
-
--- ── delete_auth_user RPC (SECURITY DEFINER — deletes from auth.users) ────────
-CREATE OR REPLACE FUNCTION delete_auth_user(p_auth_id text)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  DELETE FROM auth.users WHERE id = p_auth_id::uuid;
-END;
-$$;
+-- ── create_team_user / delete_auth_user ───────────────────────────────────────
+-- Defined in security_hardening.sql, with the caller checks these versions
+-- lacked (anyone, even signed out, could call them). Re-running the old
+-- definitions here would remove those checks, so they are no longer in this file.
 
 -- ── Verify ────────────────────────────────────────────────────────────────────
 SELECT column_name, data_type

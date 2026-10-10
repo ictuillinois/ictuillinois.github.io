@@ -26,8 +26,13 @@ async function createAuthUser(email, password) {
       const existingAuthId = existingRows?.[0]?.auth_id
       if (existingAuthId) return { id: existingAuthId, reused: true }
       // Orphaned auth user — delete it then retry signUp so the new password is correct
+      // delete_auth_user refuses a login still in use — including by an
+      // account in another org, which the query above cannot see. Link to it.
       const { data: orphanId } = await sb.rpc('get_auth_user_id_by_email', { p_email: emailLC })
-      if (orphanId) try { await sb.rpc('delete_auth_user', { p_auth_id: orphanId }) } catch (_) {}
+      if (orphanId) {
+        const { error: delErr } = await sb.rpc('delete_auth_user', { p_auth_id: orphanId })
+        if (delErr) return { id: orphanId, reused: true }
+      }
       const { data: retryData, error: retryError } = await sb.auth.signUp({ email: emailLC, password })
       if (prev) await sb.auth.setSession({ access_token: prev.access_token, refresh_token: prev.refresh_token })
       if (retryError) throw retryError
@@ -1679,12 +1684,12 @@ export default function Admin() {
     ])
     // Unassign tasks rather than delete them
     await sb.from('tasks').update({ assigned_to: null }).eq('assigned_to', uid)
-    // Try to remove Supabase auth account so the email can be reused (non-critical)
-    if (user.auth_id) {
-      try { await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id }) } catch (_) {}
-    }
     const { error } = await sb.from('users').delete().eq('id', uid)
     if (error) { toast('Delete failed: ' + error.message); return }
+    // Then the login, so the email can be reused. Row first: delete_auth_user
+    // refuses while any account still uses the login, which also keeps this
+    // person's other roles signed in. Non-critical — a refusal is expected then.
+    if (user.auth_id) await sb.rpc('delete_auth_user', { p_auth_id: user.auth_id })
     loadUsers()
     toast('User deleted.')
   }

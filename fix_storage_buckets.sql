@@ -11,32 +11,13 @@ VALUES
   ('project-records', 'project-records', true, 52428800)    -- 50 MB — project record files
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- 2. Allow anon users to upload/read/delete in all three buckets
-DO $$
-DECLARE
-  buckets text[] := ARRAY['project-files', 'item-photos', 'project-records'];
-  b text;
-BEGIN
-  FOREACH b IN ARRAY buckets
-  LOOP
-    -- SELECT (read public URLs)
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'anon_select_' || b) THEN
-      EXECUTE format('CREATE POLICY "anon_select_%s" ON storage.objects FOR SELECT TO anon USING (bucket_id = %L)', b, b);
-    END IF;
-    -- INSERT (upload)
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'anon_insert_' || b) THEN
-      EXECUTE format('CREATE POLICY "anon_insert_%s" ON storage.objects FOR INSERT TO anon WITH CHECK (bucket_id = %L)', b, b);
-    END IF;
-    -- UPDATE (replace / upsert)
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'anon_update_' || b) THEN
-      EXECUTE format('CREATE POLICY "anon_update_%s" ON storage.objects FOR UPDATE TO anon USING (bucket_id = %L)', b, b);
-    END IF;
-    -- DELETE (remove old image)
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'anon_delete_' || b) THEN
-      EXECUTE format('CREATE POLICY "anon_delete_%s" ON storage.objects FOR DELETE TO anon USING (bucket_id = %L)', b, b);
-    END IF;
-  END LOOP;
-END $$;
+-- 2. Policies — NOT here any more.
+-- This step used to give the anon role INSERT / UPDATE / DELETE on all three
+-- buckets: anyone on the internet could overwrite or delete the lab's files.
+-- security_hardening.sql removed those policies (Oct 2026). Do not put them
+-- back. Public bucket URLs need no policy to be read; signed-in uploads use
+-- the authenticated policies; signed-out support screenshots use
+-- anon_support_screenshot (security_hardening.sql).
 
 -- ═══════════════════════════════════════════════════════════════
 -- Done. After running this:

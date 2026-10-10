@@ -1815,5 +1815,41 @@ in the file has to be run on its own.
 | `vehicle_agreement_setup.sql` / `vehicle_agreement_privacy.sql` | ✓ (superseded by training_privacy) | — no vehicle tables |
 | `vehicle_list_setup.sql` | ✓ after training_privacy | — |
 | `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
+| `security_hardening.sql` | ✓ (same file in both) | ✓ |
 
-As of Oct 10 2026 every row above has been run where marked.
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending).
+
+## Security hardening — functions and storage (Oct 2026)
+
+`security_hardening.sql` — the SAME file in both folders; run it in BOTH, and
+again after adding any new SQL function. Its last query lists what is still
+open; empty = done.
+
+- **Storage was writable signed-out.** `fix_storage_buckets.sql` gave `anon`
+  INSERT/UPDATE/DELETE on every bucket — anyone could delete the lab's files.
+  Anon now has exactly one storage policy, `anon_support_screenshot` (INSERT
+  into `project-files/support/`, for the signed-out Contact Us form). Never
+  add an anon write policy back. Public bucket URLs need no policy to be read.
+- **Account RPCs check the caller.** `delete_auth_user`, `create_team_user`,
+  `confirm_auth_user_email`, `get_auth_user_id_by_email` require
+  `can_manage_accounts()` (super admin, or active admin / lab manager; FALSE
+  when signed out — unlike `i_manage_people()`, which is TRUE with no user so
+  the SQL editor passes). `create_team_user`: lab managers never create an org
+  admin, org admins only in their own org. `reset_auth_user_password` was
+  callable signed-out, set anyone's password, and was unused — dropped. Never
+  recreate it.
+- **`delete_auth_user` refuses a login any account still uses** (users or
+  solo_users row, or the super admin). One person holds several users rows on
+  one login; deleting one role used to sign them out of the others. So callers
+  delete the users ROW first, then the login, and when it is refused during
+  account creation they LINK to the existing login (`{ id, reused: true }`)
+  instead of deleting it.
+- **New functions are not signed-out callable by default** (default
+  privileges revoked from PUBLIC/anon). A function that genuinely must run
+  signed out needs an explicit `GRANT EXECUTE ... TO anon`.
+- Left on purpose (the linter still lists them): INSERT `WITH CHECK (true)` on
+  notifications / admin_notifications / email_notifications_queue /
+  support_messages; authenticated EXECUTE on the RLS helpers; signed-in
+  bucket listing (upsert and remove need SELECT). Open follow-up: any signed-in
+  user can queue an email to any address — narrow `email_queue_insert` to known
+  recipients + the support address.
