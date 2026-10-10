@@ -40,14 +40,15 @@ const docByKey = k => VEHICLE_DOCS.find(d => d.key === k)
 
 // Vehicle use agreement.
 //
-// A lab user reads the agreement, types their name and submits; a lab manager
-// approves or denies; every submission stays as the archive. Access is dated
-// from the APPROVAL, not the signature — signing is a request, approving is
-// the grant.
+// The agreement IS the three university documents: a lab user signs and
+// uploads the two forms and confirms the manual; a lab manager approves or
+// denies; every submission stays as the archive. Access is dated from the
+// APPROVAL, not the signature — signing is a request, approving is the grant.
 //
-// The agreement text is stored on each signed row, not looked up when the
-// archive is displayed. The wording is editable, and an archive that shows
-// today's text beside a signature from last year is not a record of anything.
+// There used to be an editable agreement text with a version number on top
+// of the forms. It was removed (Oct 2026): the forms already are the terms,
+// and a second, optional text beside them only raised the question of which
+// one counted. Rows signed back then keep their agreement_text/version.
 
 const PENDING_STYLE  = { bg: '#fff8f0', border: '#f59e0b', fg: '#92400e' }
 const APPROVED_STYLE = { bg: '#E1F5EE', border: '#9FE1CB', fg: '#085041' }
@@ -72,17 +73,13 @@ function FileLink({ url, name }) {
   )
 }
 
-// view: 'agreement' — the agreement text and the signed archive;
+// view: 'agreement' — the signed archive;
 //       'forms'     — the three university documents (and, for a lab user,
 //                     where they upload or confirm each one).
 export default function VehicleAgreement({ labUsers = [], session, isManager, onChanged, view = 'agreement' }) {
   const { toast } = useAppStore()
-  const [text, setText] = useState('')
-  const [version, setVersion] = useState(1)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editingText, setEditingText] = useState(false)
-  const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
 
   // lab user signing form
@@ -98,15 +95,9 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
 
   async function load() {
     setLoading(true)
-    const [{ data: cfg }, agr] = await Promise.all([
-      sb.from('settings').select('key, value').in('key', ['vehicle_agreement_text', 'vehicle_agreement_version']),
-      isManager
-        ? sb.from('vehicle_agreements').select('*').eq('organization_id', orgId).order('signed_at', { ascending: false })
-        : sb.from('vehicle_agreements').select('*').eq('user_id', myId).order('signed_at', { ascending: false }),
-    ])
-    const map = Object.fromEntries((cfg || []).map(r => [r.key, r.value]))
-    setText(map.vehicle_agreement_text || '')
-    setVersion(Number(map.vehicle_agreement_version) || 1)
+    const agr = isManager
+      ? await sb.from('vehicle_agreements').select('*').eq('organization_id', orgId).order('signed_at', { ascending: false })
+      : await sb.from('vehicle_agreements').select('*').eq('user_id', myId).order('signed_at', { ascending: false })
     if (agr.error) console.warn('[vehicle agreement] load failed:', agr.error.message)
     setRows(agr.data || [])
     setLoading(false)
@@ -128,26 +119,6 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       const name = docByKey(r.doc_key)?.name
       if (name && !filed.has(String(r.user_id) + '|' + name)) await archiveToDocuments(r.user_id, r.file_url, r.status === 'approved', name)
     }
-  }
-
-  async function saveText() {
-    setSaving(true)
-    const { error } = await sb.from('settings').upsert({ key: 'vehicle_agreement_text', value: draft }, { onConflict: 'key' })
-    setSaving(false)
-    if (error) { toast('Could not save the agreement: ' + error.message); return }
-    setText(draft); setEditingText(false)
-    toast('Agreement saved. New signatures will use this wording.')
-  }
-
-  // Bumping the version does not invalidate anything on its own — it marks
-  // which wording each signature was made against, so the archive can show
-  // "signed against an older version" rather than quietly implying otherwise.
-  async function bumpVersion() {
-    const next = version + 1
-    const { error } = await sb.from('settings').upsert({ key: 'vehicle_agreement_version', value: String(next) }, { onConflict: 'key' })
-    if (error) { toast('Could not update the version: ' + error.message); return }
-    setVersion(next)
-    toast(`Agreement is now version ${next}. Existing signatures stay on their own version.`)
   }
 
   async function submitForm(doc) {
@@ -173,8 +144,6 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       organization_id: orgId,
       doc_key: doc.key,
       vehicle_name: vehicle.trim() || null,
-      agreement_text: text || null,     // the manager's instructions, as shown
-      agreement_version: version,
       file_url: url,
       file_name: file.name,
       status: 'pending',
@@ -229,7 +198,6 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       organization_id: orgId,
       doc_key: doc.key,
       vehicle_name: vehicle.trim() || null,
-      agreement_version: version,
       status: 'acknowledged',
     })
     setUploading(null)
@@ -265,48 +233,6 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
 
   return (
     <div>
-      {/* ── the agreement ─────────────────────────────────────────────── */}
-      {view === 'agreement' && (
-      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Vehicle Use Agreement</div>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>v{version}</span>
-          {isManager && !editingText && (
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              <button className="btn btn-sm" onClick={() => { setDraft(text); setEditingText(true) }}>Edit text</button>
-              <button className="btn btn-sm" onClick={bumpVersion} title="Marks new signatures as a new version">New version</button>
-            </div>
-          )}
-        </div>
-        <div style={{ padding: 16 }}>
-          {editingText ? (
-            <>
-              <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={14}
-                placeholder="Paste the vehicle use agreement here. Lab users read this before signing."
-                style={{ width: '100%', fontSize: 13, lineHeight: 1.65, fontFamily: 'inherit' }} />
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button className="btn btn-sm btn-primary" onClick={saveText} disabled={saving}>Save agreement</button>
-                <button className="btn btn-sm" onClick={() => setEditingText(false)}>Cancel</button>
-              </div>
-            </>
-          ) : text ? (
-            <div style={{ fontSize: 13, lineHeight: 1.75, whiteSpace: 'pre-wrap', maxHeight: 340, overflowY: 'auto',
-                          padding: '4px 2px', color: 'var(--text2)' }}>
-              {text}
-            </div>
-          ) : (
-            // Say who can fix it. A lab user seeing "no agreement" with no
-            // explanation assumes the page is broken.
-            <div style={{ fontSize: 13, color: 'var(--text3)', fontStyle: 'italic' }}>
-              {isManager
-                ? 'No agreement text. Optional — anything added here is shown to lab users and saved with each submission. The forms are on the Forms tab.'
-                : 'No extra terms from your lab manager. The forms to sign are on the Forms tab.'}
-            </div>
-          )}
-        </div>
-      </div>
-      )}
-
       {/* ── the three documents ───────────────────────────────────────── */}
       {view === 'forms' && VEHICLE_DOCS.map(doc => {
         const mine = rows.filter(r => r.doc_key === doc.key && (isManager ? false : r.user_id === myId))
