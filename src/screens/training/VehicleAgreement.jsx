@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
@@ -234,6 +234,19 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     load(); onChanged?.()
   }
 
+  // The archive shows the people this panel is FOR — one lab user when opened
+  // from their card, every lab user in "All users". It used to show every
+  // agreement in the organization whoever was selected, so Gaurav's signed
+  // forms appeared under Akash. A person's other accounts (same email) count
+  // as theirs: a form uploaded from either is still their form.
+  const shownRows = useMemo(() => {
+    if (!isManager || !labUsers.length) return rows
+    const emails = new Set(labUsers.map(u => (u.email || '').trim().toLowerCase()).filter(Boolean))
+    const own = new Set(labUsers.map(u => String(u.id)))
+    orgPeople.forEach(u => { if (emails.has((u.email || '').trim().toLowerCase())) own.add(String(u.id)) })
+    return rows.filter(r => own.has(String(r.user_id)))
+  }, [rows, labUsers, orgPeople, isManager])
+
   const nameOf = id => {
     const u = labUsers.find(x => x.id === id) || orgPeople.find(x => x.id === id)
     if (!u) return 'Unknown account'
@@ -332,7 +345,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
         {isManager ? 'Signed agreements' : 'Your agreements'}
       </div>
-      {rows.length === 0 ? (
+      {shownRows.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--text3)', padding: '12px 0' }}>Nothing signed yet.</div>
       ) : (
         // A list, not a table. Seven columns of mixed-width content forced the
@@ -340,7 +353,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
         // past the right edge of the container, where a manager could not see
         // them without scrolling sideways. Rows cannot overflow.
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {rows.map(r => {
+          {shownRows.map(r => {
             const st = STATUS_STYLE[r.status] || PENDING_STYLE
             const doc = docByKey(r.doc_key)
             return (
