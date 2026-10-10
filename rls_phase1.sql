@@ -348,7 +348,7 @@ DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'equipment_sop','equipment_videos','equipment_standards',
-    'equipment_exam_questions','equipment_exam_results',
+    'equipment_exam_questions',
     'equipment_calibration','equipment_temp_access',
     'equipment_material_progress','equipment_details'
   ]
@@ -764,17 +764,49 @@ $b$);
 -- STEP 14: training tables
 -- ────────────────────────────────────────────────────────────────
 
+-- Organizations where I am an active org admin or lab manager.
+CREATE OR REPLACE FUNCTION my_managed_org_ids() RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT DISTINCT organization_id FROM users
+  WHERE auth_id = auth.uid() AND is_active AND role IN ('admin', 'user') AND organization_id IS NOT NULL
+$$;
+
+-- Exam results are a person's own record, not equipment content: they left
+-- the shared equipment-hub rule (readable by everyone in the org).
+DROP POLICY IF EXISTS eq_hub_policy ON equipment_exam_results;
+SELECT _apply_rls('equipment_exam_results', 'exam_results_policy', $b$
+FOR ALL TO authenticated
+USING (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+)
+WITH CHECK (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+)
+$b$);
+
+-- Personal training records: the owner (any of their accounts) and the lab
+-- managers / admins of their organization — not every org member. Was
+-- org-wide, which let lab users read and change everyone's (Oct 2026; see
+-- training_privacy.sql, which also blocks lab users approving themselves).
 SELECT _apply_rls('training_schedule', 'training_schedule_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
 )
 $b$);
 
@@ -791,21 +823,37 @@ BEGIN
       USING (
         is_super_admin()
         OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
-        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+        OR user_id::text = my_solo_id()::text
+        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
       )
       WITH CHECK (
         is_super_admin()
         OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
-        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+        OR user_id::text = my_solo_id()::text
+        OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
       )
     $b$);
   END LOOP;
 END $$;
 
+-- Personal training records: the owner (any of their accounts) and the lab
+-- managers / admins of their organization — not every org member. Was
+-- org-wide, which let lab users read and change everyone's (Oct 2026; see
+-- training_privacy.sql, which also blocks lab users approving themselves).
 SELECT _apply_rls('retraining_requests', 'retraining_requests_policy', $b$
 FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))
-WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid) OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))
+USING (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+)
+WITH CHECK (
+  is_super_admin()
+  OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+  OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+)
 $b$);
 
 
@@ -1000,19 +1048,23 @@ $b$);
 
 -- lab_safety_progress — per-user safety step completion. Was missing entirely;
 -- TrainingRecords.jsx queries it by user_id list with no org filter.
+-- Personal training records: the owner (any of their accounts) and the lab
+-- managers / admins of their organization — not every org member. Was
+-- org-wide, which let lab users read and change everyone's (Oct 2026; see
+-- training_privacy.sql, which also blocks lab users approving themselves).
 SELECT _apply_rls('lab_safety_progress', 'lab_safety_progress_policy', $b$
 FOR ALL TO authenticated
 USING (
   is_super_admin()
-  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
 )
 WITH CHECK (
   is_super_admin()
-  OR organization_id IN (SELECT oid FROM my_org_ids() AS oid)
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
 )
 $b$);
 
@@ -1498,7 +1550,7 @@ DECLARE
     'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy',
     'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','change_log_select','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
-    'training_schedule_policy','training_policy','retraining_requests_policy',
+    'training_schedule_policy','training_policy','retraining_requests_policy','exam_results_policy','personal_training_policy',
     'task_progress_log_policy',
     'task_dependencies_policy',
     'reminder_sends_policy',

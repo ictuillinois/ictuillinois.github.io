@@ -1740,3 +1740,21 @@ areas; one tick is required to save:
   included" with the reason, never dropped silently.
 - Material photos are off by default (size). `jszip` is a declared
   dependency, dynamically imported, and in the obfuscator's reservedStrings.
+
+## Personal training records are private (Oct 2026)
+
+`training_privacy.sql` (run in BOTH projects; the same rules are in
+rls_phase1.sql). training_fresh, training_golf_car, training_building_alarm,
+training_equipment, lab_safety_progress, equipment_exam_results,
+retraining_requests, training_schedule (and vehicle_agreements in ICT-Lab)
+used to be readable AND writable by every member of the organization through
+the API. Now: the owner (any of their accounts, solo too) plus the lab
+managers / admins of an organization they manage (`my_managed_org_ids()`).
+
+A BEFORE trigger (`guard_training_approval`) keeps approval fields unchanged
+when a lab user saves — admin_approved*, trained*, completed/approved_*,
+vehicle approved_* and status — so nobody approves themselves. The equipment
+exam pass is not guarded: the exam is how a lab user earns it.
+
+Every lab-user screen asks only for its own rows; anything that reads other
+people's training rows must be manager-only, or it will now see nothing.
