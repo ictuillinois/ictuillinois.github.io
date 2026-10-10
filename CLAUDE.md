@@ -1818,7 +1818,7 @@ in the file has to be run on its own.
 | `security_hardening.sql` | ✓ (same file in both) | ✓ |
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql and locker_requests_setup.sql (pending).
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending). locker_requests_setup.sql ran in both on Oct 10.
 
 ## Security hardening — functions and storage (Oct 2026)
 
