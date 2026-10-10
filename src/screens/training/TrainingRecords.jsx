@@ -13,6 +13,7 @@ import { useAppStore } from '../../store/useAppStore'
 import StorageService from '../../lib/storage/StorageService'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 import SDSTab from './SDSTab'
+import VehicleList from './VehicleList'
 
 async function notifyManagersTrainingSubmitted(orgId, uploaderName) {
   if (!orgId) return
@@ -508,6 +509,14 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
   // because a lab user only ever needs the agreement half.
   // A lab user lands on Forms: that is where they download, sign and upload.
   const [vehTab, setVehTab] = useState(canEdit(session) ? 'training' : 'forms')
+  // Names from the ICT vehicle list, offered when adding a vehicle training so
+  // the record and the list use the same name (typing another still works)
+  const [vehicleNames, setVehicleNames] = useState([])
+  useEffect(() => {
+    if (!session?.organizationId) return
+    sb.from('org_vehicles').select('name').eq('organization_id', session.organizationId).eq('is_active', true).order('name')
+      .then(({ data, error }) => { if (!error) setVehicleNames((data || []).map(v => v.name)) })
+  }, [session?.organizationId])
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -714,7 +723,8 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Add vehicle training</div>
             <div className="field">
               <label>Vehicle name <span style={{ color: '#c84b2f' }}>*</span></label>
-              <input value={form.vehicleName} onChange={e => setForm(f => ({ ...f, vehicleName: e.target.value }))} placeholder="e.g. Golf Cart #1, Forklift" autoFocus />
+              <input list="ict-vehicle-names" value={form.vehicleName} onChange={e => setForm(f => ({ ...f, vehicleName: e.target.value }))} placeholder="e.g. Golf Cart #1, Forklift" autoFocus />
+              <datalist id="ict-vehicle-names">{vehicleNames.map(n => <option key={n} value={n} />)}</datalist>
             </div>
             <div className="grid-2">
               <div className="field">
@@ -2220,8 +2230,9 @@ export default function TrainingRecords() {
       {/* Lab users read; lab managers and admins curate. canEdit is the
           same gate the rest of this screen uses. */}
       {subTab === 'sds' && <SDSTab session={session} readOnly={!canEdit(session)} />}
+      {subTab === 'vehicles' && (canEdit(session) ? <VehicleList session={session} /> : <div className="empty-state">Only lab managers and admins can manage the vehicle list.</div>)}
 
-      {subTab !== 'exam' && subTab !== 'sds' && (
+      {subTab !== 'exam' && subTab !== 'sds' && subTab !== 'vehicles' && (
         loading ? (
           <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : labUsers.length === 0 ? (

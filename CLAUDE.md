@@ -1710,6 +1710,15 @@ areas; one tick is required to save:
   The copy now reads Supabase `error` (it is returned, not thrown), and a lab
   manager opening the tab files any signed form still missing from Documents.
 - Archive rows use `.va-row` fixed columns so status and buttons line up.
+- **ICT vehicle list** (Training Records sidebar, key `vehicles`, lab managers
+  and admins only — `VehicleList.jsx`): table `org_vehicles`. Lab users tick
+  the vehicles they need at the top of Forms (`vehicle_access`, status
+  requested → confirmed / declined). A lab manager confirms on Use agreement
+  only once that person's two forms are approved and the manual read. A lab
+  user cannot confirm themselves (policy + guard_training_approval trigger).
+  "Remove" sets `is_active = false` — never delete a vehicle someone asked
+  for. SQL: `vehicle_list_setup.sql` (after training_privacy.sql). The
+  Training records "add vehicle training" box suggests these names.
 - Lab user's Forms tab: the **Golf Cart Manual** is read step by step —
   `src/components/PdfSteps.jsx` draws the published PDF one page per step
   (pdf.js, lazy-loaded) and offers the acknowledgement only on the last page

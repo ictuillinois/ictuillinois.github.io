@@ -78,6 +78,8 @@ function getScreenTabs(screen, session) {
     { key: 'safety',    icon: '🦺', label: 'Safety' },
     { key: 'fresh',     icon: '📄', label: 'Lab User Documents' },
     ...(!isSolo ? [{ key: 'golf',  icon: '🚗', label: 'Vehicle' }] : []),
+    // Lab managers and admins only: the list lab users request vehicles from
+    ...(!isSolo && (isAdmin || isLabManager) ? [{ key: 'vehicles', icon: '🚙', label: 'ICT vehicle list' }] : []),
     { key: 'equipment', icon: '🔧', label: 'Equipment' },
     ...(!isSolo ? [{ key: 'alarm', icon: '🔔', label: 'Building Alarm' }] : []),
     ...(!isSolo ? [{ key: 'locker', icon: '🗄️', label: 'Lab User Locker' }] : []),

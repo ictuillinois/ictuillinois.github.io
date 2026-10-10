@@ -87,7 +87,13 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
   const [saving, setSaving] = useState(false)
 
   // lab user signing form
-  const [vehicle, setVehicle] = useState('')
+  // ICT vehicle list (Training Records → ICT vehicle list) and who asked for
+  // which. A lab user ticks the vehicles they need; a lab manager confirms
+  // each one once that person's forms are approved.
+  const [vehicles, setVehicles] = useState([])
+  const [access, setAccess] = useState([])
+  const [vehiclesReady, setVehiclesReady] = useState(true)
+  const [vehBusy, setVehBusy] = useState(null)
   const [files, setFiles] = useState({})
   const [uploading, setUploading] = useState(null)   // doc key being uploaded
   const [redo, setRedo] = useState({})
@@ -116,7 +122,57 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     setRows(agr.data || [])
     setLoading(false)
     if (isManager && agr.data?.length) fileMissingCopies(agr.data)
+    loadVehicles()
   }
+
+  async function loadVehicles() {
+    if (!orgId) return
+    const [v, a] = await Promise.all([
+      sb.from('org_vehicles').select('*').eq('organization_id', orgId).order('name'),
+      isManager
+        ? sb.from('vehicle_access').select('*').eq('organization_id', orgId).order('requested_at', { ascending: false })
+        : sb.from('vehicle_access').select('*').eq('user_id', myId),
+    ])
+    // Not set up yet (vehicle_list_setup.sql not run): hide the feature, never break the tab
+    if (v.error || a.error) { setVehiclesReady(false); return }
+    setVehiclesReady(true)
+    setVehicles(v.data || [])
+    setAccess(a.data || [])
+  }
+
+  // A lab user's request: tick to ask, untick to withdraw. A confirmed vehicle
+  // stays; a declined one can be asked for again.
+  async function toggleVehicle(v, on) {
+    const mine = access.find(a => a.vehicle_id === v.id && String(a.user_id) === String(myId))
+    if (mine?.status === 'confirmed') return
+    setVehBusy(v.id)
+    let error
+    if (mine) ({ error } = await sb.from('vehicle_access').delete().eq('id', mine.id))
+    if (!error && on) ({ error } = await sb.from('vehicle_access').insert({ user_id: myId, vehicle_id: v.id, organization_id: orgId }))
+    setVehBusy(null)
+    if (error) { toast('Could not save your choice: ' + error.message); return }
+    loadVehicles()
+  }
+
+  async function decideVehicle(a, status) {
+    setVehBusy(a.id)
+    const { data, error } = await sb.from('vehicle_access').update({
+      status,
+      confirmed_by: status === 'requested' ? null : String(myId || ''),
+      confirmed_by_name: status === 'requested' ? null : (session?.username || null),
+      confirmed_at: status === 'requested' ? null : new Date().toISOString(),
+    }).eq('id', a.id).select('id')
+    setVehBusy(null)
+    if (error || !data?.length) { toast('Could not save: ' + (error?.message || 'not allowed')); return }
+    toast(status === 'confirmed' ? 'Vehicle confirmed.' : status === 'declined' ? 'Request declined.' : 'Reopened.')
+    loadVehicles(); onChanged?.()
+  }
+
+  const vehicleName = id => vehicles.find(v => v.id === id)?.name || 'Removed vehicle'
+  // What this person asked for, written on each form they submit so the
+  // archive shows which vehicles the signature was for.
+  const requestedNames = () => access.filter(a => String(a.user_id) === String(myId) && a.status !== 'declined')
+    .map(a => vehicleName(a.vehicle_id)).join(', ') || null
 
   // Every signed form also belongs in the Documents tab. Forms submitted
   // before that copy existed (Sept 24 2026), or whose copy failed, are filed
@@ -157,7 +213,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       user_id: myId,
       organization_id: orgId,
       doc_key: doc.key,
-      vehicle_name: vehicle.trim() || null,
+      vehicle_name: requestedNames(),
       file_url: url,
       file_name: file.name,
       status: 'pending',
@@ -211,7 +267,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       user_id: myId,
       organization_id: orgId,
       doc_key: doc.key,
-      vehicle_name: vehicle.trim() || null,
+      vehicle_name: requestedNames(),
       status: 'acknowledged',
     })
     setUploading(null)
@@ -263,6 +319,36 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
 
   return (
     <div>
+      {/* ── which vehicles (lab user) ─────────────────────────────────── */}
+      {view === 'forms' && !isManager && vehiclesReady && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 12, display: 'grid', gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Which vehicles do you need?</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Tick one or more. Your lab manager confirms each one after approving your forms below.</div>
+          </div>
+          {(() => {
+            const mineOf = id => access.find(a => a.vehicle_id === id && String(a.user_id) === String(myId))
+            const list = vehicles.filter(v => v.is_active || mineOf(v.id))
+            if (!list.length) return <div style={{ fontSize: 13, color: 'var(--text3)' }}>No vehicles have been listed yet. Ask your lab manager.</div>
+            return list.map(v => {
+              const a = mineOf(v.id)
+              const label = { requested: 'waiting for your lab manager', confirmed: 'confirmed', declined: 'declined — tick to ask again' }[a?.status]
+              const style = a?.status === 'confirmed' ? APPROVED_STYLE : a?.status === 'declined' ? DENIED_STYLE : PENDING_STYLE
+              return (
+                <label key={v.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 0, cursor: a?.status === 'confirmed' ? 'default' : 'pointer', fontSize: 14 }}>
+                  <input type="checkbox" style={{ width: 'auto' }}
+                    checked={!!a && a.status !== 'declined'} disabled={a?.status === 'confirmed' || vehBusy === v.id}
+                    onChange={e => toggleVehicle(v, e.target.checked)} />
+                  <span style={{ fontWeight: 500 }}>{v.name}</span>
+                  {v.description && <span style={{ fontSize: 12, color: 'var(--text3)' }}>{v.description}</span>}
+                  {a && <span style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.fg, borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{label}</span>}
+                </label>
+              )
+            })
+          })()}
+        </div>
+      )}
+
       {/* ── the three documents ───────────────────────────────────────── */}
       {view === 'forms' && VEHICLE_DOCS.map(doc => {
         const mine = rows.filter(r => r.doc_key === doc.key && (isManager ? false : r.user_id === myId))
@@ -374,15 +460,69 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
         )
       })}
 
-      {view === 'forms' && !isManager && (
-        <div className="field" style={{ marginBottom: 16 }}>
-          <label>Vehicle</label>
-          <input value={vehicle} onChange={e => setVehicle(e.target.value)} placeholder="e.g. ICT golf cart" />
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
-            Recorded with anything you submit above. Access starts when a lab manager approves.
+
+      {/* ── requested vehicles (lab manager) ──────────────────────────── */}
+      {view === 'agreement' && isManager && vehiclesReady && (() => {
+        const accountsOf = id => {
+          const u = orgPeople.find(x => String(x.id) === String(id)) || labUsers.find(x => String(x.id) === String(id))
+          const em = (u?.email || '').trim().toLowerCase()
+          const ids = new Set([String(id)])
+          if (em) orgPeople.forEach(x => { if ((x.email || '').trim().toLowerCase() === em) ids.add(String(x.id)) })
+          return ids
+        }
+        const shown = new Set()
+        labUsers.forEach(u => accountsOf(u.id).forEach(i => shown.add(i)))
+        const list = access.filter(a => !labUsers.length || shown.has(String(a.user_id)))
+        // Confirm only once the vehicle forms are done: both signed forms
+        // approved and the manual acknowledged (newest submission of each).
+        const missingFor = userId => {
+          const ids = accountsOf(userId)
+          const latest = k => rows.find(r => r.doc_key === k && ids.has(String(r.user_id)))
+          const m = []
+          if (latest('driver-approval')?.status !== 'approved') m.push('Driver Approval Form approved')
+          if (latest('operators-brief')?.status !== 'approved') m.push("Operator's Brief approved")
+          if (latest('golf-cart-manual')?.status !== 'acknowledged') m.push('Golf Cart Manual read')
+          return m
+        }
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Requested vehicles</div>
+            {list.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text3)', padding: '4px 0 8px' }}>No vehicle requests.</div>
+            ) : list.map(a => {
+              const missing = a.status === 'requested' ? missingFor(a.user_id) : []
+              const style = a.status === 'confirmed' ? APPROVED_STYLE : a.status === 'declined' ? DENIED_STYLE : PENDING_STYLE
+              return (
+                <div key={a.id} className="va-row" style={{ marginBottom: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{vehicleName(a.vehicle_id)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, lineHeight: 1.6 }}>
+                      {nameOf(a.user_id)} · requested {fmt(a.requested_at)}
+                      {a.status !== 'requested' && a.confirmed_by_name && <> · {a.status} by {a.confirmed_by_name} {fmt(a.confirmed_at)}</>}
+                      {missing.length > 0 && <> · <span style={{ color: '#92400e' }}>still needs: {missing.join(', ')}</span></>}
+                    </div>
+                  </div>
+                  <span className="va-status" style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.fg, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {a.status}
+                  </span>
+                  <div className="va-actions">
+                    {a.status === 'requested' ? (
+                      <>
+                        <button className="btn btn-sm btn-primary" disabled={missing.length > 0 || vehBusy === a.id}
+                          title={missing.length ? 'Approve the forms first' : 'Confirm this vehicle for them'}
+                          onClick={() => decideVehicle(a, 'confirmed')}>Confirm</button>
+                        <button className="btn btn-sm" style={{ color: '#c84b2f' }} disabled={vehBusy === a.id} onClick={() => decideVehicle(a, 'declined')}>Decline</button>
+                      </>
+                    ) : (
+                      <button className="btn btn-sm" disabled={vehBusy === a.id} onClick={() => decideVehicle(a, 'requested')}>Reopen</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── the archive ───────────────────────────────────────────────── */}
       {view === 'agreement' && <>

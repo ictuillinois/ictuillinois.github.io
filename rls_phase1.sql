@@ -1550,7 +1550,7 @@ DECLARE
     'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy',
     'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','change_log_select','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
-    'training_schedule_policy','training_policy','retraining_requests_policy','exam_results_policy','personal_training_policy',
+    'training_schedule_policy','training_policy','retraining_requests_policy','exam_results_policy','personal_training_policy','org_vehicles_read','org_vehicles_manage','vehicle_access_policy',
     'task_progress_log_policy',
     'task_dependencies_policy',
     'reminder_sends_policy',
