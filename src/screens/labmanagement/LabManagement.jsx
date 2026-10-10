@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { LabUsersPanel, LabManagersPanel, ApprovalRequestsPanel } from '../profile/Profile'
 import { sb } from '../../lib/supabase'
+import ExportData from './ExportData'
 
 const TAB_TITLES = {
   labusers:    'Lab Users',
   labmanagers: 'Lab Managers',
   orgadmins:   'Organization Admins',
   approvals: 'Approval Requests',
+  exportdata: 'Export Data',
   guide:     'Lab Manager Guide',
 }
 
@@ -39,7 +41,7 @@ export default function LabManagement() {
   const [pendingCount, setPendingCount] = useState(0)
 
   // Tabs live in the sidebar (Layout getScreenTabs 'labmanagement')
-  const tab = ['labusers', 'labmanagers', 'orgadmins', 'approvals', 'guide'].includes(sidebarSubTab) ? sidebarSubTab : 'labusers'
+  const tab = ['labusers', 'labmanagers', 'orgadmins', 'approvals', 'exportdata', 'guide'].includes(sidebarSubTab) ? sidebarSubTab : 'labusers'
 
   useEffect(() => { loadPendingCount() }, [])
 
@@ -66,6 +68,7 @@ export default function LabManagement() {
       {tab === 'labmanagers'     && <LabManagersPanel    toast={toast} session={session} role="user" />}
       {tab === 'orgadmins'       && <LabManagersPanel    toast={toast} session={session} role="admin" />}
       {tab === 'approvals' && <ApprovalRequestsPanel toast={toast} session={session} onCountChange={setPendingCount} />}
+      {tab === 'exportdata' && <ExportData session={session} toast={toast} />}
       {tab === 'guide'     && <LabManagerGuidePanel />}
     </div>
   )

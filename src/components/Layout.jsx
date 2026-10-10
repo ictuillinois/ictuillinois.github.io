@@ -90,6 +90,9 @@ function getScreenTabs(screen, session) {
     { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
     { key: 'orgadmins',       icon: '🏛️', label: 'Organization Admins' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },
+    // Lab managers and admins only — the screen is closed to lab users anyway,
+    // and ExportData checks the role again itself.
+    ...(isAdmin || isLabManager ? [{ key: 'exportdata', icon: '⬇️', label: 'Export Data' }] : []),
     { key: 'guide',     icon: '📖', label: 'Lab Manager Guide' },
   ]
 

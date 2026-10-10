@@ -1719,3 +1719,24 @@ areas; one tick is required to save:
   the video is replaced so those who have not passed watch the new one.
 - Backup tables made with `CREATE TABLE … AS` must get RLS enabled in the same
   script (see the RLS section).
+
+## Lab Management → Export Data (Oct 2026)
+
+`src/screens/labmanagement/ExportData.jsx`, sidebar key `exportdata`.
+**Lab managers and admins only** (Layout gate + a role check in the component).
+
+- One ZIP: `Lab users/` and `Lab managers/`, then **one folder per person**
+  holding everything about them — their own `<Name>.xlsx` (Profile, every
+  training table, bookings in the chosen date range, projects / materials
+  with reduction folder paths / tested materials, Files, Files not included)
+  and their uploaded files sorted by source (Safety/, Documents/, Vehicle/…).
+- Rows are exported with `select('*')`, so new columns appear without code
+  changes; tables missing from this database are skipped. Secrets and
+  internal ids (`DROP` set) are never exported.
+- Files: any `*url` column (URL, `ext:` ref, or a JSON object of them) is
+  resolved through StorageService and fetched. ICT-Lab's originals are in S3
+  and always resolve. A LabHive file in someone's personal Google Drive /
+  OneDrive cannot be read by the manager — it is listed in "Files not
+  included" with the reason, never dropped silently.
+- Material photos are off by default (size). `jszip` is a declared
+  dependency, dynamically imported, and in the obfuscator's reservedStrings.

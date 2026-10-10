@@ -594,3 +594,6 @@ main > * { animation: screen-fade 0.16s ease-out; }
   .va-row, .va-row.no-actions { grid-template-columns: 1fr; }
   .va-row .va-status, .va-row .va-actions { justify-self: start; }
 }
+
+/* ── Lab Management → Export Data: options and preview side by side, stacked on phones ── */
+@media (max-width: 820px) { .export-grid { grid-template-columns: 1fr !important; } }

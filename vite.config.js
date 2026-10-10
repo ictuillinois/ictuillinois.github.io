@@ -16,7 +16,7 @@ export default defineConfig({
         renameGlobals: false,
         selfDefending: false,
         reservedStrings: [
-          '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$',
+          '^jspdf$', '^jspdf-autotable$', '^exceljs$', '^xlsx$', '^jszip$',
           '^pdfjs-dist$',
           '^\\./', '^\\.\\./',
         ],
