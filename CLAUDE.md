@@ -1704,6 +1704,12 @@ areas; one tick is required to save:
   The copy now reads Supabase `error` (it is returned, not thrown), and a lab
   manager opening the tab files any signed form still missing from Documents.
 - Archive rows use `.va-row` fixed columns so status and buttons line up.
+- Lab user's Forms tab: the **Golf Cart Manual** is read step by step —
+  `src/components/PdfSteps.jsx` draws the published PDF one page per step
+  (pdf.js, lazy-loaded) and offers the acknowledgement only on the last page
+  after every page was shown. The two **forms to sign** show four numbered
+  steps: download → sign → upload the signed copy → lab manager approves.
+  Step titles for the manual are `VEHICLE_DOCS[...].steps` (one per PDF page).
 - Vehicle and building-alarm training dates are **read-only once confirmed**
   (set when the box is ticked; unticking clears them).
 

@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
+// Lazy: pdf.js is large, and only a lab user reading the manual needs it
+const PdfSteps = lazy(() => import('../../components/PdfSteps'))
 
 // The three vehicle documents, served from public/. They are university
 // documents and are offered exactly as published — re-creating them as web
@@ -17,21 +19,23 @@ const VEHICLE_DOCS = [
     kind: 'sign',
     name: 'Departmental Driver Approval Form',
     file: 'Departmental-Driver-Approval-Form.pdf',
-    note: 'University of Illinois form · download, sign, then upload the signed copy',
+    note: 'University of Illinois form · download, sign, upload the signed copy · your lab manager approves it',
   },
   {
     key: 'operators-brief',
     kind: 'sign',
     name: "Campus Unlicensed Motorized Vehicle Operator's Brief",
     file: 'campus-unlicensed-motorized-vehicle-operators-brief.pdf',
-    note: 'Download, sign, then upload the signed copy',
+    note: 'Download, sign, upload the signed copy · your lab manager approves it',
   },
   {
     key: 'golf-cart-manual',
     kind: 'read',
     name: 'Golf Cart Manual',
     file: 'golf-cart-manual.pdf',
-    note: 'Read it, then confirm below — nothing to upload',
+    note: 'Read it step by step, then confirm you understood it — nothing to upload',
+    // One title per page of the PDF, shown above that page in the step view
+    steps: ['Requirements, scope of use and rules', 'Before you drive', 'Driving', 'Stopping and parking', 'Switching off, returning and charging'],
   },
 ]
 
@@ -277,55 +281,95 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', whiteSpace: 'nowrap' }}>Open ⬇</span>
             </a>
 
-            {!isManager && (
-              <div style={{ padding: 16, borderTop: '1px solid var(--border)' }}>
-                {latest ? (
-                  <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
-                                   borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>
-                      {latest.status}
-                    </span>
-                    <span style={{ color: 'var(--text3)' }}>
-                      {doc.kind === 'read' ? 'Confirmed' : 'Submitted'} {fmt(latest.signed_at)}
-                      {latest.status === 'approved' && ` · access from ${fmt(latest.approved_at)}`}
-                    </span>
-                    {/* Re-submitting is allowed: a form can be rejected, or a
-                        new one needed next year. The old row stays. */}
-                    {latest.status !== 'pending' && (
-                      <button className="btn btn-sm" onClick={() => setRedo(r => ({ ...r, [doc.key]: true }))}>
-                        {doc.kind === 'read' ? 'Confirm again' : 'Submit a new one'}
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-
-                {(!latest || redo[doc.key]) && (doc.kind === 'sign' ? (
-                  <div style={{ marginTop: latest ? 12 : 0 }}>
-                    <input type="file" accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={e => setFiles(f => ({ ...f, [doc.key]: e.target.files?.[0] || null }))}
-                      style={{ width: 'auto' }} />
-                    {files[doc.key] && (
-                      <div style={{ fontSize: 12, color: 'var(--text3)', margin: '4px 0 8px' }}>
-                        {files[doc.key].name} · {(files[doc.key].size / 1024).toFixed(0)} KB
-                      </div>
-                    )}
-                    <div>
-                      <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }}
-                        onClick={() => submitForm(doc)} disabled={uploading === doc.key}>
-                        {uploading === doc.key ? 'Uploading…' : 'Upload signed form'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: latest ? 12 : 0 }}>
-                    <button className="btn btn-sm btn-primary"
-                      onClick={() => confirmRead(doc)} disabled={uploading === doc.key}>
-                      {uploading === doc.key ? 'Saving…' : 'I have read this manual'}
+            {!isManager && (() => {
+              const redoing = !!redo[doc.key]
+              const open = !latest || redoing || latest.status === 'denied'
+              const status = latest && (
+                <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
+                                 borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>{latest.status}</span>
+                  <span style={{ color: 'var(--text3)' }}>
+                    {doc.kind === 'read' ? 'Confirmed' : 'Submitted'} {fmt(latest.signed_at)}
+                    {latest.status === 'approved' && ` · access from ${fmt(latest.approved_at)}`}
+                    {latest.status === 'pending' && ' · waiting for your lab manager to review it'}
+                    {latest.status === 'denied' && ' · not approved — please sign and upload it again'}
+                  </span>
+                  {/* Re-submitting is allowed: a form can be rejected, or a new
+                      one needed next year. The old row stays. */}
+                  {(latest.status === 'approved' || latest.status === 'acknowledged') && !redoing && (
+                    <button className="btn btn-sm" onClick={() => setRedo(r => ({ ...r, [doc.key]: true }))}>
+                      {doc.kind === 'read' ? 'Read it again' : 'Submit a new one'}
                     </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
+                </div>
+              )
+
+              if (doc.kind === 'read') return (
+                <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'grid', gap: 12 }}>
+                  {status}
+                  {open && (
+                    // The manual, page by page from the published PDF, ending in
+                    // the acknowledgement — reaching the end is the point.
+                    <Suspense fallback={<div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>}>
+                      <PdfSteps url={docUrl(doc)} title={doc.name} steps={doc.steps}
+                        confirmLabel="I have read and understood the ICT Golf Cart Standard Operating Procedure, and I will follow it."
+                        busy={uploading === doc.key}
+                        onConfirm={() => confirmRead(doc)} />
+                    </Suspense>
+                  )}
+                </div>
+              )
+
+              // A form to sign: four plain steps, so it is clear the signed copy
+              // is what counts and that a lab manager has to approve it.
+              const stepStyle = () => ({ display: 'grid', gridTemplateColumns: '28px 1fr', gap: 10, alignItems: 'start' })
+              const num = (n, done) => (
+                <span style={{ width: 24, height: 24, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700,
+                  background: done ? 'var(--accent)' : 'var(--surface2)', color: done ? '#fff' : 'var(--text2)', border: done ? 'none' : '1px solid var(--border)' }}>
+                  {done ? '✓' : n}
+                </span>
+              )
+              const submitted = latest && !open
+              return (
+                <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'grid', gap: 12 }}>
+                  {status}
+                  {open && (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      <div style={stepStyle()}>{num(1)}<div style={{ fontSize: 13 }}>
+                        <strong>Download the form.</strong>{' '}
+                        <a href={docUrl(doc)} target="_blank" rel="noreferrer" download style={{ color: 'var(--accent)', fontWeight: 600 }}>Download {doc.file}</a>
+                      </div></div>
+                      <div style={stepStyle()}>{num(2)}<div style={{ fontSize: 13 }}>
+                        <strong>Sign it.</strong> Print and sign it, or sign the PDF electronically. An unsigned form will not be approved.
+                      </div></div>
+                      <div style={stepStyle()}>{num(3)}<div style={{ fontSize: 13, display: 'grid', gap: 6 }}>
+                        <strong>Upload the signed copy.</strong>
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={e => setFiles(f => ({ ...f, [doc.key]: e.target.files?.[0] || null }))}
+                          style={{ width: 'auto' }} />
+                        {files[doc.key] && (
+                          <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+                            {files[doc.key].name} · {(files[doc.key].size / 1024).toFixed(0)} KB
+                          </span>
+                        )}
+                        <div>
+                          <button className="btn btn-sm btn-primary"
+                            onClick={() => submitForm(doc)} disabled={uploading === doc.key || !files[doc.key]}>
+                            {uploading === doc.key ? 'Uploading…' : 'Upload signed form'}
+                          </button>
+                        </div>
+                      </div></div>
+                      <div style={stepStyle()}>{num(4)}<div style={{ fontSize: 13, color: 'var(--text2)' }}>
+                        <strong style={{ color: 'var(--text)' }}>Your lab manager reviews and approves it.</strong> Vehicle access starts on the day it is approved.
+                      </div></div>
+                    </div>
+                  )}
+                  {submitted && latest.status === 'pending' && (
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>Uploaded. Nothing more to do until your lab manager has reviewed it.</div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )
       })}
