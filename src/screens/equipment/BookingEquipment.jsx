@@ -2265,10 +2265,14 @@ function BookingCalendar({ session }) {
   const photoRequiredRef = useRef(false)
   const orgEqIdsRef = useRef(null)
   const equipmentRef = useRef([])
+  // Same rule as Equipment SOP: Lab only equipment (kept for calibration and
+  // maintenance) is left out of the booking list for everyone. Lab users never
+  // receive it; lab managers and admins can show it when they need to book one.
+  const [showLabOnly, setShowLabOnly] = useState(false)
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
-    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_hidden_areas').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
+    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     q = forLabUsers(q, session, 'booking')
@@ -2737,10 +2741,12 @@ function BookingCalendar({ session }) {
     loadBookings()
   }
 
+  const labOnlyCount = equipment.filter(e => e.lab_user_access === false).length
   const filteredEq = equipment.filter(e => {
     const q = search.toLowerCase()
     return (!q || [e.equipment_name, e.nickname, e.category, e.location].some(f => f?.toLowerCase().includes(q)))
       && (!filterCat || e.category === filterCat)
+      && (showLabOnly || e.lab_user_access !== false)
   })
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))].sort()
@@ -2921,6 +2927,22 @@ function BookingCalendar({ session }) {
                 <option value="">All categories</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              {canEdit(session) && labOnlyCount > 0 && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 0, fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={showLabOnly}
+                    onChange={e => {
+                      const on = e.target.checked
+                      setShowLabOnly(on)
+                      // Hiding them again also drops them from the selection, or the
+                      // calendar would keep showing equipment the list no longer has
+                      if (!on) {
+                        const hidden = new Set(equipment.filter(x => x.lab_user_access === false).map(x => x.id))
+                        setSelectedEq(prev => prev.filter(id => !hidden.has(id)))
+                      }
+                    }} />
+                  Show lab-only equipment ({labOnlyCount})
+                </label>
+              )}
             </div>
             <div onClick={() => allSelected ? setSelectedEq([]) : setSelectedEq(prev => [...new Set([...prev, ...allIds])])}
               style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: allSelected ? 'var(--accent-light)' : 'var(--surface2)', flexShrink: 0 }}>
