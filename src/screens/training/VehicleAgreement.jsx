@@ -78,6 +78,7 @@ function FileLink({ url, name }) {
 }
 
 // view: 'agreement' — the signed archive;
+//       'requests'  — vehicle requests to confirm (shown on Training records);
 //       'forms'     — the three university documents (and, for a lab user,
 //                     where they upload or confirm each one).
 export default function VehicleAgreement({ labUsers = [], session, isManager, onChanged, view = 'agreement' }) {
@@ -462,7 +463,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
 
 
       {/* ── requested vehicles (lab manager) ──────────────────────────── */}
-      {view === 'agreement' && isManager && vehiclesReady && (() => {
+      {view === 'requests' && isManager && vehiclesReady && (() => {
         const accountsOf = id => {
           const u = orgPeople.find(x => String(x.id) === String(id)) || labUsers.find(x => String(x.id) === String(id))
           const em = (u?.email || '').trim().toLowerCase()
@@ -508,7 +509,10 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
                   <div className="va-actions">
                     {a.status === 'requested' ? (
                       <>
+                        {/* Greyed out, not just disabled: the green primary style
+                            made a locked Confirm look clickable. */}
                         <button className="btn btn-sm btn-primary" disabled={missing.length > 0 || vehBusy === a.id}
+                          style={missing.length > 0 ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
                           title={missing.length ? 'Approve the forms first' : 'Confirm this vehicle for them'}
                           onClick={() => decideVehicle(a, 'confirmed')}>Confirm</button>
                         <button className="btn btn-sm" style={{ color: '#c84b2f' }} disabled={vehBusy === a.id} onClick={() => decideVehicle(a, 'declined')}>Decline</button>

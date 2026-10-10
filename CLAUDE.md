@@ -1713,8 +1713,8 @@ areas; one tick is required to save:
 - **ICT vehicle list** (Training Records sidebar, key `vehicles`, lab managers
   and admins only — `VehicleList.jsx`): table `org_vehicles`. Lab users tick
   the vehicles they need at the top of Forms (`vehicle_access`, status
-  requested → confirmed / declined). A lab manager confirms on Use agreement
-  only once that person's two forms are approved and the manual read. A lab
+  requested → confirmed / declined). A lab manager confirms on the Vehicle → Training records
+  tab (`VehicleAgreement view="requests"`), only once that person's two forms are approved and the manual read. A lab
   user cannot confirm themselves (policy + guard_training_approval trigger).
   "Remove" sets `is_active = false` — never delete a vehicle someone asked
   for. SQL: `vehicle_list_setup.sql` (after training_privacy.sql). The

@@ -113,7 +113,7 @@ export default function VehicleList({ session }) {
     <div style={{ maxWidth: 720 }}>
       <div className="section-header"><div className="section-title">ICT vehicle list</div></div>
       <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
-        The vehicles lab users can request on <strong>Vehicle → Forms</strong>. You confirm each request on <strong>Vehicle → Use agreement</strong>, once that person's forms are approved.
+        The vehicles lab users can request on <strong>Vehicle → Forms</strong>. You confirm each request on <strong>Vehicle → Training records</strong>, once that person's forms are approved.
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 16, display: 'grid', gap: 8 }}>

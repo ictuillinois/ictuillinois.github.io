@@ -616,6 +616,11 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
       )}
 
       {vehTab === 'training' && <>
+      {/* Vehicle requests sit with the training records: confirming one is the
+          lab manager saying this person may drive that vehicle. */}
+      {isVehManager && (
+        <VehicleAgreement view="requests" labUsers={labUsers} session={session} isManager onChanged={onChanged} />
+      )}
       {!hideChrome && <SectionHeader title="Training Records" count={labUsers.length} />}
       {!hideChrome && canEdit(session) && (
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
