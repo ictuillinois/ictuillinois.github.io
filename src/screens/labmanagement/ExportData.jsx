@@ -135,14 +135,9 @@ export default function ExportData({ session, toast }) {
     setBusy(true); setResult(null)
     try {
       const [{ default: JSZip }, { default: ExcelJS }] = await Promise.all([import('jszip'), import('exceljs')])
-      const ids = selected.map(p => p.id)
-      const byUser = id => r => String(r.user_id) === String(id)
-
-      setStatus('Reading records…')
-      const { data: eqRows } = await sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('organization_id', orgId)
-      const eqName = Object.fromEntries((eqRows || []).map(e => [e.id, e.nickname || e.equipment_name]))
-      // Every users row in the org: one person can own several (a lab-user row
-      // and a lab-manager row sharing an email), and a project may list either.
+      // One person can own several users rows (a lab-user and a lab-manager row
+      // sharing an email) and may have uploaded from any of them. Everything is
+      // fetched for ALL of a person's rows and filed under that person.
       const { data: allRows } = await sb.from('users').select('*').eq('organization_id', orgId)
       const profiles = allRows || []
       const rowsOf = p => {
@@ -150,6 +145,12 @@ export default function ExportData({ session, toast }) {
         const same = em ? profiles.filter(u => (u.email || '').trim().toLowerCase() === em) : []
         return same.length ? same : [p]
       }
+      const ids = [...new Set(selected.flatMap(p => rowsOf(p).map(r => r.id)))]
+      const byUser = id => { const own = new Set(rowsOf(selected.find(x => x.id === id) || { id }).map(r => String(r.id))); return r => own.has(String(r.user_id)) }
+
+      setStatus('Reading records…')
+      const { data: eqRows } = await sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('organization_id', orgId)
+      const eqName = Object.fromEntries((eqRows || []).map(e => [e.id, e.nickname || e.equipment_name]))
       let orgProjects = [], orgMaterials = [], orgTested = []
       if (opts.projects) {
         orgProjects = (await sb.from('projects').select('*').eq('organization_id', orgId).order('name')).data || []

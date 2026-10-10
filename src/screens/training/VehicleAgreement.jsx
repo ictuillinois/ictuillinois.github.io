@@ -90,6 +90,16 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
 
   const orgId = session?.organizationId || null
   const myId = session?.userId
+  // Every account in the org, for naming who submitted. labUsers only holds
+  // active lab users, so a form uploaded from someone's other account (one
+  // person can have a lab-user and a lab-manager row) or by a deactivated
+  // user showed as just "Lab user".
+  const [orgPeople, setOrgPeople] = useState([])
+  useEffect(() => {
+    if (!isManager || !orgId) return
+    sb.from('users').select('id, name, last_name, nick_name, email, role, is_active').eq('organization_id', orgId)
+      .then(({ data }) => setOrgPeople(data || []))
+  }, [isManager, orgId])
 
   useEffect(() => { load() }, [session?.userId, labUsers.length])
 
@@ -225,8 +235,11 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
   }
 
   const nameOf = id => {
-    const u = labUsers.find(x => x.id === id)
-    return u ? (u.nick_name?.trim() || [u.name, u.last_name].filter(Boolean).join(' ')) : 'Lab user'
+    const u = labUsers.find(x => x.id === id) || orgPeople.find(x => x.id === id)
+    if (!u) return 'Unknown account'
+    const n = u.nick_name?.trim() || [u.name, u.last_name].filter(Boolean).join(' ') || u.email
+    const tag = u.role === 'user' ? ' (lab manager account)' : u.role === 'admin' ? ' (admin account)' : !u.is_active && u.is_active !== undefined ? ' (deactivated)' : ''
+    return n + tag
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 30 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
