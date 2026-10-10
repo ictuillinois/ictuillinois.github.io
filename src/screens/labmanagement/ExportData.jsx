@@ -34,6 +34,15 @@ const ZERO = '00000000-0000-0000-0000-000000000000'
 const today = () => new Date().toISOString().slice(0, 10)
 const missingTable = e => e && (e.code === '42P01' || e.code === 'PGRST205' || /does not exist|schema cache/i.test(e.message || ''))
 
+// Why a file could not be included, in words a lab manager can act on.
+// A fetch() that throws a TypeError ("Failed to fetch") means the browser
+// refused the download — almost always the storage bucket's CORS rules.
+function reasonFor(e) {
+  const m = e?.message || ''
+  if (e instanceof TypeError || /failed to fetch|load failed|networkerror/i.test(m)) return 'the browser was not allowed to download it from storage (storage CORS settings)'
+  return m || 'could not be downloaded'
+}
+
 const fullName = u => (u.nick_name?.trim() || [u.name, u.last_name].filter(Boolean).join(' ') || u.email || 'Unnamed').trim()
 const safe = s => String(s || '').replace(/[\\/:*?"<>|\r\n]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'untitled'
 
@@ -151,6 +160,8 @@ export default function ExportData({ session, toast }) {
       const zip = new JSZip()
       const folderNames = new Set()
       let filesIn = 0, filesOut = 0
+      const missed = []
+      const counted = {}   // folder → files included, across everyone
       for (let i = 0; i < selected.length; i++) {
         const p = selected[i]
         setStatus(`Preparing ${i + 1} of ${selected.length}: ${fullName(p)}…`)
@@ -201,9 +212,11 @@ export default function ExportData({ session, toast }) {
                 while (dir.file(path)) path = `${folder}/${fname.replace(/(\.[^.]+)?$/, ` (${n++})$1`)}`
                 dir.file(path, await res.blob())
                 fileList.push({ file: path, from: folder, stored_as: f.ref.startsWith('ext:') ? f.ref.split(':')[1] : 'app storage' })
+                counted[folder] = (counted[folder] || 0) + 1
                 filesIn++
               } catch (e) {
-                notIncluded.push({ file: fname, from: folder, reason: e.message || 'could not be downloaded', link: f.ref })
+                notIncluded.push({ file: fname, from: folder, reason: reasonFor(e), link: f.ref })
+                missed.push({ person: fullName(p), file: fname, from: folder, reason: reasonFor(e) })
                 filesOut++
               }
             }
@@ -259,7 +272,7 @@ export default function ExportData({ session, toast }) {
       a.download = `${APP_NAME}-export-${scope}-${today()}.zip`.replace(/\s+/g, '-')
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(a.href), 30000)
-      setResult({ people: selected.length, filesIn, filesOut })
+      setResult({ people: selected.length, filesIn, filesOut, missed, counted })
       setStatus('')
     } catch (e) {
       console.error('[export] failed:', e)
@@ -339,7 +352,25 @@ export default function ExportData({ session, toast }) {
         {result && (
           <div style={{ fontSize: 13, background: 'var(--accent-light)', border: '1px solid #9FE1CB', borderRadius: 10, padding: '10px 12px', color: '#085041' }}>
             Downloaded: {result.people} {result.people === 1 ? 'person' : 'people'}, {result.filesIn} file{result.filesIn === 1 ? '' : 's'}.
-            {result.filesOut > 0 && <> {result.filesOut} file{result.filesOut === 1 ? ' was' : 's were'} not included — see "Files not included" in that person's workbook.</>}
+            {Object.keys(result.counted || {}).length > 0 && (
+              <div style={{ marginTop: 4, color: 'var(--text2)' }}>
+                {Object.entries(result.counted).map(([k, n]) => `${k}: ${n}`).join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+        {/* Every file that could not be included, here and not only inside the
+            workbooks — a missing folder should never need hunting for. */}
+        {result?.missed?.length > 0 && (
+          <div style={{ fontSize: 13, background: '#fdf0ed', border: '1px solid #f1c3b5', borderRadius: 10, padding: '10px 12px' }}>
+            <strong style={{ color: '#c84b2f' }}>{result.missed.length} file{result.missed.length === 1 ? ' was' : 's were'} not included</strong>
+            <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 6, display: 'grid', gap: 4 }}>
+              {result.missed.map((m, i) => (
+                <div key={i} style={{ color: 'var(--text2)' }}>
+                  <b>{m.person}</b> · {m.from} · {m.file} — {m.reason}
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>Built in your browser. With everyone and every option it can take a minute.</div>
