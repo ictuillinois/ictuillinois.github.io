@@ -1644,3 +1644,78 @@ types changing with no way to say who or when.
   re-run. Logging never blocks a change (errors become a WARNING).
 - Material Types refuses to save an empty list (empty = silent fallback to a
   default list) and reports a save that matched no row.
+
+## Equipment: who sees which item (Sept–Oct 2026)
+
+All rules live in `src/lib/equipmentAccess.js` — never filter inline.
+
+The edit form's **Lab user access** has one Lab-only choice and four lab-user
+areas; one tick is required to save:
+
+| Ticked | Row button | Stored |
+|---|---|---|
+| nothing yet | **Waiting for decision** (amber) — still visible to lab users | `lab_user_decided = false` |
+| Calibration & maintenance | **Lab only** | `lab_user_access = false` |
+| Equipment SOP / Booking calendar / Request training / Exam | **Lab users** | `lab_user_access = true`, unticked areas in `lab_user_hidden_areas` |
+
+- Calibration & maintenance is exclusive with the four areas.
+- Request training unticked (with access on) = **no training needed**:
+  booking stops asking a lab user for a training record, and the 3-month
+  retraining block skips it (`requiresTraining()`).
+- Lab users: `forLabUsers(query, session, area)` filters server-side in the
+  equipment list, calibration, maintenance, SOP, booking, Request Training,
+  exam and QR scan (Book / SOP options hidden per area).
+- **Equipment SOP and Reserve Equipment hide Lab only items for EVERYONE**,
+  managers and admins included — Lab only means "for calibration and
+  maintenance", and a manager seeing it there read as the setting not
+  working. Both lists show the same items; managers/admins get a
+  **Show lab-only equipment (N)** switch (role admin/user only). Calibration,
+  maintenance and the equipment list still show Lab only items to managers.
+- The button beside Edit has a fixed width (136px) — label widths moved
+  Edit and ✕ around per row.
+- SQL: `equipment_lab_user_access.sql` (also adds every column the equipment
+  form writes — `maintenance_assignees` was never created and equipment saves
+  had been failing silently).
+
+## Material types (Oct 2026)
+
+- The list for the Add material form: the org's saved `material_types`; if
+  none is saved, a fallback. **ICT-Lab's fallback is always the transportation
+  list** (Aggregate, Asphalt Binder, Plant Mix, Cores, Other) — it ignores the
+  organization category, which is "University / Academic" and once silently
+  swapped Asphalt Binder out when the saved list went empty. LabHive still
+  falls back by category (it serves many kinds of lab).
+- One copy of the lists: `lib/materialTypes.js` (ICT-Lab's barcode screen had
+  its own duplicate).
+- The **Material Types** screen moved from QR Labels to the **Projects**
+  sidebar (sub-tab `material_types`, admins + lab managers, not solo),
+  lazy-loaded so Projects does not pull in jsQR.
+- It refuses to save an empty list and reports a save that matched no row.
+- Any change to it is recorded by the change log (see above).
+
+## Vehicle tab (ICT-Lab only; Oct 2026)
+
+- Sub-tabs: **Training records · Use agreement · Forms**. Forms holds the three
+  university documents (and the lab user's upload / confirm controls); lab
+  users land there. Use agreement is the signed archive only.
+- The editable agreement text + "New version" were **removed** — the three
+  forms are the agreement. Old rows keep their agreement_text/version.
+- Each signed form is also filed in the Documents tab (`training_fresh`).
+  The copy now reads Supabase `error` (it is returned, not thrown), and a lab
+  manager opening the tab files any signed form still missing from Documents.
+- Archive rows use `.va-row` fixed columns so status and buttons line up.
+- Vehicle and building-alarm training dates are **read-only once confirmed**
+  (set when the box is ticked; unticking clears them).
+
+## Small UI rules (Oct 2026)
+
+- The "New version available" banner sits **bottom centre** — bottom-right was
+  under Sara's chat button. Centred with left/right + auto margins (its
+  animation owns `transform`); Toasts draw above it (z 9000 vs 8500).
+- Dashboard icon hint: "Profile → Dashboard Icons" is a link (opens Profile on
+  the Dashboard Icons tab via `setPendingProfileTab('dashboard')`).
+- Safety Step 1 video: S3 key `safety-videos/ICT-Building safety video.mp4`
+  (ICT-Lab). Its watched marker is versioned (`STEP1_WATCH_KEY`) — bump it when
+  the video is replaced so those who have not passed watch the new one.
+- Backup tables made with `CREATE TABLE … AS` must get RLS enabled in the same
+  script (see the RLS section).
