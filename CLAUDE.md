@@ -1710,6 +1710,10 @@ areas; one tick is required to save:
   The copy now reads Supabase `error` (it is returned, not thrown), and a lab
   manager opening the tab files any signed form still missing from Documents.
 - Archive rows use `.va-row` fixed columns so status and buttons line up.
+- The manager's archive shows only the person(s) the panel is for
+  (`shownRows`): one lab user from their card, every lab user in "All
+  users". It once listed every agreement in the org under whoever was open,
+  so another user's signed forms appeared under the wrong name.
 - **ICT vehicle list** (Training Records sidebar, key `vehicles`, lab managers
   and admins only — `VehicleList.jsx`): table `org_vehicles`. Lab users tick
   the vehicles they need at the top of Forms (`vehicle_access`, status
@@ -1759,6 +1763,19 @@ areas; one tick is required to save:
   and always resolve. A LabHive file in someone's personal Google Drive /
   OneDrive cannot be read by the manager — it is listed in "Files not
   included" with the reason, never dropped silently.
+- **One person, several accounts:** a person can own a lab-user and a
+  lab-manager `users` row sharing an email, and may have uploaded or been
+  assigned from either. Training rows, files, bookings and projects are
+  gathered across ALL their rows (`rowsOf()`), or their own data goes missing.
+- **Projects are folders:** `<Person>/Projects/<project>/<project> - info.xlsx`
+  (project, materials with folder path + label barcode + QR link, tested
+  materials), then one folder per material, reductions as subfolders, each
+  with `<material> - info.xlsx`. A person's projects: PI by id or by name,
+  listed in `lab_user_ids`, or `users.assigned_project_ids` — across all
+  their rows. A lab manager's general access to every project is NOT
+  counted, or every manager folder would hold the whole organization.
+- The page lists every file it could not include, with the reason
+  ("storage CORS" = the S3 bucket needs GET in its CORS rule).
 - Material photos are off by default (size). `jszip` is a declared
   dependency, dynamically imported, and in the obfuscator's reservedStrings.
 
@@ -1779,3 +1796,24 @@ exam pass is not guarded: the exam is how a lab user earns it.
 
 Every lab-user screen asks only for its own rows; anything that reads other
 people's training rows must be manager-only, or it will now see nothing.
+
+
+## SQL files from Sept–Oct 2026 — which database, which order
+
+Each project is a SEPARATE database; a file run in one does nothing for the
+other. Every file is idempotent (safe to run again) and ends with a check
+query — the SQL Editor only shows the LAST result, so a check placed earlier
+in the file has to be run on its own.
+
+| File | ICT-Lab | LabHive |
+|---|---|---|
+| `rls_phase1.sql` | its OWN copy only | its OWN copy only — `users.auth_id` type differs |
+| `equipment_lab_user_access.sql` | ✓ | ✓ |
+| `tested_materials_setup.sql` | ✓ | ✓ |
+| `change_log_setup.sql` | ✓ (re-run after the auth_id cast fix) | ✓ |
+| `training_privacy.sql` | ✓ — run BEFORE vehicle_list_setup | ✓ |
+| `vehicle_agreement_setup.sql` / `vehicle_agreement_privacy.sql` | ✓ (superseded by training_privacy) | — no vehicle tables |
+| `vehicle_list_setup.sql` | ✓ after training_privacy | — |
+| `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
+
+As of Oct 10 2026 every row above has been run where marked.
