@@ -582,3 +582,15 @@ main > * { animation: screen-fade 0.16s ease-out; }
   .pmt-page { grid-template-columns: 1fr; }
   .pmt-info { position: static; }
 }
+
+/* ── Vehicle agreements: signed archive rows (VehicleAgreement.jsx) ──
+   Fixed columns so the status badge and the Approve / Reopen buttons sit in
+   the same place on every row, whatever the length of the text beside them. */
+.va-row { display: grid; grid-template-columns: minmax(0, 1fr) 128px 180px; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.va-row.no-actions { grid-template-columns: minmax(0, 1fr) 128px; }
+.va-row .va-status { justify-self: center; }
+.va-row .va-actions { justify-self: end; display: flex; gap: 6px; align-items: center; }
+@media (max-width: 640px) {
+  .va-row, .va-row.no-actions { grid-template-columns: 1fr; }
+  .va-row .va-status, .va-row .va-actions { justify-self: start; }
+}

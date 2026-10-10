@@ -72,7 +72,10 @@ function FileLink({ url, name }) {
   )
 }
 
-export default function VehicleAgreement({ labUsers = [], session, isManager, onChanged }) {
+// view: 'agreement' — the agreement text and the signed archive;
+//       'forms'     — the three university documents (and, for a lab user,
+//                     where they upload or confirm each one).
+export default function VehicleAgreement({ labUsers = [], session, isManager, onChanged, view = 'agreement' }) {
   const { toast } = useAppStore()
   const [text, setText] = useState('')
   const [version, setVersion] = useState(1)
@@ -107,6 +110,24 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     if (agr.error) console.warn('[vehicle agreement] load failed:', agr.error.message)
     setRows(agr.data || [])
     setLoading(false)
+    if (isManager && agr.data?.length) fileMissingCopies(agr.data)
+  }
+
+  // Every signed form also belongs in the Documents tab. Forms submitted
+  // before that copy existed (Sept 24 2026), or whose copy failed, are filed
+  // here — once, for the newest form per person and document.
+  async function fileMissingCopies(all) {
+    const latest = new Map()
+    all.forEach(r => { if (r.file_url && !latest.has(r.user_id + '|' + r.doc_key)) latest.set(r.user_id + '|' + r.doc_key, r) })
+    if (!latest.size) return
+    const userIds = [...new Set([...latest.values()].map(r => r.user_id))]
+    const { data: have, error } = await sb.from('training_fresh').select('user_id, certificate_name').in('user_id', userIds)
+    if (error) { console.warn('[vehicle agreement] Documents check failed:', error.message); return }
+    const filed = new Set((have || []).map(h => String(h.user_id) + '|' + h.certificate_name))
+    for (const r of latest.values()) {
+      const name = docByKey(r.doc_key)?.name
+      if (name && !filed.has(String(r.user_id) + '|' + name)) await archiveToDocuments(r.user_id, r.file_url, r.status === 'approved', name)
+    }
   }
 
   async function saveText() {
@@ -163,11 +184,12 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     // Mirror into the Documents tab. Same shape the safety steps use, so the
     // signed form sits with every other certificate rather than only inside
     // this tab. Not approved yet — the manager's decision sets that.
-    await archiveToDocuments(myId, url, false, doc.name)
+    const filed = await archiveToDocuments(myId, url, false, doc.name)
 
     setUploading(null)
     setFiles(f => ({ ...f, [doc.key]: null }))
-    toast('Submitted — your lab manager will review it.')
+    toast(filed ? 'Submitted — your lab manager will review it. A copy is in your Documents tab.'
+                : 'Submitted — your lab manager will review it. The copy for your Documents tab could not be saved; your lab manager\'s view will file it.')
     load(); onChanged?.()
   }
 
@@ -175,21 +197,25 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
   // tab lists. Best effort: failing to file a copy must not lose the
   // submission that already saved.
   async function archiveToDocuments(userId, url, approved, certName) {
+    // Supabase reports failure in `error`, it does not throw — the old
+    // try/catch alone let a failed copy pass as filed.
     try {
-      const { data: rows } = await sb.from('training_fresh').select('id')
+      const { data: rows, error: findErr } = await sb.from('training_fresh').select('id')
         .eq('user_id', userId).eq('certificate_name', certName).limit(1)
+      if (findErr) throw findErr
       const payload = {
         certificate_url: url,
         certificate_uploaded_at: new Date().toISOString(),
         admin_approved: approved,
       }
-      if (rows?.[0]) await sb.from('training_fresh').update(payload).eq('id', rows[0].id)
-      else await sb.from('training_fresh').insert({
-        user_id: userId, certificate_name: certName,
-        organization_id: orgId, ...payload,
-      })
+      const { error } = rows?.[0]
+        ? await sb.from('training_fresh').update(payload).eq('id', rows[0].id)
+        : await sb.from('training_fresh').insert({ user_id: userId, certificate_name: certName, organization_id: orgId, ...payload })
+      if (error) throw error
+      return true
     } catch (e) {
       console.warn('[vehicle agreement] Documents copy failed:', e.message)
+      return false
     }
   }
 
@@ -240,6 +266,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
   return (
     <div>
       {/* ── the agreement ─────────────────────────────────────────────── */}
+      {view === 'agreement' && (
       <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
         <div style={{ padding: '12px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Vehicle Use Agreement</div>
@@ -272,15 +299,16 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
             // explanation assumes the page is broken.
             <div style={{ fontSize: 13, color: 'var(--text3)', fontStyle: 'italic' }}>
               {isManager
-                ? 'No agreement text yet — choose “Edit text” and paste it in. Lab users cannot sign until it exists.'
-                : 'The agreement has not been published yet. Your lab manager will add it.'}
+                ? 'No agreement text. Optional — anything added here is shown to lab users and saved with each submission. The forms are on the Forms tab.'
+                : 'No extra terms from your lab manager. The forms to sign are on the Forms tab.'}
             </div>
           )}
         </div>
       </div>
+      )}
 
       {/* ── the three documents ───────────────────────────────────────── */}
-      {VEHICLE_DOCS.map(doc => {
+      {view === 'forms' && VEHICLE_DOCS.map(doc => {
         const mine = rows.filter(r => r.doc_key === doc.key && (isManager ? false : r.user_id === myId))
         const latest = mine[0]                     // rows come back newest first
         const st = latest ? (STATUS_STYLE[latest.status] || PENDING_STYLE) : null
@@ -350,7 +378,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
         )
       })}
 
-      {!isManager && (
+      {view === 'forms' && !isManager && (
         <div className="field" style={{ marginBottom: 16 }}>
           <label>Vehicle</label>
           <input value={vehicle} onChange={e => setVehicle(e.target.value)} placeholder="e.g. ICT golf cart" />
@@ -361,6 +389,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
       )}
 
       {/* ── the archive ───────────────────────────────────────────────── */}
+      {view === 'agreement' && <>
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
         {isManager ? 'Signed agreements' : 'Your agreements'}
       </div>
@@ -376,11 +405,10 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
             const st = STATUS_STYLE[r.status] || PENDING_STYLE
             const doc = docByKey(r.doc_key)
             return (
-              <div key={r.id} style={{
-                border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px',
-                display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
-              }}>
-                <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+              // Fixed columns (.va-row in index.css): with flex-wrap the badge
+              // and buttons landed wherever each row's text ended.
+              <div key={r.id} className={'va-row' + (isManager ? '' : ' no-actions')}>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.4 }}>
                     {doc?.name || r.doc_key}
                   </div>
@@ -398,18 +426,17 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
                   )}
                 </div>
 
-                <span style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
-                               borderRadius: 6, padding: '3px 9px', fontSize: 12, fontWeight: 600,
-                               whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <span className="va-status" style={{ background: st.bg, border: `1px solid ${st.border}`, color: st.fg,
+                               borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                   {r.status}
                 </span>
 
                 {isManager && (
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <div className="va-actions">
                     {r.status === 'acknowledged' ? (
                       // Nothing to approve on a manual someone read — no
                       // artefact exists to check.
-                      <span style={{ fontSize: 12, color: 'var(--text3)', alignSelf: 'center' }}>no approval needed</span>
+                      <span style={{ fontSize: 12, color: 'var(--text3)' }}>no approval needed</span>
                     ) : r.status === 'pending' ? (
                       <>
                         <button className="btn btn-sm btn-primary" disabled={saving} onClick={() => decide(r, 'approved')}>Approve</button>
@@ -425,6 +452,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
           })}
         </div>
       )}
+      </>}
     </div>
   )
 }

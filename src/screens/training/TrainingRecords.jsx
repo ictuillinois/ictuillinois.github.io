@@ -506,7 +506,8 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
   // Two things live under Vehicle now: the training records a manager keeps,
   // and the use agreement a lab user signs. Tabs rather than one long column,
   // because a lab user only ever needs the agreement half.
-  const [vehTab, setVehTab] = useState(canEdit(session) ? 'training' : 'agreement')
+  // A lab user lands on Forms: that is where they download, sign and upload.
+  const [vehTab, setVehTab] = useState(canEdit(session) ? 'training' : 'forms')
   const { toast } = useAppStore()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -586,7 +587,7 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
       {/* Training / Agreement switch. A lab user lands on the agreement — the
           training records are the manager's ledger, not theirs. */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid var(--border)' }}>
-        {[['training', 'Training records'], ['agreement', 'Use agreement']].map(([k, label]) => (
+        {[['training', 'Training records'], ['agreement', 'Use agreement'], ['forms', 'Forms']].map(([k, label]) => (
           <button key={k} onClick={() => setVehTab(k)}
             style={{
               padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer',
@@ -600,8 +601,9 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
         ))}
       </div>
 
-      {vehTab === 'agreement' && (
+      {(vehTab === 'agreement' || vehTab === 'forms') && (
         <VehicleAgreement
+          view={vehTab}
           labUsers={labUsers}
           session={session}
           isManager={isVehManager}
