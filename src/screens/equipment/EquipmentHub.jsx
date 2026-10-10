@@ -805,6 +805,10 @@ export default function EquipmentHub() {
   const { session } = useAppStore()
   const isSolo = session?.loginMode === 'solo'
   const [equipment, setEquipment] = useState([])
+  // Lab only = kept for calibration and maintenance, so it is left out of the
+  // SOP list for everyone, not just lab users (who never receive it at all).
+  // Lab managers and admins can still show it, to add an SOP to one.
+  const [showLabOnly, setShowLabOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [subTab, setSubTab] = useState('info')
@@ -840,9 +844,11 @@ export default function EquipmentHub() {
   }
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))]
+  const labOnlyCount = equipment.filter(e => e.lab_user_access === false).length
   const filtered = equipment.filter(e => {
     const q = search.toLowerCase()
     return (!q || [e.equipment_name, e.nickname, e.category, e.location].some(f => f?.toLowerCase().includes(q))) && (!filterCat || e.category === filterCat)
+      && (showLabOnly || e.lab_user_access !== false)
   })
 
   // ── List panel — rendered in sidebar (desktop) or inline (mobile) ──
@@ -863,6 +869,12 @@ export default function EquipmentHub() {
           <option value="">All categories</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        {canEdit(session) && labOnlyCount > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 0, fontSize: 12, color: 'var(--text2)', cursor: 'pointer' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={showLabOnly} onChange={e => setShowLabOnly(e.target.checked)} />
+            Show lab-only equipment ({labOnlyCount})
+          </label>
+        )}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading
