@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import StorageService from '../../lib/storage/StorageService'
+import { buildScanUrl, generateBarcodeId } from '../../lib/materialLabel'
 
 // Lab Management → Export Data. Lab managers and admins only.
 //
@@ -75,7 +76,7 @@ function preview(groups, opts, range) {
   const sheets = ['Profile']
   if (opts.training) sheets.push('Safety steps', 'Documents', 'Vehicle…', 'Equipment training', 'Exam results', 'Building alarm', 'Locker', 'Training requests')
   if (opts.bookings) sheets.push(`Bookings (${range.from} → ${range.to})`)
-  if (opts.projects) sheets.push('Projects', 'Materials', 'Tested materials')
+  if (opts.projects) sheets.push('Projects')
   if (opts.files) sheets.push('Files', 'Files not included')
   groups.forEach(([title, people], gi) => {
     const lastG = gi === groups.length - 1
@@ -86,7 +87,8 @@ function preview(groups, opts, range) {
       L.push(`${pad}${last ? '└' : '├'}─ ${safe(fullName(p))}/`)
       const pad2 = pad + (last ? '    ' : '│   ')
       L.push(`${pad2}├─ ${safe(fullName(p))}.xlsx   ${sheets.length} sheets`)
-      L.push(`${pad2}└─ ${opts.files ? 'Safety/  Documents/  Vehicle/ …' : '(no files)'}${opts.projects && opts.photos ? '  Projects/' : ''}`)
+      if (opts.projects) L.push(`${pad2}├─ Projects/<project>/  info.xlsx + a folder per material and reduction`)
+      L.push(`${pad2}└─ ${opts.files ? 'Safety/  Documents/  Vehicle/ …' : '(no training files)'}`)
     })
     if (people.length > 2) L.push(`${pad}└─ …${people.length - 2} more`)
   })
@@ -139,7 +141,25 @@ export default function ExportData({ session, toast }) {
       setStatus('Reading records…')
       const { data: eqRows } = await sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('organization_id', orgId)
       const eqName = Object.fromEntries((eqRows || []).map(e => [e.id, e.nickname || e.equipment_name]))
-      const { data: profiles } = await sb.from('users').select('*').in('id', ids)
+      // Every users row in the org: one person can own several (a lab-user row
+      // and a lab-manager row sharing an email), and a project may list either.
+      const { data: allRows } = await sb.from('users').select('*').eq('organization_id', orgId)
+      const profiles = allRows || []
+      const rowsOf = p => {
+        const em = (p.email || '').trim().toLowerCase()
+        const same = em ? profiles.filter(u => (u.email || '').trim().toLowerCase() === em) : []
+        return same.length ? same : [p]
+      }
+      let orgProjects = [], orgMaterials = [], orgTested = []
+      if (opts.projects) {
+        orgProjects = (await sb.from('projects').select('*').eq('organization_id', orgId).order('name')).data || []
+        const pids = orgProjects.map(x => x.id)
+        if (pids.length) {
+          orgMaterials = (await sb.from('project_materials').select('*').in('project_id', pids).order('created_at')).data || []
+          const t = await sb.from('tested_materials').select('*').in('project_id', pids)
+          if (!missingTable(t.error)) orgTested = t.data || []
+        }
+      }
 
       const training = {}
       if (opts.training) {
@@ -172,12 +192,12 @@ export default function ExportData({ session, toast }) {
         const dir = zip.folder(group).folder(name)
 
         const wb = new ExcelJS.Workbook()
-        const sheetNames = new Set()
-        const addSheet = (title, rows) => {
+        const addSheet = (title, rows, book = wb) => {
+          const names = book._usedNames || (book._usedNames = new Set())
           let t = title.slice(0, 31); let n = 2
-          while (sheetNames.has(t)) t = `${title.slice(0, 28)} ${n++}`
-          sheetNames.add(t)
-          const ws = wb.addWorksheet(t)
+          while (names.has(t)) t = `${title.slice(0, 28)} ${n++}`
+          names.add(t)
+          const ws = book.addWorksheet(t)
           const clean = rows.map(r => {
             const o = {}
             Object.entries(r).forEach(([k, v]) => {
@@ -234,27 +254,63 @@ export default function ExportData({ session, toast }) {
         if (opts.bookings) addSheet(`Bookings ${range.from} to ${range.to}`.slice(0, 31), bookings.filter(byUser(p.id)))
 
         if (opts.projects) {
-          const { data: projects } = await sb.from('projects').select('*')
-            .or(`pi_user_id.eq.${p.id},lab_user_ids.cs.{${p.id}}`)
-          const projectIds = (projects || []).map(x => x.id)
-          let materials = [], tested = []
-          if (projectIds.length) {
-            materials = (await sb.from('project_materials').select('*').in('project_id', projectIds).order('created_at')).data || []
-            const t1 = await sb.from('tested_materials').select('*').in('project_id', projectIds)
-            if (!missingTable(t1.error)) tested = t1.data || []
-          }
-          // Folders as a path: "CM16 Coarse Aggregate › #4 › Sample A"
-          const byId = Object.fromEntries(materials.map(m => [m.id, m]))
-          const path = m => { const out = []; let x = m; const seen = new Set(); while (x && !seen.has(x.id)) { seen.add(x.id); out.unshift(x.name || x.id); x = byId[x.parent_material_id] } return out.join(' › ') }
-          const projName = Object.fromEntries((projects || []).map(x => [x.id, x.name]))
-          addSheet('Projects', projects || [])
-          addSheet('Materials', materials.map(m => ({ project: projName[m.project_id] || '', folder: path(m), ...m })))
-          addSheet('Tested materials', tested.map(t => ({ project: projName[t.project_id] || '', material: byId[t.material_id]?.name || '', ...t })))
-          if (opts.photos) {
-            for (const m of materials) {
-              const photos = Array.isArray(m.photos) ? m.photos : []
-              for (const [k, u] of photos.entries()) await addFiles([{ file_name: `${safe(path(m))} — photo ${k + 1}`, photo_url: u }], `Projects/${safe(projName[m.project_id])}`)
+          // The person's projects, across every users row they own: PI by id
+          // or by name, listed as a lab user, or an older-style assignment.
+          const mine = rowsOf(p)
+          const myIds = new Set(mine.map(r => String(r.id)))
+          const assigned = new Set(mine.flatMap(r => (Array.isArray(r.assigned_project_ids) ? r.assigned_project_ids : []).map(String)))
+          const myNames = new Set(mine.flatMap(r => [fullName(r), [r.name, r.last_name].filter(Boolean).join(' '), r.name, r.last_name])
+            .filter(Boolean).map(x => x.trim().toLowerCase()))
+          const projects = orgProjects.filter(pr => myIds.has(String(pr.pi_user_id))
+            || (Array.isArray(pr.lab_user_ids) && pr.lab_user_ids.some(x => myIds.has(String(x))))
+            || assigned.has(String(pr.id))
+            || (pr.pi_name && myNames.has(pr.pi_name.trim().toLowerCase())))
+          addSheet('Projects', projects.map(pr => ({ folder: `Projects/${safe(pr.name)}`, ...pr })))
+
+          const used = new Set()
+          for (const pr of projects) {
+            let pname = safe(pr.name || pr.project_id)
+            if (used.has(pname)) pname = `${pname} (${safe(pr.project_id || String(pr.id).slice(0, 6))})`
+            used.add(pname)
+            const pdir = dir.folder('Projects').folder(pname)
+            const mats = orgMaterials.filter(m => m.project_id === pr.id)
+            const byId = Object.fromEntries(mats.map(m => [m.id, m]))
+            const kids = id => mats.filter(m => m.parent_material_id === id)
+            const pathOf = m => { const out = []; let x = m; const seen = new Set(); while (x && !seen.has(x.id)) { seen.add(x.id); out.unshift(x.name || 'Material'); x = byId[x.parent_material_id] } return out.join(' › ') }
+            const withLabel = m => ({ folder: pathOf(m), label_barcode: m.barcode_id || generateBarcodeId(pr, m), label_qr_link: buildScanUrl(m, pr), ...m })
+            const tested = orgTested.filter(t => t.project_id === pr.id)
+
+            const pwb = new ExcelJS.Workbook()
+            addSheet('Project', [pr], pwb)
+            addSheet('Materials', mats.map(withLabel), pwb)
+            addSheet('Tested materials', tested.map(t => ({ material: byId[t.material_id]?.name || '', ...t })), pwb)
+            pdir.file(`${pname} - info.xlsx`, await pwb.xlsx.writeBuffer())
+
+            // One folder per material, reductions as subfolders, as deep as they go
+            const roots = mats.filter(m => !m.parent_material_id || !byId[m.parent_material_id])
+            // taken: names already used at this level, so two materials that
+            // share a name get "Name" and "Name (2)" instead of one folder.
+            const writeMaterial = async (m, folder, rel, taken, seen) => {
+              if (seen.has(m.id)) return
+              seen.add(m.id)
+              const mname = safe(m.name || 'Material')
+              let fname = mname, n = 2
+              while (taken.has(fname)) fname = `${mname} (${n++})`
+              taken.add(fname)
+              const mdir = folder.folder(fname)
+              const mwb = new ExcelJS.Workbook()
+              addSheet('Material', [withLabel(m)], mwb)
+              addSheet('Tested', tested.filter(t => t.material_id === m.id), mwb)
+              mdir.file(`${mname} - info.xlsx`, await mwb.xlsx.writeBuffer())
+              if (opts.photos) {
+                const photos = Array.isArray(m.photos) ? m.photos : []
+                for (const [k, u] of photos.entries()) await addFiles([{ file_name: `${mname} — photo ${k + 1}`, photo_url: u }], `${rel}/${fname}`)
+              }
+              const childTaken = new Set()
+              for (const c of kids(m.id)) await writeMaterial(c, mdir, `${rel}/${fname}`, childTaken, seen)
             }
+            const rootTaken = new Set(), seen = new Set()
+            for (const m of roots) await writeMaterial(m, pdir, `Projects/${pname}`, rootTaken, seen)
           }
         }
         if (opts.files || (opts.projects && opts.photos)) {
