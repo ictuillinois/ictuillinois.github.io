@@ -499,11 +499,8 @@ BEGIN
   END IF;
 END $$;
 
-SELECT _apply_rls('lab_user_lockers', 'lab_user_lockers_policy', $b$
-FOR ALL TO authenticated
-USING    (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
-WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_org_ids() AS oid))
-$b$);
+-- lab_user_lockers policies: further down, after my_managed_org_ids() is
+-- defined (they use it). Search "Lab users read only their OWN locker".
 
 
 -- ────────────────────────────────────────────────────────────────
@@ -770,6 +767,42 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT organization_id FROM users
   WHERE auth_id::text = auth.uid()::text AND is_active AND role IN ('admin', 'user') AND organization_id IS NOT NULL
 $$;
+
+-- Lab users read only their OWN locker; lab managers / admins read and write
+-- the organization's. (They used to read every locker, with names.) Same as
+-- locker_requests_setup.sql.
+SELECT _apply_rls('lab_user_lockers', 'lab_user_lockers_policy', $b$
+FOR SELECT TO authenticated
+USING (is_super_admin()
+       OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+       OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+$b$);
+SELECT _apply_rls('lab_user_lockers', 'lab_user_lockers_manage', $b$
+FOR ALL TO authenticated
+USING      (is_super_admin() OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+$b$);
+
+-- Locker requests: one waiting request per lab user (locker_requests_setup.sql).
+CREATE TABLE IF NOT EXISTS locker_requests (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         uuid NOT NULL,
+  organization_id uuid,
+  user_name       text,
+  note            text,
+  requested_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS locker_requests_user_uniq ON locker_requests (user_id);
+SELECT _apply_rls('locker_requests', 'locker_requests_policy', $b$
+FOR ALL TO authenticated
+USING (is_super_admin()
+       OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+       OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+WITH CHECK (is_super_admin()
+       OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid)
+       OR (user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
+           AND organization_id IN (SELECT oid FROM my_org_ids() AS oid)))
+$b$);
 
 -- Exam results are a person's own record, not equipment content: they left
 -- the shared equipment-hub rule (readable by everyone in the org).
@@ -1547,7 +1580,7 @@ DECLARE
     'equipment_inventory_policy','equipment_categories_policy','equipment_locations_policy',
     'equipment_booking_settings_policy','equipment_bookings_policy','booking_notifications_policy',
     'equipment_booking_blocks_policy','eq_hub_policy','equipment_sop_notes_policy','equipment_list_policy',
-    'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy',
+    'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy','lab_user_lockers_manage','locker_requests_policy',
     'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','change_log_select','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy','exam_results_policy','personal_training_policy','org_vehicles_read','org_vehicles_manage','vehicle_access_policy',

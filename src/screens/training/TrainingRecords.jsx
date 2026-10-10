@@ -1663,14 +1663,31 @@ function BuildingAlarm({ labUsers, session, hideChrome = false, onChanged }) {
 // ══════════════════════════════════════════════════════════════
 const TOTAL_LOCKERS = 15
 
+// In-app only: lockers have no notification preference of their own. The
+// bell opens these types on Training Records → Locker.
+async function lockerNotify(userIds, type, title, body) {
+  const rows = [...new Set(userIds.filter(Boolean))].map(user_id => ({ user_id, type, title, body, read: false }))
+  if (!rows.length) return
+  const { error } = await sb.from('notifications').insert(rows)
+  if (error) console.warn('[locker] notification failed:', error.message)
+}
+
+// Lab users ask for "a locker" (locker_requests, one waiting row each); lab
+// managers and admins pick which one. Lab users see only their own locker —
+// the grid of everyone's lockers is for editors (and RLS agrees).
 function LabUserLocker({ session, panelUser = null, onChanged }) {
   const { toast } = useAppStore()
   const [lockers, setLockers] = useState([])
   const [labUsers, setLabUsers] = useState([])
+  const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [assigning, setAssigning] = useState(null)
   const [selectedLabUser, setSelectedLabUser] = useState('')
   const [notes, setNotes] = useState('')
+  const [reqNote, setReqNote] = useState('')
+  const [pick, setPick] = useState({})          // request id → locker number
+  const [busy, setBusy] = useState(false)
+  const isLabUser = session?.role === 'lab_user'
 
   useEffect(() => { load() }, [])
 
@@ -1681,8 +1698,18 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
     if (orgId) stQ = stQ.eq('organization_id', orgId)
     let lkQ = sb.from('lab_user_lockers').select('*').order('locker_number')
     if (orgId) lkQ = lkQ.eq('organization_id', orgId)
-    const [{ data: lk }, { data: st }] = await Promise.all([lkQ, stQ])
-    if (!lk || lk.length === 0) {
+    if (isLabUser) lkQ = lkQ.eq('user_id', session.userId)
+    let rqQ = sb.from('locker_requests').select('*').order('requested_at')
+    if (isLabUser) rqQ = rqQ.eq('user_id', session.userId)
+    else if (orgId) rqQ = rqQ.eq('organization_id', orgId)
+    const [{ data: lk }, { data: st }, { data: rq }] = await Promise.all([
+      lkQ, canEdit(session) ? stQ : Promise.resolve({ data: [] }), rqQ,
+    ])
+    // data is null when locker_requests does not exist yet — no requests then
+    setRequests(rq || [])
+    if (isLabUser) {
+      setLockers(lk || [])
+    } else if (!lk || lk.length === 0) {
       setLockers(Array.from({ length: TOTAL_LOCKERS }, (_, i) => ({ locker_number: i + 1, user_id: null, user_name: null })))
     } else {
       setLockers(lk)
@@ -1691,10 +1718,11 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
     setLoading(false)
   }
 
-  async function assignLocker(lockerNumber) {
-    const targetId = panelUser?.id || selectedLabUser
+  async function assignLocker(lockerNumber, requestFor = null) {
+    const targetId = requestFor?.user_id || panelUser?.id || selectedLabUser
     if (!targetId) { toast('Select a lab user.'); return }
-    const labUser = labUsers.find(s => s.id === targetId) || panelUser
+    const labUser = labUsers.find(s => s.id === targetId) || (panelUser?.id === targetId ? panelUser : null)
+      || (requestFor ? { id: requestFor.user_id, name: requestFor.user_name || 'Lab user' } : null)
     if (!labUser) return
     const orgId = session?.organizationId
     const displayName = firstName(labUser)
@@ -1709,9 +1737,64 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
       is_unavailable: false,
     }, { onConflict: 'organization_id,locker_number' })
     if (error) { toast('Error: ' + error.message); return }
+    // An assignment answers any waiting request, whichever screen it came from.
+    await sb.from('locker_requests').delete().eq('user_id', labUser.id)
+    await lockerNotify([labUser.id], 'locker_assigned', `Locker #${lockerNumber} assigned`,
+      `${session.username || 'Your lab manager'} assigned you locker #${lockerNumber}.`)
     toast(`Locker ${lockerNumber} assigned to ${displayName} ✓`)
     setAssigning(null); setSelectedLabUser(''); setNotes('')
     load(); onChanged?.()
+  }
+
+  async function requestLocker() {
+    const orgId = session?.organizationId
+    const note = reqNote.trim()
+    setBusy(true)
+    const { error } = await sb.from('locker_requests').insert({
+      user_id: session.userId, organization_id: orgId || null,
+      user_name: session.username || null, note: note || null,
+    })
+    if (error && error.code !== '23505') {   // 23505: already requested
+      setBusy(false)
+      toast(/locker_requests|schema cache|does not exist/i.test(error.message)
+        ? 'Locker requests are not set up yet. Ask an admin to run locker_requests_setup.sql.'
+        : 'Could not send the request: ' + error.message)
+      return
+    }
+    if (!error) {
+      let mq = sb.from('users').select('id').in('role', ['admin', 'user']).eq('is_active', true)
+      if (orgId) mq = mq.eq('organization_id', orgId)
+      const { data: managers } = await mq
+      await lockerNotify((managers || []).map(m => m.id), 'locker_request', 'Locker requested',
+        `${session.username || 'A lab user'} asked for a locker.${note ? ` Note: ${note}` : ''}`)
+    }
+    setBusy(false); setReqNote('')
+    toast('Locker requested ✓')
+    load(); onChanged?.()
+  }
+
+  async function cancelRequest() {
+    setBusy(true)
+    const { error } = await sb.from('locker_requests').delete().eq('user_id', session.userId)
+    setBusy(false)
+    if (error) { toast('Could not cancel: ' + error.message); return }
+    toast('Request cancelled.')
+    load(); onChanged?.()
+  }
+
+  async function declineRequest(r) {
+    if (!confirm(`Decline ${requestName(r)}'s locker request?`)) return
+    const { data, error } = await sb.from('locker_requests').delete().eq('id', r.id).select('id')
+    if (error || !data?.length) { toast('Could not decline: ' + (error?.message || 'not allowed')); return }
+    await lockerNotify([r.user_id], 'locker_declined', 'Locker request declined',
+      `${session.username || 'Your lab manager'} declined your locker request. Contact your lab manager if you still need one.`)
+    toast('Request declined.')
+    load(); onChanged?.()
+  }
+
+  function requestName(r) {
+    const u = labUsers.find(x => x.id === r.user_id)
+    return u ? firstName(u) : (r.user_name || 'Lab user')
   }
 
   async function unassignLocker(locker) {
@@ -1765,12 +1848,15 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
   const assigned = lockers.filter(l => l.user_name).length
   const unavailableCount = lockers.filter(l => l.is_unavailable && !l.user_name).length
   const available = TOTAL_LOCKERS - assigned - unavailableCount
+  const availableLockers = Array.from({ length: TOTAL_LOCKERS }, (_, i) => i + 1)
+    .filter(n => { const l = lockerMap[n]; return !l || (!l.user_name && !l.is_unavailable) })
+  const myRequest = isLabUser ? requests.find(r => r.user_id === session.userId) : null
+  const fmtDate = d => d ? new Date(d).toLocaleDateString() : ''
 
   // ── Panel mode: compact single-user locker view ──
   if (panelUser) {
     const mine = lockers.find(l => l.user_id === panelUser.id)
-    const availableLockers = Array.from({ length: TOTAL_LOCKERS }, (_, i) => i + 1)
-      .filter(n => { const l = lockerMap[n]; return !l || (!l.user_name && !l.is_unavailable) })
+    const req = requests.find(r => r.user_id === panelUser.id)
     return (
       <div>
         {mine ? (
@@ -1786,14 +1872,25 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
           </div>
         ) : (
           <div style={{ fontSize: 13, color: 'var(--text3)' }}>
+            {req && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', background: '#fff7e6', border: '1px solid #f1d49b', color: '#7a4a00', borderRadius: 10, padding: '10px 14px', marginBottom: 10 }}>
+                <b>Requested a locker on {fmtDate(req.requested_at)}</b>
+                {req.note && <span>"{req.note}"</span>}
+              </div>
+            )}
             No locker assigned{canEdit(session) ? ':' : '.'}
-            {canEdit(session) && availableLockers.length > 0 && (
+            {canEdit(session) && (availableLockers.length > 0 || req) && (
               <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select value={assigning || ''} onChange={e => setAssigning(e.target.value)} style={{ maxWidth: 180 }}>
-                  <option value="">— Select locker —</option>
-                  {availableLockers.map(n => <option key={n} value={n}>Locker #{n}</option>)}
-                </select>
-                <button className="btn btn-sm btn-primary" disabled={!assigning} onClick={() => assignLocker(Number(assigning))}>Assign</button>
+                {availableLockers.length > 0 && (
+                  <>
+                    <select value={assigning || ''} onChange={e => setAssigning(e.target.value)} style={{ maxWidth: 180 }}>
+                      <option value="">— Select locker —</option>
+                      {availableLockers.map(n => <option key={n} value={n}>Locker #{n}</option>)}
+                    </select>
+                    <button className="btn btn-sm btn-primary" disabled={!assigning} onClick={() => assignLocker(Number(assigning))}>Assign</button>
+                  </>
+                )}
+                {req && <button className="btn btn-sm" onClick={() => declineRequest(req)}>Decline request</button>}
               </div>
             )}
           </div>
@@ -1805,12 +1902,12 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>🗄️ Lab User Lockers</div>
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>🗄️ {isLabUser ? 'My locker' : 'Lab User Lockers'}</div>
+        {!isLabUser && <div style={{ display: 'flex', gap: 16 }}>
           <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>{available} available</span>
           <span style={{ fontSize: 13, color: 'var(--text2)' }}>{assigned} assigned</span>
           {unavailableCount > 0 && <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 600 }}>{unavailableCount} unavailable</span>}
-        </div>
+        </div>}
       </div>
 
       {session?.role === 'lab_user' && (
@@ -1830,21 +1927,65 @@ function LabUserLocker({ session, panelUser = null, onChanged }) {
                 {myLocker.assigned_by ? ` by ${myLocker.assigned_by}` : ''}
               </div>
             </div>
+          ) : myRequest ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '32px 20px' }}>
+              <div style={{ display: 'grid', gap: 4, textAlign: 'center', background: '#fff7e6', border: '1px solid #f1d49b', color: '#7a4a00', borderRadius: 12, padding: '16px 20px', maxWidth: 420 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Locker requested on {fmtDate(myRequest.requested_at)}</div>
+                <div style={{ fontSize: 13 }}>A lab manager will assign you one. You'll get a notification.</div>
+                {myRequest.note && <div style={{ fontSize: 13 }}>Note: {myRequest.note}</div>}
+              </div>
+              <button className="btn btn-sm" style={{ color: '#c84b2f' }} onClick={cancelRequest} disabled={busy}>Cancel request</button>
+            </div>
           ) : (
             <div className="empty-state">
               <div className="empty-icon">🗄️</div>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>No locker assigned yet</div>
-              <div style={{ fontSize: 13, color: 'var(--text3)' }}>Contact your lab manager to get a locker assigned.</div>
+              <div style={{ fontSize: 13, color: 'var(--text3)' }}>Ask for one and a lab manager will assign you a free locker.</div>
+              <div style={{ display: 'grid', gap: 8, width: 'min(100%, 360px)', margin: '16px auto 0', textAlign: 'left' }}>
+                <label htmlFor="locker-req-note" style={{ marginBottom: 0 }}>Note for the lab manager (optional)</label>
+                <input id="locker-req-note" value={reqNote} onChange={e => setReqNote(e.target.value)} maxLength={200} placeholder="e.g. I need it from Monday" />
+                <button className="btn btn-primary" onClick={requestLocker} disabled={busy}>{busy ? 'Sending…' : 'Request a locker'}</button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* The grid is visible to everyone. Lab users see it READ-ONLY so they
-          know which lockers are taken and by whom; their own shows "Yours".
-          Every mutating control below is gated on !readOnly. */}
-      {(canEdit(session) || session?.role === 'lab_user') && (
+      {/* The grid is for lab managers and admins. Lab users see only their own
+          locker above (Oct 2026: they used to see everyone's, read-only), and
+          RLS now returns them only their own row anyway. */}
+      {canEdit(session) && (
         <div>
+          {requests.length > 0 && (
+            <div style={{ border: '1px solid #f1d49b', borderRadius: 12, overflow: 'hidden', maxWidth: 640, margin: '0 auto 20px' }}>
+              <div style={{ background: '#fff7e6', color: '#7a4a00', fontWeight: 700, fontSize: 14, padding: '10px 14px' }}>Locker requests ({requests.length})</div>
+              {requests.map((r, idx) => {
+                const has = lockers.find(l => l.user_id === r.user_id)
+                return (
+                  <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', padding: '10px 14px', borderTop: '1px solid var(--border)', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
+                    <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{requestName(r)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>Requested {fmtDate(r.requested_at)}{r.note ? ` · "${r.note}"` : ''}</div>
+                    </div>
+                    {has ? (
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>Already has locker #{has.locker_number}</span>
+                    ) : availableLockers.length === 0 ? (
+                      <span style={{ fontSize: 12, color: 'var(--text2)' }}>No free lockers</span>
+                    ) : (
+                      <>
+                        <select value={pick[r.id] || ''} onChange={e => setPick(p => ({ ...p, [r.id]: e.target.value }))} style={{ maxWidth: 160 }} aria-label={`Locker for ${requestName(r)}`}>
+                          <option value="">— Select locker —</option>
+                          {availableLockers.map(n => <option key={n} value={n}>Locker #{n}</option>)}
+                        </select>
+                        <button className="btn btn-sm btn-primary" disabled={!pick[r.id]} onClick={() => assignLocker(Number(pick[r.id]), r)}>Assign</button>
+                      </>
+                    )}
+                    <button className="btn btn-sm" onClick={() => declineRequest(r)}>{has ? 'Remove request' : 'Decline'}</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, maxWidth: 500, margin: '0 auto 28px' }}>
             {Array.from({ length: TOTAL_LOCKERS }, (_, i) => {
               const num = i + 1
@@ -2009,13 +2150,14 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
   async function loadStatuses() {
     const ids = labUsers.map(s => s.id)
     if (!ids.length) { setStatuses({}); return }
-    const [fresh, golf, equip, alarm, lockers, safetyRes] = await Promise.all([
+    const [fresh, golf, equip, alarm, lockers, safetyRes, lockerReqs] = await Promise.all([
       sb.from('training_fresh').select('user_id, admin_approved, certificate_url').in('user_id', ids),
       sb.from('training_golf_car').select('user_id, trained').in('user_id', ids),
       sb.from('training_equipment').select('user_id, passed_exam').in('user_id', ids),
       sb.from('training_building_alarm').select('user_id, trained').in('user_id', ids),
       sb.from('lab_user_lockers').select('user_id').in('user_id', ids),
       sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids).then(r => r, () => ({ data: null })),
+      sb.from('locker_requests').select('user_id').in('user_id', ids).then(r => r, () => ({ data: null })),
     ])
     const map = {}
     const get = uid => map[uid] || (map[uid] = {})
@@ -2031,7 +2173,10 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
     agg(golf, 'golf', r => r.trained)
     agg(equip, 'equipment', r => r.passed_exam)
     agg(alarm, 'alarm', r => r.trained)
-    ids.forEach(uid => { get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok' : 'none' })
+    ids.forEach(uid => {
+      get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok'
+        : (lockerReqs.data || []).some(r => r.user_id === uid) ? 'pend' : 'none'
+    })
     const safetyCount = {}
     ;(safetyRes.data || []).forEach(r => { if (r.completed) safetyCount[r.user_id] = (safetyCount[r.user_id] || 0) + 1 })
     ids.forEach(uid => { const n = safetyCount[uid] || 0; get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend' })
@@ -2116,7 +2261,11 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
 
       {/* ── Detail panel ── */}
       {!selectedUser ? (
-        labUsers.length > 0 && (
+        // Locker with nobody picked: the whole locker view, so a waiting
+        // request (and its bell notification) leads somewhere actionable.
+        editable && subTab === 'locker' ? (
+          <LabUserLocker session={session} onChanged={loadStatuses} />
+        ) : labUsers.length > 0 && (
           <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text3)', padding: '8px 0 16px' }}>
             Select a lab user above to view their training profile.
           </div>

@@ -1816,8 +1816,9 @@ in the file has to be run on its own.
 | `vehicle_list_setup.sql` | ✓ after training_privacy | — |
 | `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
 | `security_hardening.sql` | ✓ (same file in both) | ✓ |
+| `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending).
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql and locker_requests_setup.sql (pending).
 
 ## Security hardening — functions and storage (Oct 2026)
 
@@ -1853,3 +1854,26 @@ open; empty = done.
   bucket listing (upsert and remove need SELECT). Open follow-up: any signed-in
   user can queue an email to any address — narrow `email_queue_insert` to known
   recipients + the support address.
+
+## Lockers: lab users request, lab managers assign (Oct 2026)
+
+`LabUserLocker` in TrainingRecords.jsx. SQL: `locker_requests_setup.sql`
+(same file in both folders, after training_privacy.sql; the rules are also
+in rls_phase1.sql).
+
+- **Lab users never see the locker grid.** They see their own locker, or
+  "Request a locker" (optional note), or "Locker requested on …" with Cancel.
+  They ask for *a* locker, not a number. RLS matches: `lab_user_lockers`
+  SELECT returns a lab user only their own row (it used to return every
+  locker in the org, with names); writes are lab managers / admins only
+  (`lab_user_lockers_manage`).
+- `locker_requests`: one waiting row per lab user (unique `user_id`).
+  Assigning a locker from ANY path deletes that person's request; Decline
+  deletes it. Both notify the lab user; a new request notifies every active
+  admin / lab manager of the org. In-app only (`lockerNotify`, types
+  `locker_request` / `locker_assigned` / `locker_declined`); the bell opens
+  Training Records → Locker.
+- Managers see a **Locker requests (N)** box above the grid (free lockers
+  only in each row's dropdown), and the request on that person's card. The
+  Locker tab with nobody picked shows the whole locker view, so the bell
+  lands somewhere actionable. A waiting request is the Locker tab's ⏳ dot.
