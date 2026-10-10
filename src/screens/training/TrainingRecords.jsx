@@ -557,11 +557,6 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
     load(); onChanged?.()
   }
 
-  async function updateDate(rec, date) {
-    await sb.from('training_golf_car').update({ trained_date: date }).eq('id', rec.id)
-    load()
-  }
-
   async function deleteRecord(id) {
     if (!confirm('Remove this vehicle training record?')) return
     await sb.from('training_golf_car').delete().eq('id', id)
@@ -699,9 +694,9 @@ function GolfCarTraining({ labUsers, session, hideChrome = false, onChanged }) {
                         )}
                       </td>
                       <td>
-                        {canEdit(session) && rec.trained ? (
-                          <input type="date" value={rec.trained_date || ''} onChange={e => updateDate(rec, e.target.value)} style={{ width: 140, fontSize: 13, padding: '4px 8px' }} />
-                        ) : <span style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec.trained_date || '—'}</span>}
+                        {/* Read-only once confirmed: the date is set when the box is ticked and
+                            is the record of that training — not something to adjust afterwards. */}
+                        <span style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec.trained_date || '—'}</span>
                       </td>
                       {canEdit(session) && <td><button className="btn btn-sm btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => deleteRecord(rec.id)}>✕</button></td>}
                     </tr>
@@ -1631,9 +1626,8 @@ function BuildingAlarm({ labUsers, session, hideChrome = false, onChanged }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: 'var(--text3)', fontSize: 12 }}>Date:</span>
-                {canEdit(session) && rec?.trained ? (
-                  <input type="date" value={rec.trained_date || ''} onChange={e => updateRecord(u, 'trained_date', e.target.value)} style={{ fontSize: 13, padding: '4px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} />
-                ) : <span style={{ fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec?.trained_date || '—'}</span>}
+                {/* Read-only once confirmed, like the vehicle tab */}
+                <span style={{ fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{rec?.trained_date || '—'}</span>
               </div>
               {rec?.trained_by && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
