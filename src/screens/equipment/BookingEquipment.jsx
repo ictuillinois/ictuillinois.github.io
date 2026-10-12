@@ -123,6 +123,15 @@ function useIsMobile() {
 }
 function isAdmin(s) { return s?.role === 'admin' }
 
+// A booking whose end time has passed is a record of who used the equipment
+// and when. Only admins may change it; lab users and lab managers can edit a
+// booking only while it is current or still to come (Oct 2026).
+function isPastBooking(b) { return !!b?.end_time && new Date(b.end_time) <= new Date() }
+function canChangePast(s) { return isAdmin(s) }
+// An edit that keeps the original start (e.g. extending a booking in
+// progress) is not "booking a time in the past".
+function sameStart(b, start) { return !!b?.start_time && Math.abs(new Date(start) - new Date(b.start_time)) < 60000 }
+
 // ── Date helpers ──────────────────────────────────────────────
 function startOfWeek(d) {
   const dt = new Date(d)
@@ -233,7 +242,9 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
   async function save() {
     if (!form.equipment_id) { toast('Select equipment.'); return }
     if (!form.start_time || !form.end_time) { toast('Please select a start and end time.'); return }
-    if (new Date(form.start_time) < new Date()) { toast('Cannot book a time in the past.'); return }
+    if (booking && isPastBooking(booking) && !canChangePast(session)) { toast('This booking is over and can no longer be edited.'); return }
+    const correctingRecord = booking && isPastBooking(booking) && canChangePast(session)
+    if (!correctingRecord && !sameStart(booking, form.start_time) && new Date(form.start_time) < new Date()) { toast('Cannot book a time in the past.'); return }
     if (new Date(form.end_time) <= new Date(form.start_time)) { toast('End time must be after start time.'); return }
     if (conflict) { toast('This time slot conflicts with an existing booking.'); return }
     if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
@@ -1714,7 +1725,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
         )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && (
+          {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && (!isPastBooking(booking) || canChangePast(session)) && (
             <button className="btn btn-sm" onClick={() => onEdit(booking)}>✏️ Edit</button>
           )}
           {isAdmin(session) && booking.status === 'pending' && (
@@ -1734,7 +1745,11 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
           </button>
         )}
         {(isOwn || isAdmin(session)) && booking.status !== 'cancelled' && new Date(booking.start_time) <= new Date() && (
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4, fontStyle: 'italic' }}>Booking has started — cancellation not available.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4, fontStyle: 'italic' }}>
+            {isPastBooking(booking) && !canChangePast(session)
+              ? 'This booking is over — it can no longer be edited or cancelled.'
+              : 'Booking has started — cancellation not available.'}
+          </div>
         )}
 
         {photoRequired && <CleanlinessSection booking={booking} session={session} eqName={eq?.nickname || eq?.equipment_name} onUpdated={onUpdated} />}
@@ -2592,13 +2607,15 @@ function BookingCalendar({ session }) {
   function canRescheduleBooking(booking) {
     if (!booking) return false
     if (['cancelled', 'denied'].includes(booking.status)) return false
+    if (isPastBooking(booking)) return canChangePast(session)
     if (canEdit(session)) return true
     return booking.user_id === session?.userId
   }
 
   async function handleBookingReschedule(booking, newStart, newEnd) {
     if (!newStart || !newEnd || newStart >= newEnd) { toast('Invalid time range.'); return }
-    if (newStart < new Date()) { toast('Cannot reschedule to a time in the past.'); return }
+    if (!canRescheduleBooking(booking)) { toast('This booking is over and can no longer be edited.'); return }
+    if (newStart < new Date() && !sameStart(booking, newStart) && !(isPastBooking(booking) && canChangePast(session))) { toast('Cannot reschedule to a time in the past.'); return }
     const { error } = await sb.from('equipment_bookings').update({
       start_time: newStart.toISOString(),
       end_time: newEnd.toISOString(),

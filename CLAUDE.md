@@ -1887,3 +1887,22 @@ zero rows — silent-failure class #2 — and the messages came back on reload.
 `support_messages_manage.sql` adds super-admin UPDATE / DELETE (the only one
 who reads the inbox). Both writes now `.select('id')` and toast when nothing
 changed, instead of removing the row from the list regardless.
+
+## Past bookings are locked — admins only (Oct 2026)
+
+`isPastBooking(b)` (end_time has passed) in BookingEquipment.jsx. A finished
+booking is a record of who used the equipment and when:
+
+| Who | Current / future booking | Past booking |
+|---|---|---|
+| Lab user | edit own (Edit + drag) | locked |
+| Lab manager | edit own (Edit); drag anyone's | locked |
+| Admin / super admin | edit anyone's | edit anyone's (`canChangePast`) |
+
+Enforced in all three paths: the Edit button, calendar drag
+(`canRescheduleBooking`), and the modal's `save()` (an Edit modal opened
+before the booking ended). The save used to check only that the NEW time was
+not past, which is how a past booking was moved into the future. An edit that
+keeps the original start (`sameStart`) is allowed, so a booking in progress
+can be extended. Cancelling is unchanged: before the start only.
+UI rule only — the equipment_bookings policy does not check times.
