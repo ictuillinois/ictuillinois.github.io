@@ -1819,7 +1819,7 @@ in the file has to be run on its own.
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending). support_messages_manage.sql ran in both on Oct 12. locker_requests_setup.sql ran in both on Oct 10.
+As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
 ## Security hardening — functions and storage (Oct 2026)
 
