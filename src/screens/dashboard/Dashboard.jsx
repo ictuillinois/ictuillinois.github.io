@@ -440,6 +440,7 @@ function DashboardView({ modules, onNavigate, mileageUrl, labSafetyUrl, moduleIm
 
 // ── Support Inbox modal (super admin only) ────────────────────
 function SupportInbox({ onClose, onRead }) {
+  const { toast } = useAppStore()
   const [messages, setMessages] = useState([])
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState(null)
@@ -456,8 +457,12 @@ function SupportInbox({ onClose, onRead }) {
     setLoading(false)
   }
 
+  // Both writes read back the rows they changed: with no UPDATE / DELETE
+  // policy an RLS-blocked write returns 200 and changes nothing, and the
+  // message used to vanish from the list only to come back on reload.
   async function setStatus(id, status) {
-    await sb.from('support_messages').update({ status }).eq('id', id)
+    const { data, error } = await sb.from('support_messages').update({ status }).eq('id', id).select('id')
+    if (error || !data?.length) { toast('Could not update the message: ' + (error?.message || 'not allowed — run support_messages_manage.sql')); return }
     setMessages(prev => prev.map(m => m.id === id ? { ...m, status } : m))
     if (selected?.id === id) setSelected(s => ({ ...s, status }))
     onRead()
@@ -465,7 +470,8 @@ function SupportInbox({ onClose, onRead }) {
 
   async function deleteMsg(id) {
     if (!confirm('Delete this message?')) return
-    await sb.from('support_messages').delete().eq('id', id)
+    const { data, error } = await sb.from('support_messages').delete().eq('id', id).select('id')
+    if (error || !data?.length) { toast('Could not delete the message: ' + (error?.message || 'not allowed — run support_messages_manage.sql')); return }
     setMessages(prev => prev.filter(m => m.id !== id))
     if (selected?.id === id) setSelected(null)
     onRead()

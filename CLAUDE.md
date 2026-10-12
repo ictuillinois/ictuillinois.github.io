@@ -1817,8 +1817,9 @@ in the file has to be run on its own.
 | `reset_lab_user_safety.sql` | one-off; creates a backup — lock it | — |
 | `security_hardening.sql` | ✓ (same file in both) | ✓ |
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
+| `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
 
-As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql (pending). locker_requests_setup.sql ran in both on Oct 10.
+As of Oct 10 2026 every row above has been run where marked, except security_hardening.sql and support_messages_manage.sql (pending). locker_requests_setup.sql ran in both on Oct 10.
 
 ## Security hardening — functions and storage (Oct 2026)
 
@@ -1877,3 +1878,12 @@ in rls_phase1.sql).
   only in each row's dropdown), and the request on that person's card. The
   Locker tab with nobody picked shows the whole locker view, so the bell
   lands somewhere actionable. A waiting request is the Locker tab's ⏳ dot.
+
+## Customer Service inbox could not delete (Oct 2026)
+
+`support_messages` had INSERT and SELECT policies but no UPDATE or DELETE,
+so Delete and Mark read / resolved in `SupportInbox` (Dashboard.jsx) matched
+zero rows — silent-failure class #2 — and the messages came back on reload.
+`support_messages_manage.sql` adds super-admin UPDATE / DELETE (the only one
+who reads the inbox). Both writes now `.select('id')` and toast when nothing
+changed, instead of removing the row from the list regardless.

@@ -1338,6 +1338,12 @@ SELECT _apply_rls('support_messages', 'support_messages_insert',
   $b$FOR INSERT TO authenticated WITH CHECK (true)$b$);
 SELECT _apply_rls('support_messages', 'support_messages_select',
   $b$FOR SELECT TO authenticated USING (is_super_admin() OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid))$b$);
+-- The Customer Service inbox (super admin) marks messages read / resolved
+-- and deletes them. Without these two, both silently changed nothing.
+SELECT _apply_rls('support_messages', 'support_messages_update',
+  $b$FOR UPDATE TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin())$b$);
+SELECT _apply_rls('support_messages', 'support_messages_delete',
+  $b$FOR DELETE TO authenticated USING (is_super_admin())$b$);
 
 -- account_deletion_requests — backs the account-deletion flow in Profile, and
 -- the review UI in Admin and LabManagement. Never created in this project, so
@@ -1596,7 +1602,7 @@ DECLARE
     'notifications_insert','notifications_select','notifications_update','notifications_delete',
     'admin_notif_insert','admin_notif_select','admin_notif_update',
     'feedback_responses_policy','notification_prefs_policy','notification_prefs_select_org',
-    'support_messages_insert','support_messages_select',
+    'support_messages_insert','support_messages_select','support_messages_update','support_messages_delete',
     'account_deletion_policy','email_queue_insert','email_queue_select',
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',
     'team_workspace_invites_policy','team_workspace_members_policy',
