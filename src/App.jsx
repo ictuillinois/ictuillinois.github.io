@@ -3,28 +3,55 @@ import { useAppStore } from './store/useAppStore'
 import { sb } from './lib/supabase'
 import { logAdminError } from './lib/logAdminError'
 
+// A screen that cannot load its code after a deploy (an open tab asking for a
+// chunk the new build no longer has) is not a bug in that screen: reload once
+// and it fixes itself. Anything else shows its message, so a screenshot of
+// this page says what broke instead of only that something did.
+const STALE_CHUNK = /dynamically imported module|Importing a module script failed|error loading dynamically imported|Failed to fetch|ChunkLoadError|Loading chunk/i
+
 class ScreenErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { hasError: false } }
-  static getDerivedStateFromError() { return { hasError: true } }
+  constructor(props) { super(props); this.state = { hasError: false, error: null } }
+  static getDerivedStateFromError(error) { return { hasError: true, error } }
   componentDidCatch(error, info) {
     console.error('Screen render error:', error, info)
+    if (STALE_CHUNK.test(error?.message || '')) {
+      const key = 'ictlab_chunk_reload'
+      const last = parseInt(sessionStorage.getItem(key) || '0', 10)
+      if (Date.now() - last > 15_000) { sessionStorage.setItem(key, String(Date.now())); window.location.reload(); return }
+    }
     logAdminError('Screen render error', `${error?.message}\n${info?.componentStack?.slice(0, 400)}`)
   }
   render() {
-    if (this.state.hasError) return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'60vh', padding:32, textAlign:'center' }}>
+    if (!this.state.hasError) return this.props.children
+    const msg = this.state.error?.message || String(this.state.error || '')
+    const stale = STALE_CHUNK.test(msg)
+    const btn = { padding:'10px 24px', borderRadius:10, fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'60vh', padding:32, textAlign:'center' }}>
         <div style={{ fontSize:48, marginBottom:16 }}>⚠️</div>
-        <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:8 }}>Something went wrong</div>
-        <div style={{ fontSize:14, color:'var(--text3)', marginBottom:24, maxWidth:360, lineHeight:1.6 }}>
-          This page had an error. Your data is safe — go back to the dashboard and try again.
+        <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:8 }}>{stale ? 'A new version is available' : 'Something went wrong'}</div>
+        <div style={{ fontSize:14, color:'var(--text3)', marginBottom:16, maxWidth:400, lineHeight:1.6 }}>
+          {stale
+            ? 'ICT-Lab was updated while this page was open. Reload to continue — your data is safe.'
+            : 'This page had an error. Your data is safe. Reload, or go back to the dashboard and try again.'}
         </div>
-        <button onClick={() => { this.setState({ hasError:false }); useAppStore.getState().setScreen('dashboard') }}
-          style={{ padding:'10px 24px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:10, fontSize:15, fontWeight:600, cursor:'pointer' }}>
-          ← Back to Dashboard
-        </button>
+        {!stale && msg && (
+          <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'#a32d2d', background:'#fdf1ee', border:'1px solid #f3c9bf', borderRadius:8, padding:'8px 12px', marginBottom:20, maxWidth:560, overflowWrap:'anywhere', textAlign:'left' }}>
+            Error: {msg}
+          </div>
+        )}
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
+          <button onClick={() => window.location.reload()}
+            style={{ ...btn, background:'var(--accent)', color:'#fff', border:'none' }}>
+            Reload
+          </button>
+          <button onClick={() => { this.setState({ hasError:false, error:null }); useAppStore.getState().setScreen('dashboard') }}
+            style={{ ...btn, background:'var(--surface)', color:'var(--text)', border:'1px solid var(--border)' }}>
+            ← Back to Dashboard
+          </button>
+        </div>
       </div>
     )
-    return this.props.children
   }
 }
 import Login from './screens/auth/Login'
