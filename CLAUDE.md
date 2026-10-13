@@ -1922,3 +1922,12 @@ commit.**
 - The "?" now also sits on Lab Management and QR Labels.
 - Sara matches by keywords (longest total wins); after editing, run a few
   real questions through `findAnswer` to check the right answer comes back.
+
+## Never call an imported function above its import line (Oct 2026)
+
+`const X = lazy(...)` sat ABOVE `import { lazy } from 'react'` in
+ProjectMaterial.jsx. Production builds hoist imports, so the live site
+worked; the Vite dev server rewrites a CommonJS dependency's named import
+(React is one) into `const lazy = …` at the import's own line, so local dev
+crashed with "Cannot access 'lazy' before initialization". Keep every
+top-level statement below the last import.

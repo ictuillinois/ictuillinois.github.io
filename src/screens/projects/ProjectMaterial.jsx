@@ -3,9 +3,6 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { IconEye, IconCalendar, IconUser, IconPlus, IconFlask, IconBox, IconBoxPlus, IconSearch, IconSieve, IconDownload, IconExternal, IconTag } from '../../components/Icons'
 import { TestedLabelForm, TestedMaterialsRecords } from './TestedLabels'
 import { openProjectMaterials, takeReopenProject } from '../../lib/projectMaterialsTab'
-// Lazy: it lives in the barcode scanner module, which pulls in jsQR — no
-// reason to load a QR decoder for everyone who opens Projects.
-const MaterialTypesManager = lazy(() => import('../barcode/BarcodeScannerScreen').then(m => ({ default: m.MaterialTypesManager })))
 import { useState, useEffect, useRef, useMemo, Fragment, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
@@ -19,6 +16,13 @@ import ProjectMaterials, { MaterialModal, PiSelect, CharLimitHint } from './Proj
 import { FIELD_LIMITS, overLimit } from '../../lib/materialLabel'
 import MaterialIcon from '../../components/MaterialIcon'
 import MaterialStorage, { SingleMaterialStorageTab } from '../storage/MaterialStorage'
+
+// Lazy: it lives in the barcode scanner module, which pulls in jsQR — no
+// reason to load a QR decoder for everyone who opens Projects. Declared AFTER
+// the imports: the dev server turns `import { lazy }` into a const at that
+// line, so calling lazy() above it crashes the page there (production
+// builds hoist imports, which hid this).
+const MaterialTypesManager = lazy(() => import('../barcode/BarcodeScannerScreen').then(m => ({ default: m.MaterialTypesManager })))
 
 // ── Helpers ────────────────────────────────────────────────────
 function InfoCell({ label, value, icon: Icon, emptyText = 'Not set' }) {
