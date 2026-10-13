@@ -3812,7 +3812,7 @@ export default function BookingEquipment() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div className="section-title">Reserve Equipment</div>
+        <div className="section-title">Booking Equipment</div>
         <HelpPanel screen="booking" />
       </div>
       {tab === 'calendar'  && <BookingCalendar session={session} />}

@@ -13,7 +13,7 @@ const FAQ = [
   {
     id: 'features',
     q: 'What modules are available?',
-    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Reserve Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (labManagers)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (labManagers)',
+    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Booking Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (labManagers)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (labManagers)',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions', 'available'],
     followups: ['booking', 'training', 'projects'],
   },
@@ -34,7 +34,7 @@ const FAQ = [
   {
     id: 'booking',
     q: 'How does equipment booking work?',
-    a: 'Open the Reserve Equipment module, select a piece of equipment, then pick a date and time on the shared calendar. Your request is sent to a Research Engineer for approval. You\'ll be notified when it\'s confirmed or denied. You can also scan an equipment\'s QR code to go straight to its booking page.',
+    a: 'Open the Booking Equipment module, select a piece of equipment, then pick a date and time on the shared calendar. Your request is sent to a Research Engineer for approval. You\'ll be notified when it\'s confirmed or denied. You can also scan an equipment\'s QR code to go straight to its booking page.',
     keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking', 'request', 'approve'],
     followups: ['qr', 'training', 'contact'],
   },

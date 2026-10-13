@@ -33,7 +33,7 @@ export const LAB_ONLY_OPTION = { key: LAB_ONLY_KEY, label: 'Calibration & mainte
 
 export const LAB_USER_AREAS = [
   { key: 'sop',      label: 'Equipment SOP',    icon: 'Equipment SOP' },
-  { key: 'booking',  label: 'Booking calendar', icon: 'Reserve Equipment' },
+  { key: 'booking',  label: 'Booking calendar', icon: 'Booking Equipment' },
   // Unticked (with another area ticked) = no training needed: booking stops
   // asking a lab user for a training record.
   { key: 'training', label: 'Request training', icon: 'Training Records' },

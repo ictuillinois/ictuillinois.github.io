@@ -74,7 +74,7 @@ const HELP_CONTENT = {
     ],
   },
   booking: {
-    title: 'Reserve Equipment',
+    title: 'Booking Equipment',
     description: 'Reserve lab equipment using the calendar. Drag to select your time slot. All bookings within your organization are visible.',
     tips: [
       'Select an equipment item on the left first, then drag on the calendar to book',

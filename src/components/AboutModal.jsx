@@ -5,7 +5,7 @@ const FEATURES = [
   { icon: '📦', label: 'Supply Inventory',  desc: 'Track supplies, run weekly inspections & export reports' },
   { icon: '🔧', label: 'Equipment List',    desc: 'Manage and track all lab equipment inventory' },
   { icon: '📚', label: 'Equipment Hub',     desc: 'SOPs, training videos, standards & exams library' },
-  { icon: '📅', label: 'Reserve Equipment', desc: 'Book equipment with a shared calendar & approvals' },
+  { icon: '📅', label: 'Booking Equipment', desc: 'Book equipment with a shared calendar & approvals' },
   { icon: '🎓', label: 'Training Records',  desc: 'Certificates, compliance tracking & exam history' },
   { icon: '🧪', label: 'Project & Material', desc: 'Research projects, materials & test results' },
   { icon: '📋', label: 'Task Board',        desc: 'Tasks, meetings, deadlines & team calendar' },

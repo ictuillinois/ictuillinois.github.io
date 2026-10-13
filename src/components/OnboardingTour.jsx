@@ -41,7 +41,7 @@ function getTourCards(session) {
     cards.push({
       emoji: '⚙️',
       title: 'Managing Your Team',
-      body: 'As a lab manager, you can:\n• Lab Management → add users & set their module access\n• Training Records → review and approve submissions\n• Reserve Equipment → approve booking requests\n• Admin Panel → customize org settings and icons',
+      body: 'As a lab manager, you can:\n• Lab Management → add users & set their module access\n• Training Records → review and approve submissions\n• Booking Equipment → approve booking requests\n• Admin Panel → customize org settings and icons',
     })
   }
 
@@ -52,7 +52,7 @@ function getTourCards(session) {
 
 const SCREEN_TIPS = {
   booking: {
-    title: 'Reserve Equipment',
+    title: 'Booking Equipment',
     body: 'Pick equipment, choose a date and time, then submit. A Research Engineer approves the request — you get a notification when it\'s confirmed.\n\nTip: scan an equipment QR code to jump straight to booking.',
   },
   training: {

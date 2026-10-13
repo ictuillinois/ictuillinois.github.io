@@ -1671,7 +1671,7 @@ areas; one tick is required to save:
 - Lab users: `forLabUsers(query, session, area)` filters server-side in the
   equipment list, calibration, maintenance, SOP, booking, Request Training,
   exam and QR scan (Book / SOP options hidden per area).
-- **Equipment SOP and Reserve Equipment hide Lab only items for EVERYONE**,
+- **Equipment SOP and Booking Equipment hide Lab only items for EVERYONE**,
   managers and admins included — Lab only means "for calibration and
   maintenance", and a manager seeing it there read as the setting not
   working. Both lists show the same items; managers/admins get a

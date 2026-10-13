@@ -15,7 +15,7 @@ export const ALL_MODULES_META = [
   { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], labManagerOnly: true },
   // ── All users ──────────────────────────────────────────────────────────
   { key: 'projects',  screen: 'projects',  label: 'Project & Material', sub: 'Material inventory & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
-  { key: 'booking',   screen: 'booking',   label: 'Reserve Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
+  { key: 'booking',   screen: 'booking',   label: 'Booking Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },
   { key: 'barcodeqr', screen: 'barcodeqr', label: 'QR Labels',         sub: 'Generate & print QR codes',       icon: '🔲', bg: '#f0f4ff', color: '#1a56db', roles: ['team'], labUserLocked: true },
   { key: 'mileage',   screen: null,        label: 'Mileage Form',      sub: 'Submit mileage reimbursement',    icon: '🚗', bg: '#fdf0ed', color: '#c84b2f', roles: ['team'], external: true },
   { key: 'profile',   screen: 'profile',   label: 'Profile',           sub: 'Your info & settings',            icon: '👤', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },

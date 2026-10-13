@@ -52,7 +52,7 @@ const MODULE_IMAGE_DEFS = [
   { key: 'training',       label: 'Training Records',    icon: '🎓' },
   { key: 'equipment',      label: 'Equipment List', icon: '🔧' },
   { key: 'equipmenthub',   label: 'Equipment',           icon: '📚' },
-  { key: 'booking',        label: 'Reserve Equipment',   icon: '📅' },
+  { key: 'booking',        label: 'Booking Equipment',   icon: '📅' },
   { key: 'pm',             label: 'Task Board',  icon: '📋' },
   { key: 'mileage',        label: 'Mileage Form',        icon: '🚗' },
   { key: 'labsafety',      label: 'Lab Safety',          icon: '🦺' },
@@ -554,7 +554,7 @@ function OrgIconPoolsPanel({ orgId }) {
 
 const LAB_USER_ICON_OPTIONS = [
   { key: 'projects',  label: 'Project & Material', icon: '🧪' },
-  { key: 'booking',   label: 'Reserve Equipment', icon: '📅' },
+  { key: 'booking',   label: 'Booking Equipment', icon: '📅' },
   { key: 'barcode',   label: 'QR Scan',           icon: '📷' },
   { key: 'mileage',   label: 'Mileage Form',      icon: '🚗' },
   { key: 'labsafety', label: 'Lab Safety',        icon: '🦺' },
