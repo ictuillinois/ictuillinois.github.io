@@ -2,101 +2,132 @@ import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { reportIssue } from '../lib/reportIssue'
 
+// Sara's answers. Keep them in step with the app — these were last checked
+// against every module in Oct 2026. When a tab, button or rule changes, the
+// answer that mentions it changes too.
 const FAQ = [
   {
     id: 'what',
     q: 'What is ICT-Lab?',
-    a: 'ICT-Lab is the research lab management system for the Illinois Center for Transportation (ICT) at the University of Illinois. It helps lab team members manage equipment, training compliance, research projects, bookings, and lab communications — all in one place.',
+    a: 'ICT-Lab is the research lab management system for the Illinois Center for Transportation (ICT) at the University of Illinois. It brings equipment, bookings, training and safety, projects and materials, tasks and lab communication into one place.',
     keywords: ['what is', 'what are', 'ictlab', 'ict', 'about', 'overview', 'explain', 'tell me', 'describe', 'illinois', 'transportation'],
     followups: ['features', 'roles', 'access'],
   },
   {
     id: 'features',
     q: 'What modules are available?',
-    a: 'ICT-Lab includes:\n• Project & Material — research projects, materials & test results\n• Booking Equipment — booking calendar with admin approval\n• Training Records — certs, vehicle log, alarm & equipment training\n• QR Scan — scan lab materials & equipment\n• QR Labels — generate & print equipment QR codes (labManagers)\n• Mileage Form — submit mileage reimbursement\n• Lab Safety — safety training & certification portal\n• Supply Inventory — room-by-room supply tracking (labManagers)',
+    a: 'ICT-Lab includes:\n• Project & Material — projects, materials, labels, reductions and tested samples\n• Booking Equipment — shared booking calendar with approval\n• Training Records — safety, documents, vehicle forms, equipment, alarm, locker, exam and SDS\n• Equipment SOP — SOPs, videos, standards and exams per instrument\n• Equipment & Maintenance — the equipment list and its records\n• Task Board — tasks, meetings, timeline and reminders\n• Lab Messages — messages between lab managers and admins\n• QR Labels & QR Scan — print and scan labels\n• Supply Inventory — room-by-room supply counts\n• Mileage Form — mileage reimbursement\nYou see the modules your lab manager has given you.',
     keywords: ['features', 'modules', 'capabilities', 'what can', 'what does', 'includes', 'functions', 'available'],
     followups: ['booking', 'training', 'projects'],
   },
   {
     id: 'access',
     q: 'How do I get access to ICT-Lab?',
-    a: 'Your account is created by the Research Engineers. You will receive your login credentials by email. On your first login you will be prompted to set a new password. If you need access or have login issues, email ResearchengineersICT@illinois.edu.',
+    a: 'Your account is created by the Research Engineers, and you receive your sign-in details by email. At your first sign-in you set a new password. If you need access or cannot sign in, email ResearchengineersICT@illinois.edu.',
     keywords: ['access', 'get started', 'login', 'log in', 'sign in', 'new user', 'how to use', 'start', 'begin', 'account', 'credentials', 'invitation'],
-    followups: ['password', 'roles', 'contact'],
+    followups: ['password', 'safety', 'contact'],
   },
   {
     id: 'roles',
     q: 'What user roles are there?',
-    a: 'ICT-Lab has three roles:\n• Org Admin — full control, manages all users and settings\n• Lab Manager (Research Engineer) — manages day-to-day lab operations and approvals\n• Lab User — researcher or labUser with access to assigned modules',
-    keywords: ['role', 'permission', 'admin', 'manager', 'lab user', 'research engineer', 're', 'access level', 'types of user', 'labUser', 'researcher'],
+    a: 'ICT-Lab has three roles:\n• Org Admin — manages the organization, its users and settings\n• Lab Manager (Research Engineer) — runs the lab day to day and approves requests\n• Lab User — a researcher or student using the modules they are given',
+    keywords: ['role', 'permission', 'admin', 'manager', 'lab user', 'research engineer', 'access level', 'types of user', 'researcher', 'student'],
     followups: ['features', 'access', 'booking'],
+  },
+  {
+    id: 'safety',
+    q: 'How do I complete lab safety training?',
+    a: 'Open Training Records → Safety. The steps are:\n1. Watch the ICT safety training video\n2. Read the Laboratory Safety Guide and complete the DRS online training\n3. Watch both safety videos and pass the acknowledgement test\nA Research Engineer approves each step. Some modules stay locked until your safety training is approved.',
+    keywords: ['safety', 'lab safety', 'drs', 'safety video', 'safety training', 'acknowledgement', 'step 1', 'step 2', 'step 3', 'locked'],
+    followups: ['training', 'access', 'contact'],
   },
   {
     id: 'booking',
     q: 'How does equipment booking work?',
-    a: 'Open the Booking Equipment module, select a piece of equipment, then pick a date and time on the shared calendar. Your request is sent to a Research Engineer for approval. You\'ll be notified when it\'s confirmed or denied. You can also scan an equipment\'s QR code to go straight to its booking page.',
-    keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking', 'request', 'approve'],
+    a: 'Open Booking Equipment, select the instrument on the left, and drag on the calendar to pick your time. Give a purpose (project, thesis or other) and send it — a Research Engineer approves it and you are notified. You can then add it to Google Calendar or Outlook.\n\nYou can cancel a booking until it starts and edit it until it ends; once it is over it is locked. Equipment that needs training, or retraining after 3 months unused, asks for it first. Scanning an equipment QR code takes you straight to its booking.',
+    keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking', 'request', 'approve', 'cancel', 'reschedule', 'edit booking'],
     followups: ['qr', 'training', 'contact'],
   },
   {
     id: 'training',
     q: 'How does training tracking work?',
-    a: 'The Training Records module lets you upload certificates and log completions for:\n• Lab orientation / fresh training\n• Golf cart / vehicle log\n• Building alarm training\n• Equipment-specific training\n• Locker assignment\nResearch Engineers review and approve your submissions.',
-    keywords: ['training', 'certificate', 'compliance', 'certification', 'records', 'exam', 'log', 'upload', 'orientation', 'golf cart', 'vehicle', 'alarm'],
-    followups: ['features', 'contact', 'access'],
+    a: 'Training Records holds everything you complete and keep current:\n• Safety — the three safety steps\n• Lab User Documents — upload certificates\n• Vehicle — vehicle forms and training\n• Equipment — training per instrument\n• Building Alarm\n• Lab User Locker — request a locker\n• Exam and SDS\nA Research Engineer approves your submissions. Your records are private: only you and the lab managers see them.',
+    keywords: ['training', 'certificate', 'compliance', 'certification', 'records', 'exam', 'upload', 'orientation', 'alarm', 'documents', 'sds'],
+    followups: ['safety', 'vehicle', 'locker'],
+  },
+  {
+    id: 'vehicle',
+    q: 'How do I get approved to drive a lab vehicle?',
+    a: 'Open Training Records → Vehicle → Forms:\n1. Tick the vehicles you need\n2. Read the Golf Cart Manual page by page and confirm at the end\n3. Download the two forms, sign them, and upload the signed copies\nA Research Engineer approves the forms and then confirms your vehicles.',
+    keywords: ['vehicle', 'golf cart', 'golf car', 'drive', 'driving', 'car', 'cart', 'vehicle form', 'use agreement', 'manual'],
+    followups: ['training', 'mileage', 'contact'],
+  },
+  {
+    id: 'locker',
+    q: 'How do I get a locker?',
+    a: 'Open Training Records → Lab User Locker and press "Request a locker" (you can add a note). A Research Engineer assigns you a free locker and you get a notification. Until then the tab shows your request, and you can cancel it.',
+    keywords: ['locker', 'lockers', 'storage space', 'cabinet', 'my locker', 'request locker'],
+    followups: ['training', 'contact'],
   },
   {
     id: 'projects',
     q: 'What is the Project & Material?',
-    a: 'The Project & Material lets you create and manage research projects. You can track material inventory with barcode scanning, record test results, and store project files and links. Research Engineers can also assign you to projects.',
-    keywords: ['project', 'research', 'material', 'test result', 'workspace', 'sample', 'inventory', 'project & material', 'barcode'],
+    a: 'Project & Material holds your projects and the materials stored for them. Every material has its own 4×6 label with a barcode and QR code, and a storage location. You can split a material into new ones with Material Reduction (for example fractions by sieve size), and print a separate label for each tested sample. Research Engineers assign you to projects.',
+    keywords: ['project', 'research', 'material', 'workspace', 'sample', 'inventory', 'project & material', 'barcode', 'reduction', 'fraction', 'sieve', 'tested', 'label'],
     followups: ['qr', 'features', 'contact'],
+  },
+  {
+    id: 'tasks',
+    q: 'How does the Task Board work?',
+    a: 'The Task Board keeps your tasks, meetings and deadlines. Add a task with a deadline, priority and project; click its status circle to move it along. Calendar shows deadlines by month, Timeline shows tasks as bars per project, and "Remind me daily" sends you a reminder each morning at 7am until the task is done.',
+    keywords: ['task', 'tasks', 'task board', 'deadline', 'meeting', 'reminder', 'timeline', 'todo', 'to do', 'out of lab'],
+    followups: ['notifications', 'features'],
   },
   {
     id: 'qr',
     q: 'How do QR codes work?',
-    a: 'Use QR Scan to scan any lab material barcode and look up its details instantly. LabManager can use QR Labels to generate and print QR code stickers for equipment. Scanning an equipment QR code opens its SOP, booking calendar, and contact info directly.',
-    keywords: ['qr', 'qr code', 'barcode', 'scan', 'label', 'generate', 'print', 'sticker'],
+    a: 'Use QR Scan to scan a label. A material label opens that material\'s record; an equipment label opens its SOP, booking, contact and calibration options after you sign in. Research Engineers print equipment labels in QR Labels.',
+    keywords: ['qr', 'qr code', 'barcode', 'scan', 'generate', 'print', 'sticker'],
     followups: ['booking', 'projects', 'features'],
+  },
+  {
+    id: 'notifications',
+    q: 'How do notifications work?',
+    a: 'The bell at the top right shows your notifications; click one to go straight to it. In Profile → Notifications you choose what you are told about in the app, and what is also sent by email.',
+    keywords: ['notification', 'notifications', 'bell', 'email', 'alert', 'notify', 'emails'],
+    followups: ['tasks', 'booking'],
   },
   {
     id: 'mileage',
     q: 'How do I submit a mileage reimbursement?',
-    a: 'Click the Mileage Form card on your dashboard. It will open the ICT mileage reimbursement portal in a new tab. Fill in your trip details and submit. For questions about reimbursement policy, contact ResearchengineersICT@illinois.edu.',
-    keywords: ['mileage', 'reimbursement', 'travel', 'miles', 'driving', 'trip', 'mileage form'],
-    followups: ['contact', 'labsafety', 'features'],
-  },
-  {
-    id: 'labsafety',
-    q: 'What is the Lab Safety module?',
-    a: 'The Lab Safety card links to the ICT/UIUC safety training and certification portal. All lab users are required to complete the necessary safety training before working in the lab or using equipment. Check with your Research Engineer for which trainings apply to you.',
-    keywords: ['lab safety', 'safety', 'training portal', 'certification', 'uiuc', 'required', 'ict policy'],
-    followups: ['training', 'contact', 'access'],
+    a: 'Click the Mileage Form card on your dashboard. It opens the ICT mileage reimbursement form; fill in your trip details and submit. For questions about the reimbursement policy, contact ResearchengineersICT@illinois.edu.',
+    keywords: ['mileage', 'reimbursement', 'travel', 'miles', 'trip', 'mileage form'],
+    followups: ['vehicle', 'contact'],
   },
   {
     id: 'password',
     q: 'How do I change my password?',
-    a: 'On your first login you will be prompted to set a new password automatically. To change it later, go to Profile → Security. If you are locked out or forgot your password, contact ResearchengineersICT@illinois.edu and a Research Engineer will reset it for you.',
-    keywords: ['password', 'forgot', 'reset', 'change password', 'locked out', 'login problem', 'can\'t log in', 'credentials'],
-    followups: ['access', 'contact', 'roles'],
+    a: 'At your first sign-in you are asked to set a new password. To change it later, go to Profile → Password. If you are locked out or forgot your password, contact ResearchengineersICT@illinois.edu and a Research Engineer will reset it.',
+    keywords: ['password', 'forgot', 'reset', 'change password', 'locked out', 'login problem', 'can\'t log in', 'cannot log in'],
+    followups: ['access', 'contact'],
   },
   {
     id: 'policy',
     q: 'What are the usage policies?',
-    a: 'All ICT-Lab users must:\n• Keep login credentials private — never share your account\n• Use ICT-Lab only for authorized research activities\n• Record data accurately — falsification is strictly prohibited\n• Complete required safety and equipment training before lab use\n• Follow all ICT policies\n\nFor the full policy document, see the Terms of Service link on the login page.',
-    keywords: ['policy', 'rules', 'guidelines', 'terms', 'allowed', 'prohibited', 'authorized', 'credentials', 'share account', 'data', 'falsification'],
-    followups: ['labsafety', 'training', 'contact'],
+    a: 'All ICT-Lab users must:\n• Keep their sign-in details private — never share an account\n• Use ICT-Lab only for authorized research\n• Record data accurately — falsification is strictly prohibited\n• Complete the required safety and equipment training before using the lab\n• Follow all ICT policies\n\nThe full policy is in the Terms of Service, linked on the sign-in page.',
+    keywords: ['policy', 'rules', 'guidelines', 'terms', 'allowed', 'prohibited', 'authorized', 'share account', 'falsification'],
+    followups: ['safety', 'training', 'contact'],
   },
   {
     id: 'contact',
     q: 'How do I contact the Research Engineers?',
-    a: 'You can reach the ICT Research Engineers by:\n• Email: ResearchengineersICT@illinois.edu\n• The "Contact Us" button on this page\n\nFor urgent lab issues, contact the lab directly.',
-    keywords: ['contact', 'support', 'help', 'question', 'reach', 'email', 'talk', 'issue', 'problem', 'research engineer', 'illinois', 'uiuc'],
+    a: 'You can reach the ICT Research Engineers by:\n• Email: ResearchengineersICT@illinois.edu\n• "Report a problem" below, which sends them your message and a screenshot\n• Contact Us on the sign-in page\n\nFor urgent lab issues, contact the lab directly.',
+    keywords: ['contact', 'support', 'help', 'question', 'reach', 'talk', 'issue', 'problem', 'research engineer', 'report', 'bug'],
     followups: ['password', 'access', 'features'],
   },
 ]
 
-const STARTERS = ['what', 'access', 'booking', 'training', 'mileage', 'labsafety', 'contact']
+const STARTERS = ['what', 'safety', 'booking', 'training', 'locker', 'vehicle', 'contact']
 
 function findAnswer(input) {
   const q = input.toLowerCase()

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import HelpPanel from '../../components/HelpPanel'
 import { createPortal } from 'react-dom'
 import { useIsMobile } from '../../components/Layout'
 import { sb } from '../../lib/supabase'
@@ -730,6 +731,7 @@ export default function BarcodeManager() {
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>QR Labels</div>
               <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>Generate and print QR labels for lab equipment</div>
             </div>
+            <div style={{ marginLeft: 'auto' }}><HelpPanel screen="barcodeqr" /></div>
           </div>
           <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f4ff', border: '1px solid #c7d7f9', borderRadius: 10, fontSize: 13, color: '#1a56db' }}>
             When scanned with a phone camera, the QR code takes users directly to the equipment options page — SOP, booking, calibration, and contact — after logging in if needed.

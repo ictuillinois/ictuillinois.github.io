@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { LabUsersPanel, LabManagersPanel, ApprovalRequestsPanel } from '../profile/Profile'
 import { sb } from '../../lib/supabase'
 import ExportData from './ExportData'
+import HelpPanel from '../../components/HelpPanel'
 
 const TAB_TITLES = {
   labusers:    'Lab Users',
@@ -58,6 +59,7 @@ export default function LabManagement() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <div className="section-title">Lab Management — {TAB_TITLES[tab] || 'Lab Users'}</div>
+        <HelpPanel screen="labmanagement" />
         {pendingCount > 0 && tab !== 'approvals' && (
           <span style={{ fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b91c1c', border: '1px solid #f59e0b', borderRadius: 99, padding: '2px 10px' }}>
             📋 {pendingCount} pending approval{pendingCount !== 1 ? 's' : ''}

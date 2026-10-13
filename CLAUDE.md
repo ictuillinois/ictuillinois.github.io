@@ -1906,3 +1906,19 @@ not past, which is how a past booking was moved into the future. An edit that
 keeps the original start (`sameStart`) is allowed, so a booking in progress
 can be extended. Cancelling is unchanged: before the start only.
 UI rule only — the equipment_bookings policy does not check times.
+
+## Help panel ("?") and Sara — keep them in step (Oct 2026)
+
+`src/components/HelpPanel.jsx` (`HELP_CONTENT`, one entry per screen) and
+`src/components/SaraChat.jsx` (`FAQ`) were rewritten against every module in
+Oct 2026 — they had drifted for months (tabs that no longer existed, Lab
+Safety as an outside link, "Profile → Security"). **When a feature, tab or
+rule changes, change the tip and the Sara answer that mention it in the same
+commit.**
+
+- A tip is a string (everyone) or `T(text, who)`: `manager` (admins + lab
+  managers), `editor` (managers + solo), `admin`, `nonadmin`, `labuser`,
+  `solo`, `team`. The panel shows only the tips for the viewer's role.
+- The "?" now also sits on Lab Management and QR Labels.
+- Sara matches by keywords (longest total wins); after editing, run a few
+  real questions through `findAnswer` to check the right answer comes back.

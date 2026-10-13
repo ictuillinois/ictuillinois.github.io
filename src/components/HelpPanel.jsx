@@ -2,135 +2,178 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import CustomerServiceModal from './CustomerServiceModal'
 
+// Who a tip is for. A plain string is for everyone; T(text, who) narrows it:
+// 'manager' = org admins + lab managers · 'admin' = org admins (and super
+// admin) · 'editor' = managers + solo users · 'nonadmin' · 'labuser' ·
+// 'solo' · 'team'. Keep this in step with the app: a tip
+// for a tab or button that no longer exists is worse than no tip. (Oct 2026)
+const T = (t, who) => ({ t, who })
+
 const HELP_CONTENT = {
   dashboard: {
     title: 'Dashboard',
-    description: 'Your home screen. All modules you have access to are shown as cards. Click any card to navigate to that section.',
+    description: 'Your home screen. Each card opens a module you have access to.',
     tips: [
-      'Click the ICT-Lab logo anytime to return to the dashboard',
-      'Your profile picture or avatar is in the top right — click it to go to your profile',
-      'Use Cards view for a quick overview, or Dashboard view for a detailed layout',
-      'Org admins can customize background images for each module card',
-      'Solo users can pick which modules appear on their dashboard from Profile → Dashboard Icons',
-      'Admin users see an Admin Panel shortcut at the top of the dashboard',
+      'Click the ICT-Lab logo anytime to come back here',
+      'Choose which cards you see in Profile → Dashboard Icons',
+      'The bell (top right) holds your notifications; click one to go straight to it',
+      T('Admins see an Admin Panel card at the top', 'admin'),
     ],
   },
   home: {
     title: 'Supply Inventory',
-    description: 'Track lab supplies across all rooms. Log inspections, import/export data, and monitor supply levels. Data is fully isolated to your organization.',
+    description: 'Count the supplies in each room, flag what is running low, and export the results.',
     tips: [
-      'Use the Rooms tab to browse and manage supplies by location',
-      'Run an inspection to record current supply counts and flag low-stock items',
-      'Export to Excel for reports — single inspection or full history',
-      'Import bulk supply data via Excel upload (Admin only)',
-      'Supplies highlighted in red are below the minimum quantity threshold',
-      'Each organization sees only its own rooms and supplies',
+      'Inspection: pick a room and count each supply. The box starts at the last count (in grey); leave it untouched to keep that number',
+      'A count below the minimum asks how many need to be ordered before you move on',
+      'On the results screen, "Save & next room" starts the next room that has supplies',
+      'Export Data: download one inspection or the full history as Excel or PDF. Use Edit on a record to correct a count afterwards',
+      T('Rooms and Supplies: add, edit and photograph rooms and items. Import loads a supply list from Excel', 'editor'),
     ],
   },
   projects: {
     title: 'Project & Material',
-    description: 'Manage research projects, track materials used, and store project files. Each project has its own materials log, file storage, and status tracking.',
+    description: 'Projects and the materials stored for them. Every material has its own label, QR code and storage location.',
     tips: [
-      'Create a project first, then add materials and upload files to it',
-      'Use the floor plan picker to assign storage locations to materials',
-      'Project Database tab shows a cross-project material summary',
-      'Lab managers can manage all projects; lab users see only their assigned projects',
-      'Use the barcode scanner to look up materials by QR code',
+      'Use the Projects · Materials · Search row at the top to switch views',
+      'Open a project card to see its materials. "Add material" and "Material Reduction" appear while a project is open',
+      'Material Reduction splits a material into new ones, such as fractions by sieve size. Each fraction gets its own label and is listed under its parent',
+      'The small sign beside "Project Materials" opens that project\'s materials as folders, with reductions branching off their parent',
+      'Every material has a printable 4×6 label with its own barcode and QR code',
+      'Tested samples get their own label: use the Tested pill, or the Tested materials label tab on a material. Tested Materials (sidebar) lists them all',
+      'Non-Project Material (on the Materials view) is for material that belongs to no project',
+      T('You see the projects you are assigned to', 'labuser'),
+      T('Manage Projects: create projects and assign lab users. Material Types: the types offered in the Add material form', 'manager'),
     ],
   },
   training: {
     title: 'Training Records',
-    description: 'Track training status across 4 categories: Fresh Lab User orientation, Golf Car, Equipment, and Building Alarm.',
+    description: 'Everything a lab user completes and keeps current: safety, documents, vehicle, equipment, building alarm, locker, exam and SDS.',
     tips: [
-      'Fresh Lab User tab: upload certificates and track admin approval',
-      'Equipment tab: view your training status per piece of equipment',
-      'Request retraining if you have not used equipment in 3+ months',
-      'Exam tab: take a knowledge exam before your training session',
-      'Training Requests tab (admin): schedule and approve training sessions',
+      T('Your own records open automatically. The mark on each tab shows ✓ done, ⏳ waiting, or — not started', 'labuser'),
+      T('Pick a lab user\'s card to open their records. "All users" lists everyone\'s at once', 'manager'),
+      'Safety: watch the safety video, read the safety guide and complete DRS training, then watch both videos and pass the test. A lab manager approves each step',
+      T('Some modules stay locked until your safety training is approved', 'labuser'),
+      'Lab User Documents: upload a certificate; a lab manager approves it',
+      'Vehicle → Forms: tick the vehicles you need, read the Golf Cart Manual page by page, then download, sign and upload the two forms',
+      T('Vehicle → Training records: confirm requested vehicles once that person\'s forms are approved. Add or remove vehicles in the ICT vehicle list', 'manager'),
+      'Equipment: training per instrument. Equipment you have not used for 3 months needs retraining before you can book it',
+      T('Lab User Locker: request a locker. A lab manager assigns one and you get a notification', 'labuser'),
+      T('Lab User Locker: assign or decline requests in the Locker requests box, or on a lab user\'s card', 'manager'),
+      'Exam: take the equipment knowledge exam',
+      'SDS: the lab\'s safety data sheets. Lab managers upload them; everyone can read them',
+      'Training records are private: only you and your lab managers can see yours',
     ],
   },
   equipmenthub: {
-    title: 'Equipment',
-    description: 'Browse all lab equipment. View photos, training videos, SOPs, and standards for each piece of equipment.',
+    title: 'Equipment SOP',
+    description: 'The library for each instrument: SOPs, training videos, standards and the knowledge exam.',
     tips: [
-      'Search or filter by category in the left panel',
-      'Training videos and SOPs are visible only after completing training',
-      'Admin can grant 1-week temporary access for pre-training review',
-      'Scroll to the bottom of an equipment page to take the knowledge exam',
-      'SOP Notes section lets you leave feedback or improvement suggestions',
-      'Standards tab shows applicable safety and calibration standards',
+      'Search, or pick a category on the left, then open an instrument',
+      'Videos and SOPs unlock once you complete that equipment\'s training, or with temporary access from ICT-RE',
+      'Take the knowledge exam at the bottom of an instrument\'s page',
+      'SOP Notes: leave feedback or suggest an improvement',
+      T('Lab-only equipment (calibration and maintenance) is hidden here. Turn on "Show lab-only equipment" to see it', 'manager'),
     ],
   },
   equipment: {
-    title: 'Equipment List',
-    description: 'Full inventory of all lab equipment with condition tracking, maintenance scheduling, and usage records.',
+    title: 'Equipment & Maintenance',
+    description: 'The lab\'s equipment list, its maintenance records, and what lab users may see of each item.',
     tips: [
-      'Import your full equipment list from Excel in one click',
-      'Maintenance Due tab shows equipment approaching service intervals',
-      'Maintenance Records shows usage hours pulled from booking data',
-      'Admin can assign maintenance responsibility to specific lab managers',
-      'Settings tab lets you add and edit equipment categories',
-      'Each organization sees only its own equipment',
+      'List of Equipment: every item with its location, condition and details',
+      T('Each item needs a Lab user access choice: Lab only (calibration & maintenance), or the areas lab users may use — SOP, booking calendar, request training, exam. Items not yet set show "Waiting for decision"', 'manager'),
+      T('Untick Request training to let lab users book an item without a training record', 'manager'),
+      T('Maintenance Records: usage hours from bookings, and maintenance history', 'manager'),
+      T('Import Excel loads a whole equipment list at once', 'manager'),
+      'Settings: equipment categories',
     ],
   },
   booking: {
     title: 'Booking Equipment',
-    description: 'Reserve lab equipment using the calendar. Drag to select your time slot. All bookings within your organization are visible.',
+    description: 'Book lab equipment on a shared calendar. Lab managers approve requests.',
     tips: [
-      'Select an equipment item on the left first, then drag on the calendar to book',
-      'Drag across multiple days for multi-day bookings',
-      'Equipment with a red RETRAIN badge requires retraining before booking',
-      'Admin can book on behalf of any user',
-      'History & Usage tab lets you export booking records as CSV',
-      'Team tab shows booking requests from teammates',
+      'Select one or more instruments on the left (Select all shows everything), then drag on the calendar to pick a time',
+      'Drag across several days for a multi-day booking. Every booking needs a purpose: project, thesis or other',
+      'After booking, add it to Google Calendar or Outlook, or download an .ics file',
+      'Drag your own booking to move it, or drag its top or bottom edge to change the time',
+      'Cancel a booking any time before it starts. Edit it until it ends; a finished booking is locked',
+      T('Admins can still correct a finished booking', 'admin'),
+      'Equipment that needs training, or retraining after 3 months unused, asks for it before you can book',
+      'Some equipment asks for a photo of the area before and after use',
+      'History & Usage: past bookings, exportable as CSV',
+      T('Book on behalf of a lab user from the booking form, or use "View lab user" to see one person\'s bookings', 'manager'),
+      T('Special Treatment: instructions shown to anyone booking that equipment', 'manager'),
+      T('Lab-only equipment is hidden. Turn on "Show lab-only equipment" to see it', 'manager'),
+      T('Settings: booking rules, such as required photos', 'admin'),
     ],
   },
   profile: {
     title: 'Profile',
-    description: 'Manage your personal information, profile photo, login password, and dashboard icons. Org admins can manage users and customize module images here.',
+    description: 'Your details, password, dashboard cards and notification settings.',
     tips: [
-      'Upload a photo or choose an emoji avatar — shown in the navigation bar',
-      'Change your password in the Password tab',
-      'Dashboard Icons tab: choose which module cards appear on your home screen',
-      'Org admin — Module Images tab: upload a background photo for each dashboard card',
-      'Org admin — Users and Lab Users tabs: add, edit, and manage all accounts',
-      'Admin 1 and Admin 2 levels can be assigned to trusted lab managers',
+      T('My Info: your name, photo or avatar, and contact details', 'team'),
+      'Password: change your password',
+      'Dashboard Icons: choose which cards appear on your home screen',
+      'Notifications: choose what you hear about in the app and by email',
+      T('Delete Account: ask for your account to be removed; an admin reviews the request', 'team'),
+      T('Admin Settings, Icon Images and Organization: organization-wide settings and the picture on each dashboard card', 'admin'),
     ],
   },
   pm: {
     title: 'Task Board',
-    description: 'Personal and team task tracking — tasks, meetings, calendar, reminders, and collaboration. Each organisation sees only its own data.',
+    description: 'Tasks, meetings, deadlines and reminders for you and your team.',
     tips: [
-      'My Tasks: add tasks with deadlines, priority, and notes — click the status circle to cycle through progress',
-      'Mark a task as Private to hide it from group teammates (lab users default to private)',
-      'Calendar tab: three-month view of all deadlines — red ✕ marks days you marked as out-of-lab',
-      'Out of Lab panel (sidebar): log days you won\'t be in to let teammates see your availability',
-      'Meetings tab: use "📅 Schedule" to log a new meeting date, then "＋ Task for [date]" to assign action items',
-      'Meetings — filter tasks by Priority, Person, Deadline, or Sort; use the year pills to jump between years',
-      'Meeting tasks support multi-person assignment, a date-range calendar picker, a task icon, and a reference URL',
-      'Live Drawing board (🎨): open from any meeting task modal to sketch and share ideas in real time — save to attach permanently or discard to close without saving',
-      'Team tab (lab managers): kanban board of all lab manager tasks across the org',
-      'Reminders tab: set personal time-based reminders independent of tasks',
-      'Assign Others tab (org admin only): create and assign tasks directly to any lab manager',
+      'Overview: what is due soon and what is moving',
+      'My Tasks: add a task with a deadline, priority and project; click the status circle to move it along',
+      'Private tasks are hidden from teammates (lab users\' tasks start private)',
+      'Calendar: deadlines by month. Days you mark out of lab (My Tasks sidebar) show a red ✕',
+      'Timeline: each task as a bar from start to deadline, grouped by project. Link tasks ("waits on") to see the critical path',
+      T('Meetings: schedule a meeting, add action items for that date, and sketch together on the live drawing board', 'team'),
+      'Reminders: tick "Remind me daily" on a task to get a reminder each morning at 7am until it is done',
+      T('Team: every lab manager\'s tasks on one board', 'manager'),
+      T('Assign Others: create tasks for lab managers', 'admin'),
+    ],
+  },
+  remessages: {
+    title: 'Lab Messages',
+    description: 'Messages between lab managers and admins, kept as conversations.',
+    tips: [
+      'Start a message, then reply inside its thread',
+      'Attach a file or photo to a message or a reply',
+      'You are told about replies in the app, and by email if you turn that on in Profile → Notifications',
+      'Pick a background for the message board',
     ],
   },
   labmanagement: {
     title: 'Lab Management',
-    description: 'Centralized hub for lab administration — manage safety documents, compliance records, lab policies, and facility information.',
+    description: 'The people in your lab: lab users, lab managers and org admins, account requests, and data export.',
     tips: [
-      'Upload and organize lab safety documents and SOPs',
-      'Track compliance and certification expiry dates',
-      'Admins can publish announcements visible to all lab members',
-      'Each organization manages its own lab documents independently',
+      'Lab Users / Lab Managers: add people, edit them, set their dashboard icons, or deactivate them',
+      'A new account gets a temporary password and must change it at first sign-in',
+      'One person can be a lab user and a lab manager on the same email; they sign in once',
+      T('Organization Admins: read only for lab managers. Only admins change org admin accounts', 'manager'),
+      'Approval Requests: account deletion requests; choose who takes over that person\'s records',
+      'Export Data: one ZIP with each person\'s records, training, bookings, projects and uploaded files',
+      'Lab Manager Guide: how to run the lab in ICT-Lab',
+    ],
+  },
+  barcodeqr: {
+    title: 'QR Labels',
+    description: 'Print QR labels for equipment and project materials.',
+    tips: [
+      T('Equipment Barcode: make and print a QR label for each instrument. Scanning it opens its SOP, booking, contact and calibration', 'manager'),
+      T('Records: pick several instruments and print their labels together', 'manager'),
+      'Material Labels: print or reprint the 4×6 label of a project material',
+      T('Summary: materials by type across projects', 'manager'),
     ],
   },
   barcode: {
-    title: 'Barcode Scanner',
-    description: 'Scan QR codes and barcodes to quickly look up equipment, supplies, or project materials.',
+    title: 'QR Scan',
+    description: 'Scan a QR code to open the equipment or material it belongs to.',
     tips: [
-      'Point the camera at any ICT-Lab QR code to pull up the linked item',
-      'Equipment QR codes open the full equipment detail page',
-      'Use the Barcode Manager (admin) to generate and print QR labels',
+      'Point the camera at any ICT-Lab QR label',
+      'An equipment label opens its SOP, booking, contact and calibration options',
+      'A material label opens that material\'s record',
     ],
   },
 }
@@ -143,6 +186,16 @@ export default function HelpPanel({ screen }) {
   if (!help) return null
 
   const isSolo = session?.loginMode === 'solo'
+  const role = session?.role
+  const forMe = who => !who
+    || (who === 'manager' && (role === 'admin' || role === 'user'))
+    || (who === 'editor' && (role === 'admin' || role === 'user' || isSolo))
+    || (who === 'admin' && role === 'admin')
+    || (who === 'nonadmin' && role !== 'admin')
+    || (who === 'labuser' && role === 'lab_user' && !isSolo)
+    || (who === 'solo' && isSolo)
+    || (who === 'team' && !isSolo)
+  const tips = help.tips.map(x => typeof x === 'string' ? { t: x } : x).filter(x => forMe(x.who))
 
   return (
     <>
@@ -185,7 +238,7 @@ export default function HelpPanel({ screen }) {
               Key tips
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {help.tips.map((tip, i) => (
+              {tips.map(({ t: tip }, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-light)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--accent)', flexShrink: 0, marginTop: 1 }}>
                     {i + 1}
