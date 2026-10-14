@@ -2672,7 +2672,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: 'var(--accent3-light)', border: '1px solid #c9c5f2', color: '#2f2880', borderRadius: 10, padding: '12px 14px', margin: '8px 0' }}>
               <div style={{ flex: '1 1 280px', fontSize: 14 }}>
                 <b style={{ display: 'block' }}>New: sub projects</b>
-                You can split {activeProject.name} into sub projects, such as lots or phases. Add them, then connect each one to its material folders. Folders you don't connect stay on the main project.
+                You can split {activeProject.name} into sub projects, such as MIX or #2. Add them, then connect each one to its material folders. Folders you don't connect stay on the main project.
               </div>
               <button className="btn btn-sm btn-purple" onClick={() => setSubTab('subprojects')}>Add sub projects</button>
               <button className="btn btn-sm" onClick={hideSubPrompt}>Not now</button>

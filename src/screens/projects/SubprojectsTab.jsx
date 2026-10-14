@@ -93,7 +93,7 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-        Split <b>{project.name}</b> into sub projects, such as lots or phases, and tick the material folders that belong to each.
+        Split <b>{project.name}</b> into sub projects, such as MIX or #2, and tick the material folders that belong to each.
         A folder can be in more than one; a shared folder gets its own colour everywhere it appears. Folders you do not tick stay on the main project.
       </div>
 
