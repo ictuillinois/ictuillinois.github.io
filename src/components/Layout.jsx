@@ -208,7 +208,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
   const isDash      = screen === 'dashboard'
   // Screens that portal a list (equipment, projects…) into the sidebar —
   // hide the Apps section there so the list gets full height; Home stays.
-  const hasPortal   = ['projects', 'barcodeqr', 'equipment', 'equipmenthub', 'booking'].includes(screen)
+  const hasPortal   = ['projects', 'projectmaterials', 'barcodeqr', 'equipment', 'equipmenthub', 'booking'].includes(screen)
   const tabs        = getScreenTabs(screen, session)
   const mod         = MODULE_META[screen]
   const activeTab   = sidebarSubTab || (tabs?.[0]?.key ?? null)

@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useIsMobile } from '../../components/Layout'
 import { useAppStore } from '../../store/useAppStore'
 import { sb } from '../../lib/supabase'
 import { MaterialDetail, MaterialModal } from './ProjectMaterials'
@@ -25,6 +27,10 @@ import { loadSubprojects, linkMap, sharedColours } from '../../lib/subprojects'
 // project, then its sub projects, then each one's folders; folders on the
 // main project hang straight off the project. A folder in several sub
 // projects appears under each, in its own colour, with its reductions.
+//
+// The project info sits in the left sidebar (the same slot Booking uses), so
+// the folder tree gets the full width: reductions branch to the right, and
+// beside a 280px info column they ran off the edge. On a phone it stays above.
 
 const smooth = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 
@@ -58,6 +64,11 @@ export default function ProjectMaterialsPage() {
   // Set by a click on a folder; the effect below then scrolls to its
   // details, which sit below every folder and are easy to miss on a long list.
   const scrollToDetail = useRef(false)
+  const isMobile = useIsMobile()
+  // Looked up after mount: on a direct load the slot may not be in the DOM yet
+  // while this screen first renders.
+  const [sidebarSlot, setSidebarSlot] = useState(null)
+  useEffect(() => { setSidebarSlot(isMobile ? null : document.getElementById('sidebar-portal-slot')) }, [isMobile])
 
   useEffect(() => { load() }, [projectId])
 
@@ -233,15 +244,8 @@ export default function ProjectMaterialsPage() {
   const picked = selected ? byId[selected] : null
   const reductionTotal = materials.length - roots.length
 
-  return (
-    <div ref={topRef}>
-      <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div className="section-title">{project.name} — Materials</div>
-        <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => backToProjects(project.id, setScreen)}>All projects</button>
-      </div>
-
-      <div className="pmt-page">
-        <aside className="pmt-info" aria-label="Project info">
+  const info = (
+        <aside className="pmt-info" aria-label="Project info" style={sidebarSlot ? { border: 'none', borderRadius: 0, position: 'static', background: 'transparent', overflowY: 'auto', flex: 1, minHeight: 0 } : undefined}>
           {project.project_id && <div className="pmt-pid">{project.project_id}</div>}
           <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.3 }}>{project.name}</div>
           {project.status && (
@@ -268,6 +272,20 @@ export default function ProjectMaterialsPage() {
           )}
           {readOnly && <div style={{ fontSize: 12, color: 'var(--text3)' }}>View only — you are not assigned to this project.</div>}
         </aside>
+  )
+
+  return (
+    <div ref={topRef}>
+      <div className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="section-title">{project.name} — Materials</div>
+        <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => backToProjects(project.id, setScreen)}>All projects</button>
+      </div>
+
+      {sidebarSlot && createPortal(info, sidebarSlot)}
+
+      <div className="pmt-page" style={sidebarSlot ? { gridTemplateColumns: 'minmax(0, 1fr)' } : undefined}>
+        {/* Phone, or no sidebar: the info card stays beside / above the tree */}
+        {!sidebarSlot && info}
 
         <div style={{ minWidth: 0, display: 'grid', gap: 16 }}>
           <div className="pmt-tree">
