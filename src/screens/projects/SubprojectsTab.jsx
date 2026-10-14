@@ -7,6 +7,9 @@ import { SUBPROJECT_MAX, loadSubprojects, linkMap, sharedColours } from '../../l
 // which top-level material folders belong to each. A folder can be ticked
 // under several; a folder ticked under none is on the main project.
 // Reductions are not listed — they follow their folder.
+//
+// Ticks are a DRAFT until "Save changes": people wanted to see that what
+// they changed was submitted, and an instant save gave them nothing to press.
 export default function SubprojectsTab({ project, readOnly = false, onChanged }) {
   const { session, toast } = useAppStore()
   const [subs, setSubs] = useState([])
@@ -17,23 +20,42 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
   const [name, setName] = useState('')
   const [renaming, setRenaming] = useState(null)   // { id, name }
   const [busy, setBusy] = useState(false)
+  const [draft, setDraft] = useState({})   // material id → [sub project id] as ticked, unsaved
+  const [savingLinks, setSavingLinks] = useState(false)
 
-  useEffect(() => { load() }, [project?.id])
+  useEffect(() => { load(true) }, [project?.id])
 
-  async function load() {
+  // resetDraft: after a save (or on open) the draft becomes what is stored.
+  // Adding or renaming a sub project reloads too, and must not throw away
+  // ticks not yet saved — only ticks on a sub project that no longer exists.
+  async function load(resetDraft = false) {
     const [r, { data: mats }] = await Promise.all([
       loadSubprojects(project.id),
       sb.from('project_materials').select('id, name, material_type, parent_material_id, created_at')
         .eq('project_id', project.id).is('parent_material_id', null).order('created_at'),
     ])
     setSubs(r.subs); setLinks(r.links); setMissing(r.missing)
+    const stored = linkMap(r.links)
+    const alive = new Set(r.subs.map(x => x.id))
+    setDraft(prev => {
+      if (resetDraft) return stored
+      const out = {}
+      Object.entries(prev).forEach(([mid, ids]) => { out[mid] = ids.filter(id => alive.has(id)) })
+      return out
+    })
     setFolders(mats || [])
     setLoading(false)
     onChanged?.(r.subs.length)
   }
 
-  const map = linkMap(links)
+  const saved = linkMap(links)
+  const map = draft   // what the page shows: the ticks as they are now
   const colours = sharedColours(folders.map(f => f.id), map)
+  const changes = []
+  folders.forEach(f => subs.forEach(sp => {
+    const was = (saved[f.id] || []).includes(sp.id), now = (map[f.id] || []).includes(sp.id)
+    if (was !== now) changes.push({ material_id: f.id, subproject_id: sp.id, on: now })
+  }))
   const subName = id => subs.find(s => s.id === id)?.name
 
   async function add() {
@@ -73,12 +95,24 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
     load()
   }
 
-  async function toggle(folderId, subId, on) {
-    const { error } = on
-      ? await sb.from('material_subprojects').insert({ material_id: folderId, subproject_id: subId, project_id: project.id })
-      : await sb.from('material_subprojects').delete().eq('material_id', folderId).eq('subproject_id', subId)
-    if (error && error.code !== '23505') toast('Could not save: ' + error.message)
-    load()
+  function toggle(folderId, subId, on) {
+    setDraft(d => {
+      const cur = d[folderId] || []
+      return { ...d, [folderId]: on ? [...cur.filter(x => x !== subId), subId] : cur.filter(x => x !== subId) }
+    })
+  }
+
+  async function saveLinks() {
+    if (!changes.length) return
+    setSavingLinks(true)
+    const results = await Promise.all(changes.map(c => c.on
+      ? sb.from('material_subprojects').insert({ material_id: c.material_id, subproject_id: c.subproject_id, project_id: project.id })
+      : sb.from('material_subprojects').delete().eq('material_id', c.material_id).eq('subproject_id', c.subproject_id)))
+    setSavingLinks(false)
+    const bad = results.filter(x => x.error && x.error.code !== '23505')
+    if (bad.length) toast(`${changes.length - bad.length} of ${changes.length} changes saved. Could not save the rest: ${bad[0].error.message}`)
+    else toast(`Sub projects saved ✓ (${changes.length} change${changes.length !== 1 ? 's' : ''})`)
+    load(true)
   }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
@@ -118,6 +152,7 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
         <div style={{ display: 'grid', gap: 10 }}>
           {subs.map(s => {
             const used = folders.filter(f => (map[f.id] || []).includes(s.id)).length
+            const usedSaved = folders.some(f => (saved[f.id] || []).includes(s.id)) || used > 0
             return (
               <div key={s.id} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', background: 'var(--accent3-light)' }}>
@@ -134,8 +169,8 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{used} folder{used !== 1 ? 's' : ''}</span>
                       {!readOnly && <button className="btn btn-sm" onClick={() => setRenaming({ id: s.id, name: s.name })}>Rename</button>}
                       {!readOnly && (
-                        <button className="btn btn-sm" style={{ color: used ? 'var(--text3)' : '#c84b2f' }} disabled={!!used}
-                          title={used ? 'Disconnect its folders first' : 'Remove this sub project'} onClick={() => remove(s)}>Remove</button>
+                        <button className="btn btn-sm" style={{ color: usedSaved ? 'var(--text3)' : '#c84b2f' }} disabled={usedSaved}
+                          title={usedSaved ? 'Disconnect its folders (and save) first' : 'Remove this sub project'} onClick={() => remove(s)}>Remove</button>
                       )}
                     </>
                   )}
@@ -160,6 +195,19 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
               </div>
             )
           })}
+        </div>
+      )}
+
+      {!readOnly && subs.length > 0 && folders.length > 0 && (
+        <div role="status" style={{ position: 'sticky', bottom: 8, zIndex: 2, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderRadius: 10, padding: '10px 14px',
+          ...(changes.length
+            ? { background: '#fff7e6', border: '1px solid #f1d49b', color: '#7a4a00', boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }
+            : { background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text3)' }) }}>
+          <span style={{ flex: '1 1 200px', fontSize: 13, fontWeight: changes.length ? 600 : 400 }}>
+            {changes.length ? `${changes.length} unsaved change${changes.length !== 1 ? 's' : ''}` : 'All changes saved'}
+          </span>
+          <button className="btn btn-sm" onClick={() => setDraft(saved)} disabled={!changes.length || savingLinks}>Discard</button>
+          <button className="btn btn-sm btn-purple" onClick={saveLinks} disabled={!changes.length || savingLinks}>{savingLinks ? 'Saving…' : 'Save changes'}</button>
         </div>
       )}
 
