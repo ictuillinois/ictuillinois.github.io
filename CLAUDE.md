@@ -1949,6 +1949,9 @@ file in both folders; also in rls_phase1.sql).
   "Sub project *" first for a NEW folder in a project, main project last; a
   project with none preselects the main project. More sub projects are ticked
   on the project's **Sub projects** tab (`SubprojectsTab.jsx`).
+- Editing an existing top-level folder (its **Material** tab) shows the
+  project's sub projects as tick boxes — any number; none = main project.
+  Saving inserts / deletes only the links that changed.
 - Existing projects show "New: sub projects" once to everyone who can edit
   them; "Not now" is per person per project (localStorage).
 - Folders page: project → sub projects → folders; main-project folders hang

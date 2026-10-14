@@ -870,16 +870,28 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
   } : blankForm())
   const [saving, setSaving] = useState(false)
 
-  // Sub project: the first question for a NEW folder in a project, and
-  // required. Editing keeps a folder's links — those change on the project's
-  // Sub projects tab, where a folder can be put in several.
+  // Sub project. A NEW folder in a project picks one (required; main project
+  // last). EDITING a top-level folder ticks any number — a folder can be in
+  // several sub projects; none ticked = the main project. Reductions are not
+  // asked: they follow their folder.
   const askSub = !material && !!projectId
+  const editSub = !!material && !!projectId && !material.parent_material_id
   const [subs, setSubs] = useState(null)          // null while loading
-  const [subChoice, setSubChoice] = useState('')  // sub project id, or 'main'
+  const [subChoice, setSubChoice] = useState('')  // new folder: sub project id, or 'main'
+  const [subPicks, setSubPicks] = useState([])    // edited folder: sub project ids ticked
+  const subOrig = useRef([])
   useEffect(() => {
-    if (!askSub) return
-    loadSubprojects(projectId).then(r => { setSubs(r.subs); if (!r.subs.length) setSubChoice('main') })
-  }, [askSub, projectId])
+    if (!askSub && !editSub) return
+    loadSubprojects(projectId).then(r => {
+      setSubs(r.subs)
+      if (askSub && !r.subs.length) setSubChoice('main')
+      if (editSub) {
+        const mine = r.links.filter(l => l.material_id === material.id).map(l => l.subproject_id)
+        subOrig.current = mine
+        setSubPicks(mine)
+      }
+    })
+  }, [askSub, editSub, projectId, material?.id])
 
   async function save() {
     if (askSub && !subChoice) { toast('Choose a sub project, or the main project.'); return }
@@ -926,6 +938,17 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
     }
     setSaving(false)
     if (error) { toast('Error: ' + (error.message || error.code || JSON.stringify(error))); return }
+    if (editSub && subs) {
+      const add = subPicks.filter(id => !subOrig.current.includes(id))
+      const drop = subOrig.current.filter(id => !subPicks.includes(id))
+      const results = await Promise.all([
+        ...add.map(id => sb.from('material_subprojects').insert({ material_id: material.id, subproject_id: id, project_id: projectId })),
+        ...drop.map(id => sb.from('material_subprojects').delete().eq('material_id', material.id).eq('subproject_id', id)),
+      ])
+      const bad = results.find(x => x.error && x.error.code !== '23505')
+      if (bad) toast('Material saved, but its sub projects could not all be updated: ' + bad.error.message)
+      else subOrig.current = subPicks
+    }
     if (askSub && subChoice !== 'main' && created?.id) {
       const { error: linkErr } = await sb.from('material_subprojects').insert({ material_id: created.id, subproject_id: subChoice, project_id: projectId })
       if (linkErr) toast('Material added, but it could not be filed under the sub project: ' + linkErr.message)
@@ -937,6 +960,34 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
 
   const formBody = (
     <>
+      {editSub && subs && (
+        <div className="field">
+          <label>Sub projects</label>
+          {subs.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text3)' }}>This project has no sub projects yet, so this folder is on the main project. Add sub projects on the project's Sub projects tab.</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {subs.map(sp => {
+                  const on = subPicks.includes(sp.id)
+                  return (
+                    <label key={sp.id} className="filter-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 0, cursor: 'pointer', ...(on ? { background: 'var(--accent3-light)', borderColor: 'var(--accent3)', color: 'var(--accent3)' } : {}) }}>
+                      <input type="checkbox" checked={on} style={{ width: 'auto', margin: 0 }}
+                        onChange={e => setSubPicks(p => e.target.checked ? [...p, sp.id] : p.filter(x => x !== sp.id))} />
+                      {sp.name}
+                    </label>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+                {subPicks.length === 0
+                  ? `None ticked: this folder is on the main project (${projectName || 'this project'}).`
+                  : subPicks.length > 1 ? 'In more than one sub project: the folders page shows it in its own colour under each.' : 'Tick more than one to put this folder in several sub projects.'}
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {askSub && (
         <div className="field">
           <label>Sub project <span style={{ color: '#c84b2f' }}>*</span></label>
