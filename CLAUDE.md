@@ -1818,7 +1818,7 @@ in the file has to be run on its own.
 | `security_hardening.sql` | ✓ (same file in both) | ✓ |
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
-| `sub_projects_setup.sql` | pending (same file in both) | pending |
+| `sub_projects_setup.sql` | ✓ (same file in both) | ✓ |
 
 As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
