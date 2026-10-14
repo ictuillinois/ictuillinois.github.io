@@ -72,7 +72,8 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
     setBusy(false)
     if (error) { toast(error.code === '23505' ? 'This project already has a sub project with that name.' : 'Could not add: ' + error.message); return }
     setName('')
-    load()
+    toast(`Sub project "${n}" added ✓`)
+    load()   // keeps unsaved ticks
   }
 
   async function rename() {
@@ -82,6 +83,7 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
     const { data, error } = await sb.from('project_subprojects').update({ name: n }).eq('id', renaming.id).select('id')
     if (error || !data?.length) { toast('Could not rename: ' + (error?.message || 'not allowed')); return }
     setRenaming(null)
+    toast(`Renamed to "${n}" ✓`)
     load()
   }
 
@@ -92,6 +94,7 @@ export default function SubprojectsTab({ project, readOnly = false, onChanged })
       toast(error?.code === '23503' ? 'Disconnect its folders first.' : 'Could not remove: ' + (error?.message || 'not allowed'))
       return
     }
+    toast(`Sub project "${s.name}" removed.`)
     load()
   }
 
