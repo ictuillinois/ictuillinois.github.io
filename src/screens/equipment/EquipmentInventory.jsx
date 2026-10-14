@@ -147,7 +147,14 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       ;({ error: err } = await sb.from('equipment_inventory').update(payload).eq('id', item.id))
     } else {
       const lm = session?.loginMode === 'solo' ? 'solo' : 'team'
-      ;({ error: err } = await sb.from('equipment_inventory').insert({ ...payload, login_mode: lm, organization_id: lm === 'team' ? (session?.organizationId || null) : null, solo_owner_id: lm === 'solo' ? (session?.userId || null) : null }))
+      // solo_owner_id only for a solo user: ICT-Lab's equipment_inventory has
+      // no such column, and naming it at all (even as null) made PostgREST
+      // reject every new equipment item there.
+      ;({ error: err } = await sb.from('equipment_inventory').insert({
+        ...payload, login_mode: lm,
+        organization_id: lm === 'team' ? (session?.organizationId || null) : null,
+        ...(lm === 'solo' ? { solo_owner_id: session?.userId || null } : {}),
+      }))
     }
     if (err) {
       console.error('Equipment save error:', err)

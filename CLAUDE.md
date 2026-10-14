@@ -1962,3 +1962,13 @@ file in both folders; also in rls_phase1.sql).
   labels pass their own sections and are unaffected.
 - Missing tables read as "no sub projects", so Projects keeps working before
   the SQL runs.
+
+## A column on schema-audit.ignore must never be WRITTEN by shared code (Oct 2026)
+
+`equipment_inventory.solo_owner_id` was on `scripts/schema-audit.ignore` as
+"solo only", yet the shared equipment form named it in every insert (as null
+for team users). ICT-Lab has no such column, so PostgREST rejected EVERY new
+equipment item there ("Could not find the 'solo_owner_id' column") — the
+ignore entry is why the audit never reported it. Solo-only columns are added
+to a payload only for solo users (`...(isSolo ? { solo_owner_id } : {})`).
+Before ignoring a column, check that nothing in a team code path writes it.
