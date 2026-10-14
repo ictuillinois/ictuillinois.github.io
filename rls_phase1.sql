@@ -702,6 +702,40 @@ WITH CHECK (
 )
 $b$);
 
+-- Sub projects (sub_projects_setup.sql): optional level between a project and
+-- its material folders. As visible as the project they belong to.
+CREATE TABLE IF NOT EXISTS project_subprojects (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id      uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name            text NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 20),
+  organization_id uuid,
+  solo_owner_id   uuid,
+  created_by      text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS project_subprojects_name_uniq ON project_subprojects (project_id, lower(btrim(name)));
+CREATE TABLE IF NOT EXISTS material_subprojects (
+  material_id     uuid NOT NULL REFERENCES project_materials(id) ON DELETE CASCADE,
+  subproject_id   uuid NOT NULL REFERENCES project_subprojects(id),
+  project_id      uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (material_id, subproject_id)
+);
+SELECT _apply_rls('project_subprojects', 'project_subprojects_policy', $b$
+FOR ALL TO authenticated
+USING      (is_super_admin() OR project_id IN (SELECT id FROM projects))
+WITH CHECK (is_super_admin() OR project_id IN (SELECT id FROM projects))
+$b$);
+SELECT _apply_rls('material_subprojects', 'material_subprojects_policy', $b$
+FOR ALL TO authenticated
+USING (is_super_admin() OR project_id IN (SELECT id FROM projects))
+WITH CHECK (
+  (is_super_admin() OR project_id IN (SELECT id FROM projects))
+  AND material_id   IN (SELECT id FROM project_materials   WHERE project_materials.project_id   = material_subprojects.project_id)
+  AND subproject_id IN (SELECT id FROM project_subprojects WHERE project_subprojects.project_id = material_subprojects.project_id)
+)
+$b$);
+
 SELECT _apply_rls('project_record_files', 'project_record_files_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1587,7 +1621,7 @@ DECLARE
     'equipment_booking_settings_policy','equipment_bookings_policy','booking_notifications_policy',
     'equipment_booking_blocks_policy','eq_hub_policy','equipment_sop_notes_policy','equipment_list_policy',
     'org_scope_policy','floor_plans_policy','storage_locations_policy','lab_user_lockers_policy','lab_user_lockers_manage','locker_requests_policy',
-    'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','change_log_select','project_record_files_policy','project_supplies_policy',
+    'projects_policy','project_child_policy','project_materials_policy','tested_materials_policy','project_subprojects_policy','material_subprojects_policy','change_log_select','project_record_files_policy','project_supplies_policy',
     'test_result_entries_policy','analysis_comments_policy',
     'training_schedule_policy','training_policy','retraining_requests_policy','exam_results_policy','personal_training_policy','org_vehicles_read','org_vehicles_manage','vehicle_access_policy',
     'task_progress_log_policy',

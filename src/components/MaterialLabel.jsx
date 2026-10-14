@@ -1,4 +1,5 @@
 import { labelSections, LABEL_TYPE } from '../lib/materialLabel'
+import { useSubprojectLine } from '../lib/subprojects'
 
 function IctLabLogo({ size }) {
   return (
@@ -31,7 +32,11 @@ function IctLabLogo({ size }) {
 // `measure`: draw at natural height instead of a fixed 6in, so a caller can
 // tell whether the content fits the page (TestedLabels.jsx).
 export default function MaterialLabel({ id, material, project, parent, scanUrl, barcodeId, qrSize = 120, sections: given, kind, measure = false }) {
-  const sections = given || labelSections(material, project, parent)
+  // Tested labels pass their own sections; only material labels look up the
+  // sub project (the hook is still called, with no material, to keep hook
+  // order fixed).
+  const subLine = useSubprojectLine(given ? null : material)
+  const sections = given || labelSections(material, project, parent, subLine)
   const isReduction = !!material?.parent_material_id
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(scanUrl || '')}&margin=4&color=000000&bgcolor=ffffff&ecc=H`
   // Keep the logo well under ECC-H's error-correction budget so cameras can

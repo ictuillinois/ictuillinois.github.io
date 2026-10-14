@@ -7,6 +7,8 @@ import { useState, useEffect, useRef, useMemo, Fragment, lazy, Suspense } from '
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { loadSubprojects } from '../../lib/subprojects'
+import SubprojectsTab from './SubprojectsTab'
 import { exportProjectXlsx, exportAllProjectsXlsx } from '../../lib/exportMaterials'
 import MaterialSearch from '../../components/MaterialSearch'
 import MaterialReductionModal from '../../components/MaterialReductionModal'
@@ -289,6 +291,16 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
+  // Sub project of the chosen project: required for a new folder in a
+  // project. Reloaded when the project changes; edits keep their links.
+  const [subs, setSubs] = useState([])
+  const [subChoice, setSubChoice] = useState('')   // sub project id, or 'main'
+  useEffect(() => {
+    if (isEdit || !form.project_id) { setSubs([]); setSubChoice(''); return }
+    let off = false
+    loadSubprojects(form.project_id).then(r => { if (off) return; setSubs(r.subs); setSubChoice(r.subs.length ? '' : 'main') })
+    return () => { off = true }
+  }, [form.project_id, isEdit])
 
   useEffect(() => {
     async function loadProjects() {
@@ -308,6 +320,7 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
     const tooLong = overLimit('Material Name', form.name, FIELD_LIMITS.name)
     if (tooLong) { setErrMsg(tooLong); return }
     if (requireProject && !form.project_id) { setErrMsg('Please select a project.'); return }
+    if (!isEdit && form.project_id && !subChoice) { setErrMsg('Choose a sub project, or the main project.'); return }
     setSaving(true)
     const payload = {
       name: form.name.trim(),
@@ -322,6 +335,10 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
     } else {
       const { data, error: insErr } = await sb.from('project_materials').insert(payload).select().single()
       error = insErr
+      if (!error && data?.id && form.project_id && subChoice && subChoice !== 'main') {
+        const { error: linkErr } = await sb.from('material_subprojects').insert({ material_id: data.id, subproject_id: subChoice, project_id: form.project_id })
+        if (linkErr) toast('Material added, but it could not be filed under the sub project: ' + linkErr.message)
+      }
       if (!error && onCreated) onCreated(data)
     }
     setSaving(false)
@@ -346,6 +363,21 @@ function NewMaterialModal({ material, onClose, onCreated, requireProject = false
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.project_id ? ` · ${p.project_id}` : ''}</option>)}
         </select>
       </div>
+      {!isEdit && form.project_id && (
+        <div className="field">
+          <label>Sub project <span style={{ color: '#c84b2f' }}>*</span></label>
+          <select value={subChoice} onChange={e => setSubChoice(e.target.value)}>
+            {subs.length > 0 && <option value="">— Choose a sub project —</option>}
+            {subs.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            <option value="main">{(projects.find(p => p.id === form.project_id)?.name) || 'This project'} (main project)</option>
+          </select>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+            {subs.length
+              ? 'To put this folder in more sub projects, tick it on the project\'s Sub projects tab afterwards.'
+              : 'This project has no sub projects yet, so the folder goes on the main project.'}
+          </div>
+        </div>
+      )}
       {errMsg && (
         <div style={{ background: '#fdf0ed', border: '1px solid #e24b4a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#c0392b' }}>
           ⚠️ {errMsg}
@@ -2197,6 +2229,10 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
   // materials tab, so the user lands where they left off.
   const [reopenId] = useState(() => takeReopenProject())
   const [activeProjectId, setActiveProjectId] = useState(reopenId)
+  // Sub projects of the open project: null = unknown (or not set up in this
+  // database), so the one-time "New: sub projects" message stays hidden.
+  const [subCount, setSubCount] = useState(null)
+  const [subPromptHidden, setSubPromptHidden] = useState(false)
   const [activeProject, setActiveProject] = useState(null)
   const [subTab, setSubTab] = useState(reopenId ? 'materials' : 'info')
   const [photoTarget, setPhotoTarget] = useState(null)
@@ -2329,8 +2365,26 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 
   const statusBadge = (s) => s === 'active' ? 'badge-active' : s === 'completed' ? 'badge-completed' : 'badge-hold'
 
+  // Sub project count for the open project, and whether this person said
+  // "Not now" to the message for it (per person, per project, this browser).
+  const subPromptKey = activeProjectId ? `subprojects_prompt_${session?.userId || 'x'}_${activeProjectId}` : null
+  useEffect(() => {
+    setSubCount(null)
+    try { setSubPromptHidden(!!(subPromptKey && localStorage.getItem(subPromptKey))) } catch { setSubPromptHidden(false) }
+    if (!activeProjectId) return
+    let off = false
+    sb.from('project_subprojects').select('id', { count: 'exact', head: true }).eq('project_id', activeProjectId)
+      .then(({ count, error }) => { if (!off) setSubCount(error ? null : (count || 0)) })
+    return () => { off = true }
+  }, [activeProjectId])
+  function hideSubPrompt() {
+    try { if (subPromptKey) localStorage.setItem(subPromptKey, '1') } catch { /* private window */ }
+    setSubPromptHidden(true)
+  }
+
   const subTabs = [
     { key: 'info',      label: '1 · Project Info' },
+    { key: 'subprojects', label: 'Sub projects' },
     { key: 'materials', label: '2 · Project Materials' },
     { key: 'storage',   label: '3 · Material Storage' },
   ]
@@ -2614,6 +2668,16 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
               </div>
             )}
           </div>
+          {subCount === 0 && !subPromptHidden && !viewingShared && isProjectAssigned(activeProject) && subTab !== 'subprojects' && (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', background: 'var(--accent3-light)', border: '1px solid #c9c5f2', color: '#2f2880', borderRadius: 10, padding: '12px 14px', margin: '8px 0' }}>
+              <div style={{ flex: '1 1 280px', fontSize: 14 }}>
+                <b style={{ display: 'block' }}>New: sub projects</b>
+                You can split {activeProject.name} into sub projects, such as lots or phases. Add them, then connect each one to its material folders. Folders you don't connect stay on the main project.
+              </div>
+              <button className="btn btn-sm btn-purple" onClick={() => setSubTab('subprojects')}>Add sub projects</button>
+              <button className="btn btn-sm" onClick={hideSubPrompt}>Not now</button>
+            </div>
+          )}
           <ScrollTabs style={{ borderBottom: '1px solid var(--border)' }} bg='var(--surface)'>
             {subTabs.map(t => (
               <Fragment key={t.key}>
@@ -2633,6 +2697,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
           </ScrollTabs>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', padding: 24 }}>
             {subTab === 'info'      && <ProjectInfo project={activeProject} users={users} onSaved={loadActiveProject} isSolo={isSolo} readOnly={viewingShared || !isProjectAssigned(activeProject)} />}
+            {subTab === 'subprojects' && <SubprojectsTab project={activeProject} readOnly={viewingShared || !isProjectAssigned(activeProject)} onChanged={n => setSubCount(n)} />}
             {subTab === 'materials' && <ProjectMaterials key={materialsRefresh} project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
             {subTab === 'storage'   && <MaterialStorage project={activeProject} readOnly={!isProjectAssigned(activeProject)} />}
           </div>

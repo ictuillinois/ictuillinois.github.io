@@ -578,6 +578,16 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .pmt-fi.lvl1 { background: var(--accent3-light); color: var(--accent3); }
 .pmt-fi.lvl2 { background: #fef3c7; color: #92400e; }
 .pmt-cnt { grid-column: 1 / -1; margin-top: 6px; justify-self: start; font-size: 11px; font-weight: 600; color: var(--accent3); background: var(--accent3-light); border-radius: 99px; padding: 4px 8px; }
+
+/* Sub projects (Oct 2026): the project and its sub projects as tree nodes
+   above the material folders. A folder in several sub projects is drawn
+   under each in its own colour (inline, from SHARED_COLOURS). */
+.pmt-folder.proj { border-color: var(--accent); background: var(--accent-light); }
+.pmt-folder.sp { border-color: #c9c5f2; background: var(--accent3-light); }
+.pmt-fi.proj { background: #fff; color: #085041; }
+.pmt-fi.sp { background: #fff; color: var(--accent3); }
+.pmt-tog { grid-column: 1 / -1; justify-self: start; font-size: 11px; color: var(--text3); }
+.pmt-also { grid-column: 1 / -1; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 820px) {
   .pmt-page { grid-template-columns: 1fr; }
   .pmt-info { position: static; }

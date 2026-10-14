@@ -7,6 +7,7 @@ import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit, TESTED_LIMITS
 import MaterialLabel from '../../components/MaterialLabel'
 import { printLabelById } from '../../lib/printLabel'
 import { useAppStore } from '../../store/useAppStore'
+import { loadSubprojects } from '../../lib/subprojects'
 import Modal from '../../components/Modal'
 import MaterialReductionModal from '../../components/MaterialReductionModal'
 import { DEFAULT_TYPES } from '../../lib/materialTypes'
@@ -869,7 +870,19 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
   } : blankForm())
   const [saving, setSaving] = useState(false)
 
+  // Sub project: the first question for a NEW folder in a project, and
+  // required. Editing keeps a folder's links — those change on the project's
+  // Sub projects tab, where a folder can be put in several.
+  const askSub = !material && !!projectId
+  const [subs, setSubs] = useState(null)          // null while loading
+  const [subChoice, setSubChoice] = useState('')  // sub project id, or 'main'
+  useEffect(() => {
+    if (!askSub) return
+    loadSubprojects(projectId).then(r => { setSubs(r.subs); if (!r.subs.length) setSubChoice('main') })
+  }, [askSub, projectId])
+
   async function save() {
+    if (askSub && !subChoice) { toast('Choose a sub project, or the main project.'); return }
     if (!validate(form, toast, isSolo)) return
     setSaving(true)
     const payload = {
@@ -905,14 +918,18 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
       sampling_date: form.sampling_date || null,
       photos: form.photos,
     }
-    let error
+    let error, created
     if (material) {
       ({ error } = await sb.from('project_materials').update(payload).eq('id', material.id))
     } else {
-      ({ error } = await sb.from('project_materials').insert(payload))
+      ({ error, data: created } = await sb.from('project_materials').insert(payload).select('id').single())
     }
     setSaving(false)
     if (error) { toast('Error: ' + (error.message || error.code || JSON.stringify(error))); return }
+    if (askSub && subChoice !== 'main' && created?.id) {
+      const { error: linkErr } = await sb.from('material_subprojects').insert({ material_id: created.id, subproject_id: subChoice, project_id: projectId })
+      if (linkErr) toast('Material added, but it could not be filed under the sub project: ' + linkErr.message)
+    }
     toast(material ? 'Material updated.' : 'Material added.')
     onSaved()
     onClose()
@@ -920,6 +937,21 @@ export function MaterialModal({ projectId, projectName, material, onClose, onSav
 
   const formBody = (
     <>
+      {askSub && (
+        <div className="field">
+          <label>Sub project <span style={{ color: '#c84b2f' }}>*</span></label>
+          <select value={subChoice} onChange={e => setSubChoice(e.target.value)} disabled={subs === null}>
+            {subs?.length > 0 && <option value="">— Choose a sub project —</option>}
+            {(subs || []).map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            <option value="main">{projectName || 'This project'} (main project)</option>
+          </select>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+            {subs?.length
+              ? 'To put this folder in more sub projects, tick it on the project\'s Sub projects tab afterwards.'
+              : 'This project has no sub projects yet, so the folder goes on the main project. Add sub projects on the project\'s Sub projects tab.'}
+          </div>
+        </div>
+      )}
       <div className="field">
         <label>Material Name / Label <span style={{ color: '#c84b2f' }}>*</span></label>
         <input required maxLength={FIELD_LIMITS.name} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isSolo ? 'e.g. Sodium chloride, Steel sample A…' : 'e.g. Base course aggregate, Surface binder…'} />

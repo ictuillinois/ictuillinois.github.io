@@ -1818,6 +1818,7 @@ in the file has to be run on its own.
 | `security_hardening.sql` | ✓ (same file in both) | ✓ |
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
+| `sub_projects_setup.sql` | pending (same file in both) | pending |
 
 As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
@@ -1931,3 +1932,30 @@ worked; the Vite dev server rewrites a CommonJS dependency's named import
 (React is one) into `const lazy = …` at the import's own line, so local dev
 crashed with "Cannot access 'lazy' before initialization". Keep every
 top-level statement below the last import.
+
+## Sub projects (Oct 2026)
+
+project → sub project (optional) → material folder → reductions.
+`src/lib/subprojects.js` owns the rules; SQL `sub_projects_setup.sql` (same
+file in both folders; also in rls_phase1.sql).
+
+- `project_subprojects` (name ≤ 20 chars — `SUBPROJECT_MAX`, enforced on the
+  input, on save and by a CHECK) and `material_subprojects` (folder ↔ sub
+  project, many-to-many). Only TOP-LEVEL folders are linked; reductions follow
+  their folder. A folder in no sub project is on the main project.
+- A sub project with folders connected cannot be removed (the link's FK);
+  deleting the whole project cascades its sub projects and links.
+- Both add-material forms (`MaterialModal`, `NewMaterialModal`) ask
+  "Sub project *" first for a NEW folder in a project, main project last; a
+  project with none preselects the main project. More sub projects are ticked
+  on the project's **Sub projects** tab (`SubprojectsTab.jsx`).
+- Existing projects show "New: sub projects" once to everyone who can edit
+  them; "Not now" is per person per project (localStorage).
+- Folders page: project → sub projects → folders; main-project folders hang
+  off the project. A folder in 2+ sub projects is drawn under each in its own
+  colour (`SHARED_COLOURS`, stable by folder order), reductions included.
+- Label: `useSubprojectLine()` puts the folder's sub projects under the
+  project name ("Lot 3, Phase II", or "Lot 3 +2" past 30 chars). Tested
+  labels pass their own sections and are unaffected.
+- Missing tables read as "no sub projects", so Projects keeps working before
+  the SQL runs.

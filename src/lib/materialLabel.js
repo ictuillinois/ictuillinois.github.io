@@ -119,7 +119,9 @@ function reducedSpec(m, type) {
 // Only the three section titles are printed as words. Everything under them is
 // the value the user typed, with no field name in front of it — a printed
 // label is read by someone who already knows what a project name looks like.
-export function labelSections(material, project, parent) {
+// subLine: the folder's sub project(s) (useSubprojectLine), printed under the
+// project name; empty for a folder on the main project.
+export function labelSections(material, project, parent, subLine = '') {
   const type = material?.material_type
   const isReduction = !!material?.parent_material_id
   // On a reduction the "original" is the parent it came from; on a plain
@@ -127,7 +129,7 @@ export function labelSections(material, project, parent) {
   const original = isReduction ? parent : material
 
   const out = [
-    { title: 'Project info:', values: [project?.name || '\u2014', material?.pi_name || '\u2014'] },
+    { title: 'Project info:', values: [project?.name || '\u2014', ...(subLine ? [subLine] : []), material?.pi_name || '\u2014'] },
     { title: 'Original Material:', values: originalValues(original, type, material?.sampling_date) },
   ]
   if (isReduction) {

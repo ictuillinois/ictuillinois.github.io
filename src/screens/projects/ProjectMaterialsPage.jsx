@@ -5,6 +5,7 @@ import { MaterialDetail, MaterialModal } from './ProjectMaterials'
 import MaterialIcon from '../../components/MaterialIcon'
 import { IconSieve, IconPlus, IconArrowUp } from '../../components/Icons'
 import { backToProjects } from '../../lib/projectMaterialsTab'
+import { loadSubprojects, linkMap, sharedColours } from '../../lib/subprojects'
 
 // One project's materials on their own page (screen 'projectmaterials'),
 // opened in the same tab from the sign beside "2 · Project Materials";
@@ -19,6 +20,11 @@ import { backToProjects } from '../../lib/projectMaterialsTab'
 // the project's material list (MaterialDetail → MaterialCard / ReductionRow).
 // Each pick is a browser-history step (?material=), so Back walks back
 // through what was opened, and past the first pick, back to the workspace.
+//
+// Sub projects (Oct 2026): when the project has any, the tree starts at the
+// project, then its sub projects, then each one's folders; folders on the
+// main project hang straight off the project. A folder in several sub
+// projects appears under each, in its own colour, with its reductions.
 
 const smooth = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 
@@ -44,6 +50,9 @@ export default function ProjectMaterialsPage() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(() => readParams().materialId)
   const [showAdd, setShowAdd] = useState(false)
+  const [subs, setSubs] = useState([])
+  const [links, setLinks] = useState([])
+  const [folded, setFolded] = useState(() => new Set())   // project / sub project nodes closed by a click
   const topRef = useRef(null)
   const detailRef = useRef(null)
   // Set by a click on a folder; the effect below then scrolls to its
@@ -80,13 +89,20 @@ export default function ProjectMaterialsPage() {
     else if (!p) setError("This project doesn't exist, or you don't have access to it.")
     setProject(p || null)
     setMaterials(mats || [])
+    await reloadSubs()
     setLoading(false)
+  }
+
+  async function reloadSubs() {
+    const r = await loadSubprojects(projectId)
+    setSubs(r.subs); setLinks(r.links)
   }
 
   async function reloadMaterials() {
     const { data, error: err } = await sb.from('project_materials').select('*').eq('project_id', projectId).order('created_at')
     if (err) { toast('Could not reload materials: ' + err.message, true); return }
     setMaterials(data || [])
+    reloadSubs()   // a folder added from this page may have been filed under a sub project
     // A deleted folder cannot stay picked
     if (selected && !(data || []).some(m => m.id === selected)) pick(null, true)
   }
@@ -119,6 +135,11 @@ export default function ProjectMaterialsPage() {
     return ids
   }, [selected, byId])
 
+  const map = useMemo(() => linkMap(links), [links])
+  const colours = useMemo(() => sharedColours(roots.map(m => m.id), map), [roots, map])
+  const subName = id => subs.find(s => s.id === id)?.name
+  const toggleNode = id => setFolded(f => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); return n })
+
   const isLabUser = session?.loginMode !== 'solo' && session?.dbRole === 'lab_user'
   const readOnly = isLabUser && !(project?.lab_user_ids || []).includes(session?.userId)
 
@@ -134,14 +155,20 @@ export default function ProjectMaterialsPage() {
   // A render function, not a component: declared inside this one it would be
   // a new component type every render, remounting each folder and dropping
   // keyboard focus from the button just clicked.
-  function folder(m, depth) {
+  // underSub: the sub project this copy is drawn under (a shared folder is
+  // drawn once per sub project), so keys stay unique and the note names the
+  // OTHER sub projects. colour: a shared folder's, passed to its reductions.
+  function folder(m, depth, underSub = null, colour = null) {
     const kids = kidsOf[m.id] || []
     const isSel = m.id === selected
     const open = kids.length > 0 && onPath.has(m.id)
     const total = countAll(m.id)
+    const c = depth === 0 ? colours[m.id] || null : colour
+    const others = depth === 0 && c ? (map[m.id] || []).filter(id => id !== underSub).map(subName).filter(Boolean) : []
     return (
-      <div className="pmt-branch" key={m.id}>
+      <div className="pmt-branch" key={(underSub || 'main') + ':' + m.id}>
         <button type="button" className={'pmt-folder' + (isSel ? ' sel' : onPath.has(m.id) ? ' onpath' : '')}
+          style={c ? { borderColor: c.bd, background: c.bg, borderWidth: 2 } : undefined}
           aria-pressed={isSel} aria-expanded={kids.length ? open : undefined}
           // Clicking the open material again folds it; a reduction stays picked
           onClick={() => { scrollToDetail.current = true; pick(isSel && depth === 0 ? null : m.id) }}>
@@ -150,15 +177,48 @@ export default function ProjectMaterialsPage() {
           </span>
           <b title={m.name || ''}>{m.name || typeLabel(m.material_type)}</b>
           <small>{depth === 0 ? [typeLabel(m.material_type), m.container_type].filter(Boolean).join(' · ') : reductionCaption(m)}</small>
+          {others.length > 0 && <span className="pmt-also" style={{ color: c.ink }}>Also in {others.join(', ')}</span>}
           {total > 0 && <span className="pmt-cnt">{total} reduction{total !== 1 ? 's' : ''}</span>}
         </button>
         {open && (
           <div className="pmt-kids">
-            {kids.map(k => folder(k, depth + 1))}
+            {kids.map(k => folder(k, depth + 1, underSub, c))}
           </div>
         )}
       </div>
     )
+  }
+
+  // A project or sub project node: clicking it folds or unfolds what is under it.
+  function node(id, cls, title, caption, children) {
+    const open = children.length > 0 && !folded.has(id)
+    return (
+      <div className="pmt-branch" key={id}>
+        <button type="button" className={'pmt-folder ' + cls} aria-expanded={children.length ? open : undefined}
+          onClick={() => children.length && toggleNode(id)}>
+          <span className={'pmt-fi ' + cls}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              {cls === 'sp' && <path d="M8 13h8M12 9v8" />}
+            </svg>
+          </span>
+          <b title={title}>{title}</b>
+          <small>{caption}</small>
+          {children.length > 0 && <span className="pmt-tog">{open ? '▾ Fold' : '▸ Open'}</span>}
+        </button>
+        {open && <div className="pmt-kids">{children}</div>}
+      </div>
+    )
+  }
+
+  function tree() {
+    if (!subs.length) return <div className="pmt-roots">{roots.map(m => folder(m, 0))}</div>
+    const subNodes = subs.map(sp => {
+      const fs = roots.filter(m => (map[m.id] || []).includes(sp.id))
+      return node('sp:' + sp.id, 'sp', sp.name, `Sub project · ${fs.length} folder${fs.length !== 1 ? 's' : ''}`, fs.map(m => folder(m, 0, sp.id)))
+    })
+    const onMain = roots.filter(m => !(map[m.id] || []).length).map(m => folder(m, 0, null))
+    return <div className="pmt-roots">{node('project', 'proj', project.name, ['Main project', project.project_id].filter(Boolean).join(' · '), [...subNodes, ...onMain])}</div>
   }
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
@@ -199,6 +259,7 @@ export default function ProjectMaterialsPage() {
           <div className="pmt-totals">
             <div><b>{roots.length}</b><span>material{roots.length !== 1 ? 's' : ''}</span></div>
             <div><b>{reductionTotal}</b><span>reduction{reductionTotal !== 1 ? 's' : ''}</span></div>
+            {subs.length > 0 && <div><b>{subs.length}</b><span>sub project{subs.length !== 1 ? 's' : ''}</span></div>}
           </div>
           {!readOnly && (
             <button className="filter-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifySelf: 'start' }} onClick={() => setShowAdd(true)}>
@@ -212,7 +273,7 @@ export default function ProjectMaterialsPage() {
           <div className="pmt-tree">
             {roots.length === 0
               ? <div style={{ fontSize: 13, color: 'var(--text3)', padding: 8 }}>No materials in this project yet.</div>
-              : <div className="pmt-roots">{roots.map(m => folder(m, 0))}</div>}
+              : tree()}
           </div>
 
           {picked ? (
