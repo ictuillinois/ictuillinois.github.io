@@ -73,17 +73,28 @@ function EquipmentModal({ item, onClose, onSaved, session, soloCats = [], teamCa
       } else {
         const orgId = session?.organizationId
         if (!orgId) return
-        // Same people and same name as Lab Management → Lab Managers, which
-        // lists role user AND admin and shows `name`. This showed nick_name
-        // first, so someone could appear here under a nickname that matched
-        // nobody on that page; and name + last_name doubled the surname,
-        // because a lab manager's `name` already holds the full name.
-        const { data } = await sb.from('users').select('id, name, nick_name, email').in('role', ['user', 'admin']).eq('organization_id', orgId).eq('is_active', true).order('name')
-        setManagers((data || []).map(u => {
+        // Lab managers only (role 'user'), once per person. Loading admins too
+        // listed everyone who holds both an org admin and a lab manager
+        // account twice — one person owns one users row per role, same email.
+        // `name` is shown (it already holds the full name); a nickname that
+        // differs is added in brackets.
+        const { data } = await sb.from('users').select('id, name, nick_name, email').eq('role', 'user').eq('organization_id', orgId).eq('is_active', true).order('name')
+        const seen = new Set()
+        const list = []
+        ;(data || []).forEach(u => {
+          const key = (u.email || u.id).trim().toLowerCase()
+          if (seen.has(key)) return
+          seen.add(key)
           const nick = u.nick_name?.trim()
           const name = u.name?.trim() || u.email
-          return { id: u.id, name: nick && nick !== name ? `${name} (${nick})` : name }
-        }))
+          list.push({ id: u.id, name: nick && nick !== name ? `${name} (${nick})` : name })
+        })
+        // Someone already assigned who is not (or no longer) a lab manager
+        // stays listed, so they can be unticked rather than kept invisibly.
+        ;(item?.maintenance_assignees || []).forEach(a => {
+          if (a?.id && !list.some(m => m.id === a.id)) list.push({ id: a.id, name: `${a.name || 'Unknown'} (not a lab manager)` })
+        })
+        setManagers(list)
       }
     }
     loadManagers()
