@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 
 // First-visit tour of Booking Equipment (Oct 2026).
@@ -40,7 +40,10 @@ function findTarget(step) {
 }
 
 export default function BookingTour({ supportName = 'your lab manager', onClose }) {
-  const steps = bookingTourSteps(supportName)
+  // Memoized: a new steps array on every render made `step` a new object,
+  // so measure() and the layout effect re-ran on every render, and each run
+  // set state — React's "Maximum update depth exceeded".
+  const steps = useMemo(() => bookingTourSteps(supportName), [supportName])
   const [i, setI] = useState(0)
   const [box, setBox] = useState(null)        // spotlight rect in viewport px, or null (centred card)
   const narrow = typeof window !== 'undefined' && window.innerWidth < 768
@@ -49,9 +52,11 @@ export default function BookingTour({ supportName = 'your lab manager', onClose 
   const measure = useCallback(() => {
     if (narrow) { setBox(null); return }
     const t = findTarget(step)
-    if (!t) { setBox(null); return }
+    if (!t) { setBox(null); return }   // null → null does not re-render
     const pad = 6
-    setBox({ left: t.r.left - pad, top: t.r.top - pad, width: t.r.width + pad * 2, height: t.r.height + pad * 2 })
+    const next = { left: t.r.left - pad, top: t.r.top - pad, width: t.r.width + pad * 2, height: t.r.height + pad * 2 }
+    // Only when it moved: setting an equal-but-new object still re-renders.
+    setBox(prev => prev && ['left', 'top', 'width', 'height'].every(k => Math.abs(prev[k] - next[k]) < 0.5) ? prev : next)
   }, [step, narrow])
 
   // Bring the step's part into view, then measure where it landed.
@@ -62,7 +67,7 @@ export default function BookingTour({ supportName = 'your lab manager', onClose 
       if (r.top < 60 || r.bottom > window.innerHeight - 20) t.el.scrollIntoView({ block: 'center', behavior: 'instant' })
     }
     measure()
-  }, [i, measure, narrow, step])
+  }, [i, measure, narrow])
 
   useEffect(() => {
     window.addEventListener('resize', measure)
