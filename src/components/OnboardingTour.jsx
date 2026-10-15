@@ -206,7 +206,7 @@ export function HelpTourButton({ loginCount, tourDone = false, onOpen, accentRgb
           {TOURS.map(t => (
             <button key={t.key} role="menuitem" onClick={() => pick(t)}
               style={{ display: 'grid', gap: 2, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#E1F5EE' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#0d1b35' }}>▶ {t.title}</span>
               <span style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.45 }}>{t.desc}</span>

@@ -1,1 +1,0 @@
-function t(r){return!!(r!=null&&r.low)&&r.report!==!1}function e(r){return r!=null&&r.low?r.report===!1?"LOW · no order":"LOW":"OK"}function n(r){return t(r)&&r.qty_needed||""}function o(r){return(r||[]).filter(t).length}export{o as f,t as n,n as o,e as s};
