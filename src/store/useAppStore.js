@@ -74,6 +74,9 @@ export const useAppStore = create((set, get) => ({
   setPendingAdminTab: (tab) => set({ pendingAdminTab: tab }),
   pendingProfileTab: null,
   setPendingProfileTab: (tab) => set({ pendingProfileTab: tab }),
+  // A guided tour to start on arrival at its screen (lib/tours.js)
+  pendingTour: null,
+  setPendingTour: (key) => set({ pendingTour: key }),
   pendingBookingNotif: null,
   setPendingBookingNotif: (n) => set({ pendingBookingNotif: n }),
 

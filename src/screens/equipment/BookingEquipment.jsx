@@ -3863,7 +3863,7 @@ function EquipmentNotesTab({ session }) {
 // MAIN
 // ══════════════════════════════════════════════════════════════
 export default function BookingEquipment() {
-  const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
+  const { session, sidebarSubTab, setSidebarSubTab, pendingTour, setPendingTour } = useAppStore()
   const tab = sidebarSubTab || 'calendar'
 
   // Booking tour. Every lab user gets it once, existing users included: it
@@ -3904,6 +3904,13 @@ export default function BookingEquipment() {
     if (tab !== 'calendar') setSidebarSubTab('calendar')
     setTimeout(() => setShowTour(true), 300)
   }
+  // Picked from the header "?" → Guided tours (lib/tours.js)
+  useEffect(() => {
+    if (pendingTour !== 'booking') return
+    setPendingTour(null)
+    if (tab !== 'calendar') setSidebarSubTab('calendar')
+    setTimeout(() => setShowTour(true), 800)   // arriving from another screen: let the calendar load
+  }, [pendingTour])
 
   return (
     <div>

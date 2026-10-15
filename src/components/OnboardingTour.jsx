@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { TOURS, startTour } from '../lib/tours'
 
 // ── Tour card definitions ──────────────────────────────────────────────────
 
@@ -152,13 +153,32 @@ export function HelpTourButton({ loginCount, tourDone = false, onOpen, accentRgb
     return () => { clearTimeout(show); clearTimeout(hide) }
   }, [showCallout])
 
+  // The "?" opens a list of every guided tour (lib/tours.js), so each one
+  // can be taken again whenever someone wants it.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const rootRef = useRef(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    const away = e => { if (rootRef.current && !rootRef.current.contains(e.target)) setMenuOpen(false) }
+    const esc = e => { if (e.key === 'Escape') setMenuOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [menuOpen])
+
   function handleClick() {
     setCalloutVisible(false)
-    onOpen()
+    setMenuOpen(o => !o)
+  }
+
+  function pick(t) {
+    setMenuOpen(false)
+    if (t.key === 'website') onOpen()
+    else startTour(t)
   }
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
+    <div ref={rootRef} style={{ position: 'relative', flexShrink: 0 }}>
       <style>{`
         @keyframes help-ring  { 0%{transform:scale(1);opacity:0.7} 70%{transform:scale(2.1);opacity:0} 100%{transform:scale(2.1);opacity:0} }
         @keyframes callout-in { from{opacity:0;transform:translateY(-6px) scale(0.92)} to{opacity:1;transform:translateY(0) scale(1)} }
@@ -166,7 +186,7 @@ export function HelpTourButton({ loginCount, tourDone = false, onOpen, accentRgb
 
       <button
         onClick={handleClick}
-        title="Show guided tour"
+        title="Guided tours" aria-haspopup="menu" aria-expanded={menuOpen}
         style={{ position: 'relative', width: 34, height: 34, borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s ease', fontWeight: 800, fontSize: 15, fontFamily: 'inherit' }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.18)'; e.currentTarget.style.transform = 'translateY(-1px) scale(1.06)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff' }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0) scale(1)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}
@@ -179,6 +199,21 @@ export function HelpTourButton({ loginCount, tourDone = false, onOpen, accentRgb
         )}
         ?
       </button>
+
+      {menuOpen && (
+        <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: 300, maxWidth: 'calc(100vw - 24px)', background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)', padding: 8, zIndex: 600 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '6px 10px 8px' }}>Guided tours</div>
+          {TOURS.map(t => (
+            <button key={t.key} role="menuitem" onClick={() => pick(t)}
+              style={{ display: 'grid', gap: 2, width: '100%', textAlign: 'left', border: 'none', background: 'transparent', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0d1b35' }}>▶ {t.title}</span>
+              <span style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.45 }}>{t.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Speech-bubble callout */}
       {calloutVisible && (

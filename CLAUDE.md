@@ -1993,3 +1993,13 @@ through `data-tour` marks (`untrained`, `retrain`, `eqlist`, `calendar`,
 - **Responsibility tick box** (`ResponsibleCheck`) is required in all three
   booking forms; pre-ticked when editing.
 - Tour step texts must stay true to the screen — change them with it.
+
+## Guided tours live under the header "?" (Oct 2026)
+
+`src/lib/tours.js` lists every tour (`TOURS`); the header "?"
+(`HelpTourButton` in OnboardingTour.jsx) opens that list. "Website tour"
+opens the onboarding cards as before; any other entry goes to its screen and
+sets the store's `pendingTour`, which that screen starts (BookingEquipment
+watches for `'booking'`). **To add a tour:** one entry in TOURS + a
+`pendingTour` check on its screen. The page's own "?" help panel can still
+offer its tour (`HelpPanel onTour`).
