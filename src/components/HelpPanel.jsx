@@ -178,7 +178,9 @@ const HELP_CONTENT = {
   },
 }
 
-export default function HelpPanel({ screen }) {
+// onTour: a screen with a guided tour (Booking Equipment) offers it here, so
+// it can be replayed any time.
+export default function HelpPanel({ screen, onTour }) {
   const { session } = useAppStore()
   const [open, setOpen] = useState(false)
   const [showCS, setShowCS] = useState(false)
@@ -231,6 +233,11 @@ export default function HelpPanel({ screen }) {
           </div>
 
           <div style={{ padding: 20, flex: 1 }}>
+            {onTour && (
+              <button className="btn btn-sm btn-primary" style={{ marginBottom: 16 }} onClick={() => { setOpen(false); onTour() }}>
+                ▶ Take the tour of this page
+              </button>
+            )}
             <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.7, marginBottom: 20 }}>
               {help.description}
             </div>

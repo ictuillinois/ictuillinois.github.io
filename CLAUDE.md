@@ -1972,3 +1972,21 @@ equipment item there ("Could not find the 'solo_owner_id' column") — the
 ignore entry is why the audit never reported it. Solo-only columns are added
 to a payload only for solo users (`...(isSolo ? { solo_owner_id } : {})`).
 Before ignoring a column, check that nothing in a team code path writes it.
+
+## Booking Equipment tour + booking rules (Oct 2026)
+
+`src/components/BookingTour.jsx` — seven steps pointing at the real screen
+through `data-tour` marks (`untrained`, `retrain`, `eqlist`, `calendar`,
+`book`); a mark not on screen falls back, then to a centred card.
+- **Shown by itself** to a lab user on the calendar until they skip it,
+  finish it, or have a booking already in the past (checked against
+  equipment_bookings). Remembered per person in this browser
+  (`<app>_booking_tour_<userId>`). Replay: the "?" panel's "Take the tour of
+  this page" (`HelpPanel onTour`).
+- **Retraining due = locked:** an instrument unused for 3 months is greyed and
+  cannot be selected (`isRetrainLocked`), like TRAINING REQUIRED.
+- **Several instruments:** "Same time for all" (one drag fills every one —
+  `fillMultiSlot`) or "One by one" (as before).
+- **Responsibility tick box** (`ResponsibleCheck`) is required in all three
+  booking forms; pre-ticked when editing.
+- Tour step texts must stay true to the screen — change them with it.

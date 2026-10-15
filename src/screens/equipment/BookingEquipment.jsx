@@ -1,4 +1,5 @@
 import HelpPanel from '../../components/HelpPanel'
+import BookingTour from '../../components/BookingTour'
 import ScrollTabs from '../../components/ScrollTabs'
 import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -158,6 +159,17 @@ const statusColor = { confirmed: '#085041', pending: '#92400e', denied: '#a32d2d
 const statusBg = { confirmed: '#E1F5EE', pending: '#fef3c7', denied: '#fcebeb', cancelled: '#f1efe8' }
 
 // ── Booking Form Modal ────────────────────────────────────────
+// Required before any booking is made: the person booking answers for it and
+// for the purpose they picked (Oct 2026). Already ticked when editing.
+function ResponsibleCheck({ checked, onChange, small = false }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: small ? 12 : 13, color: 'var(--text2)', margin: small ? '8px 0 0' : '0 0 12px', lineHeight: 1.5 }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ width: 'auto', marginTop: 2, flexShrink: 0 }} />
+      <span>I am responsible for this booking and confirm it is for the purpose selected. <span style={{ color: '#c84b2f' }}>*</span></span>
+    </label>
+  )
+}
+
 function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, onAdjustTime, initialSlot, photoRequired, panel, defaultBehalfOf = '', onBooked }) {
   const { toast } = useAppStore()
 
@@ -184,6 +196,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
   const [labUsers, setLabUsers] = useState([])
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
+  const [responsible, setResponsible] = useState(!!booking)
   const [conflict, setConflict] = useState(null)
   const [specialNote, setSpecialNote] = useState(null)
   const [confirmedNote, setConfirmedNote] = useState(false)
@@ -250,6 +263,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
     if (form.purposeType === 'project' && !form.purposeProjectId && projects.length > 0) { toast('Select a project.'); return }
     if (form.purposeType === 'other' && !form.purposeOther.trim()) { toast('Describe the reason for the booking.'); return }
+    if (!responsible) { toast('Tick the box to confirm you are responsible for this booking.'); return }
     setSaving(true)
     // Check if equipment requires approval for this user
     let requiresApproval = false
@@ -435,6 +449,8 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
         <div className="field"><label>Notes</label>
           <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} />
         </div>
+
+        <ResponsibleCheck checked={responsible} onChange={setResponsible} />
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-primary" onClick={save} disabled={saving || !!conflict || (!!specialNote && !confirmedNote)}>
@@ -1808,6 +1824,7 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
   const [notes, setNotes]       = useState('')
   const [behalf, setBehalf]     = useState('')
   const [saving, setSaving]     = useState(false)
+  const [responsible, setResponsible] = useState(false)
   const [editingId, setEditingId] = useState(null)
 
   function setTime(id, field, val) {
@@ -1821,6 +1838,7 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
   }
 
   async function bookAll() {
+    if (!responsible) { toast('Tick the box to confirm you are responsible for these bookings.'); return }
     for (const e of equipmentList) {
       const t = times[e.id]
       if (!t.start || !t.end) { toast(`Set time for: ${e.nickname || e.equipment_name}`); return }
@@ -1924,6 +1942,8 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
           <label>Notes</label>
           <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes applied to all bookings…" style={{ resize: 'vertical' }} />
         </div>
+
+        <ResponsibleCheck checked={responsible} onChange={setResponsible} />
 
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
           <button className="btn btn-primary" onClick={bookAll} disabled={saving}>
@@ -2218,6 +2238,9 @@ function BookingCalendar({ session }) {
   const [multiSlot, setMultiSlot] = useState(null)
   // Multi-device drag booking mode
   const [multiDraftMode, setMultiDraftMode]   = useState(false)
+  // Several instruments: one drag for all of them, or a time for each.
+  const [multiSameTime, setMultiSameTime] = useState(true)
+  const [multiResponsible, setMultiResponsible] = useState(false)
   const [multiDraftSlots, setMultiDraftSlots] = useState({}) // eqId -> { start, end }
   const [multiDraftIdx, setMultiDraftIdx]     = useState(0)
   const [multiDraftPurpose, setMultiDraftPurpose] = useState('')
@@ -2552,9 +2575,17 @@ function BookingCalendar({ session }) {
       && requiresTraining(equipment.find(e => e.id === id))
   }
 
+  // Retraining due (not used for 3 months): locked like untrained equipment,
+  // until the retraining is approved.
+  function isRetrainLocked(id) { return session?.role === 'lab_user' && retrainingBlocked.includes(id) }
+
   function toggleEquipment(id) {
     if (isUntrained(id)) {
       toast('Complete equipment training first — see Training Records → Equipment Exam.')
+      return
+    }
+    if (isRetrainLocked(id)) {
+      toast('Not used for 3 months — pass the retraining first (Training Records → Equipment).')
       return
     }
     setSelectedEq(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id])
@@ -2584,12 +2615,7 @@ function BookingCalendar({ session }) {
       return
     }
     if (selectedEq.length > 1) {
-      const idx = multiDraftMode ? multiDraftIdx : 0
-      if (idx < selectedEq.length) {
-        setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
-        setMultiDraftIdx(idx + 1)
-        if (!multiDraftMode) setMultiDraftMode(true)
-      }
+      fillMultiSlot(slot)
     } else {
       setBookingDraft(slot)
       const usePanel = !isMobile && window.innerWidth >= 1050 && calView === 'week'
@@ -2639,12 +2665,7 @@ function BookingCalendar({ session }) {
     }
     const slot  = { start: start.toISOString().slice(0,16), end: end.toISOString().slice(0,16) }
     if (selectedEq.length > 1) {
-      const idx = multiDraftMode ? multiDraftIdx : 0
-      if (idx < selectedEq.length) {
-        setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
-        setMultiDraftIdx(idx + 1)
-        if (!multiDraftMode) setMultiDraftMode(true)
-      }
+      fillMultiSlot(slot)
     } else {
       setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
     }
@@ -2653,12 +2674,30 @@ function BookingCalendar({ session }) {
   function exitMultiDraft() {
     setMultiDraftMode(false); setMultiDraftSlots({}); setMultiDraftIdx(0)
     setMultiDraftPurpose(''); setMultiDraftOther(''); setMultiDraftNotes(''); setMultiDraftProjectId('')
+    setMultiResponsible(false)
+  }
+
+  // A drag (or day click) while several instruments are selected: "Same time
+  // for all" gives every one of them this slot at once; "One by one" fills
+  // the next one still without a time.
+  function fillMultiSlot(slot) {
+    const idx = multiDraftMode ? multiDraftIdx : 0
+    if (idx >= selectedEq.length) return
+    if (multiSameTime && idx === 0) {
+      setMultiDraftSlots(Object.fromEntries(selectedEq.map(id => [id, slot])))
+      setMultiDraftIdx(selectedEq.length)
+    } else {
+      setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
+      setMultiDraftIdx(idx + 1)
+    }
+    if (!multiDraftMode) setMultiDraftMode(true)
   }
 
   async function bookAllFromDraft() {
     if (!multiDraftPurpose) { toast('Select a purpose for the bookings.'); return }
     if (multiDraftPurpose === 'project' && projects.length > 0 && !multiDraftProjectId) { toast('Select a project.'); return }
     if (multiDraftPurpose === 'other' && !multiDraftOther.trim()) { toast('Describe the reason.'); return }
+    if (!multiResponsible) { toast('Tick the box to confirm you are responsible for these bookings.'); return }
     const allSet = selectedEq.every(id => multiDraftSlots[id])
     if (!allSet) { toast('Set a time slot for every selected equipment first.'); return }
     setMultiDraftSaving(true)
@@ -2765,6 +2804,9 @@ function BookingCalendar({ session }) {
       && (!filterCat || e.category === filterCat)
       && (showLabOnly || e.lab_user_access !== false)
   })
+  // The first locked items, for the Booking tour to point at
+  const firstUntrainedId = filteredEq.find(e => isUntrained(e.id))?.id
+  const firstRetrainId = filteredEq.find(e => isRetrainLocked(e.id))?.id
 
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))].sort()
 
@@ -2974,12 +3016,14 @@ function BookingCalendar({ session }) {
                 <button onClick={e => { e.stopPropagation(); setSelectedEq([]) }} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 11, padding: 0 }}>Clear</button>
               )}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div data-tour="eqlist" style={{ flex: 1, overflowY: 'auto' }}>
               {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
                 : filteredEq.map(e => {
-                    const isUntrainedEq = isUntrained(e.id)
+                    const retrainEq = isRetrainLocked(e.id)
+                    const isUntrainedEq = isUntrained(e.id) || retrainEq
+                    const tourMark = e.id === firstUntrainedId ? 'untrained' : e.id === firstRetrainId ? 'retrain' : undefined
                     return (
-                  <div key={e.id} onClick={() => toggleEquipment(e.id)}
+                  <div key={e.id} data-tour={tourMark} onClick={() => toggleEquipment(e.id)}
                     style={{ padding: '8px 12px', cursor: isUntrainedEq ? 'not-allowed' : 'pointer', borderBottom: '0.5px solid var(--surface2)', background: selectedEq.includes(e.id) ? 'var(--accent-light)' : isUntrainedEq ? 'var(--surface2)' : 'transparent', display: 'flex', alignItems: 'center', gap: 8, opacity: isUntrainedEq ? 0.55 : 1 }}
                     onMouseEnter={ev => { if (!selectedEq.includes(e.id) && !isUntrainedEq) ev.currentTarget.style.background = 'var(--surface2)' }}
                     onMouseLeave={ev => { if (!selectedEq.includes(e.id)) ev.currentTarget.style.background = isUntrainedEq ? 'var(--surface2)' : 'transparent' }}>
@@ -2989,8 +3033,8 @@ function BookingCalendar({ session }) {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: isUntrainedEq ? 'var(--text3)' : retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {e.nickname || e.equipment_name}
-                        {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
-                        {isUntrainedEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
+                        {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: retrainEq ? '#f3f4f6' : '#fcebeb', color: retrainEq ? '#6b7280' : '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
+                        {isUntrainedEq && !retrainEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
                       </div>
                       {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
                     </div>
@@ -3052,7 +3096,7 @@ function BookingCalendar({ session }) {
           <div style={{ display: 'flex', gap: 4 }}>
             <button className="btn btn-sm" style={{ background: calView === 'week' ? 'var(--accent-light)' : 'transparent', color: calView === 'week' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'week' ? 600 : 400 }} onClick={() => setCalView('week')}>Week</button>
             <button className="btn btn-sm" style={{ background: calView === 'month' ? 'var(--accent-light)' : 'transparent', color: calView === 'month' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'month' ? 600 : 400 }} onClick={() => setCalView('month')}>Month</button>
-            <button className="btn btn-sm btn-primary" onClick={() => {
+            <button className="btn btn-sm btn-primary" data-tour="book" onClick={() => {
               if (selectedEq.length > 1) { setMultiSlot(null); setShowMultiModal(true) }
               else { setBookingDraft(null); setEditBooking(null); setShowBookingModal(true) }
             }}>+ Book</button>
@@ -3071,7 +3115,7 @@ function BookingCalendar({ session }) {
 
         {calView === 'week' ? (
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            <div data-tour="calendar" style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               {selectedEq.length === 0 && (
                 <div style={{ padding: '8px 14px', background: '#fef3c7', borderBottom: '1px solid #f0d070', fontSize: 12, color: '#92400e' }}>
                   💡 Select equipment on the left to enable drag-to-book
@@ -3079,8 +3123,20 @@ function BookingCalendar({ session }) {
               )}
               {selectedEq.length > 1 && !multiDraftMode && (
                 <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
-                  <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 4 }}>📅 Multi-device booking — {selectedEq.length} equipment selected</div>
-                  <div style={{ fontSize: 12, color: '#534AB7' }}>Drag on the calendar to set a time slot for each device one by one. After the first drag the progress tracker will appear here.</div>
+                  <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 6 }}>📅 {selectedEq.length} equipment selected — how do you want to book them?</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                    {[{ v: true, l: 'Same time for all' }, { v: false, l: 'One by one, each its own time' }].map(o => (
+                      <label key={String(o.v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: multiSameTime === o.v ? '#fff' : 'transparent', border: `1px solid ${multiSameTime === o.v ? '#534AB7' : '#C5C2F5'}`, borderRadius: 99, padding: '4px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#534AB7', marginBottom: 0 }}>
+                        <input type="radio" name="multi-mode" checked={multiSameTime === o.v} onChange={() => setMultiSameTime(o.v)} style={{ width: 'auto', margin: 0 }} />
+                        {o.l}
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#534AB7' }}>
+                    {multiSameTime
+                      ? 'Drag once on the calendar: every selected instrument gets that time.'
+                      : 'Drag on the calendar to set a time for each instrument, one after another. A progress tracker appears here after the first.'}
+                  </div>
                 </div>
               )}
               {multiDraftMode && (
@@ -3154,6 +3210,7 @@ function BookingCalendar({ session }) {
                           <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
                             <label style={{ fontSize: 11 }}>Notes (optional)</label>
                             <input value={multiDraftNotes} onChange={e => setMultiDraftNotes(e.target.value)} placeholder="Any notes for all bookings…" style={{ fontSize: 12 }} />
+                            <ResponsibleCheck small checked={multiResponsible} onChange={setMultiResponsible} />
                           </div>
                           <button className="btn btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7', whiteSpace: 'nowrap' }}
                             onClick={bookAllFromDraft} disabled={multiDraftSaving}>
@@ -3806,15 +3863,45 @@ function EquipmentNotesTab({ session }) {
 // MAIN
 // ══════════════════════════════════════════════════════════════
 export default function BookingEquipment() {
-  const { session, sidebarSubTab } = useAppStore()
+  const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
   const tab = sidebarSubTab || 'calendar'
+
+  // Booking tour. Shown by itself to a lab user on the calendar until they
+  // skip it, finish it, or have a booking already in the past; the "?"
+  // panel replays it for anyone. Remembered per person in this browser.
+  const tourKey = `ictlab_booking_tour_${session?.userId || 'x'}`
+  const [showTour, setShowTour] = useState(false)
+  useEffect(() => {
+    if (session?.role !== 'lab_user' || tab !== 'calendar') return
+    let seen = false
+    try { seen = !!localStorage.getItem(tourKey) } catch { /* private window */ }
+    if (seen) return
+    let off = false
+    sb.from('equipment_bookings').select('id').eq('user_id', session.userId)
+      .lt('end_time', new Date().toISOString()).not('status', 'in', '(cancelled,denied)').limit(1)
+      .then(({ data, error }) => {
+        if (off || error) return
+        if (data?.length) { try { localStorage.setItem(tourKey, 'booked') } catch { /* ignore */ } return }
+        setTimeout(() => { if (!off) setShowTour(true) }, 600)   // let the calendar draw first
+      })
+    return () => { off = true }
+  }, [session?.userId, tab])
+  function closeTour(reason) {
+    try { localStorage.setItem(tourKey, reason || 'done') } catch { /* ignore */ }
+    setShowTour(false)
+  }
+  function replayTour() {
+    if (tab !== 'calendar') setSidebarSubTab('calendar')
+    setTimeout(() => setShowTour(true), 300)
+  }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div className="section-title">Booking Equipment</div>
-        <HelpPanel screen="booking" />
+        <HelpPanel screen="booking" onTour={replayTour} />
       </div>
+      {showTour && <BookingTour supportName="ICT-RE" onClose={closeTour} />}
       {tab === 'calendar'  && <BookingCalendar session={session} />}
       {tab === 'history'   && <BookingHistory session={session} />}
       {tab === 'eq_notes'  && <EquipmentNotesTab session={session} />}
