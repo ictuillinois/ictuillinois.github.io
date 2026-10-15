@@ -39,7 +39,7 @@ function findTarget(step) {
   return r.width && r.height ? { el, r } : null
 }
 
-export default function BookingTour({ supportName = 'your lab manager', onClose }) {
+export default function BookingTour({ supportName = 'your lab manager', onClose, onShown }) {
   // Memoized: a new steps array on every render made `step` a new object,
   // so measure() and the layout effect re-ran on every render, and each run
   // set state — React's "Maximum update depth exceeded".
@@ -68,6 +68,10 @@ export default function BookingTour({ supportName = 'your lab manager', onClose 
     }
     measure()
   }, [i, measure, narrow])
+
+  // After the first successful draw (an effect does not run if rendering
+  // threw), so "seen" is never recorded for a tour nobody saw.
+  useEffect(() => { onShown?.() }, [])
 
   useEffect(() => {
     window.addEventListener('resize', measure)

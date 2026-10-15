@@ -1982,8 +1982,9 @@ through `data-tour` marks (`untrained`, `retrain`, `eqlist`, `calendar`,
   itself on the calendar until they skip or finish it; someone who already
   has a past booking (equipment_bookings) is marked on first show, so they
   see it once even if they leave mid-tour. Remembered per person in this
-  browser (`<app>_booking_tour_v2_<userId>` — v2 because the first version
-  marked existing users done without showing it). Replay: the "?" panel's "Take the tour of
+  browser (`<app>_booking_tour_v3_<userId>`). The "seen" mark is written only
+  after the tour has drawn (`onShown`); v1/v2 marked people before it showed,
+  and a crash then left them marked having seen nothing. Replay: the "?" panel's "Take the tour of
   this page" (`HelpPanel onTour`).
 - **Retraining due = locked:** an instrument unused for 3 months is greyed and
   cannot be selected (`isRetrainLocked`), like TRAINING REQUIRED.

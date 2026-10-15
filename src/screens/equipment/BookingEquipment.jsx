@@ -3870,10 +3870,13 @@ export default function BookingEquipment() {
   // shows on the calendar until they skip or finish it. Someone who already
   // has a past booking sees it ONCE even if they leave mid-tour; someone new
   // keeps getting it until they skip or finish. The "?" panel replays it for
-  // anyone. Remembered per person in this browser. (_v2: the first version
-  // marked existing users "booked" without ever showing it to them.)
-  const tourKey = `ictlab_booking_tour_v2_${session?.userId || 'x'}`
+  // anyone. Remembered per person in this browser. (_v3: v1 marked existing
+  // users "booked" without showing it; v2 marked them BEFORE showing it, and
+  // the tour then crashed, so they were marked having seen nothing. The mark
+  // is now set only once the tour has actually drawn — BookingTour onShown.)
+  const tourKey = `ictlab_booking_tour_v3_${session?.userId || 'x'}`
   const [showTour, setShowTour] = useState(false)
+  const hadPastBooking = useRef(false)
   useEffect(() => {
     if (session?.role !== 'lab_user' || tab !== 'calendar') return
     let seen = false
@@ -3884,14 +3887,15 @@ export default function BookingEquipment() {
       .lt('end_time', new Date().toISOString()).not('status', 'in', '(cancelled,denied)').limit(1)
       .then(({ data, error }) => {
         if (off || error) return
-        setTimeout(() => {
-          if (off) return
-          if (data?.length) { try { localStorage.setItem(tourKey, 'shown-once') } catch { /* ignore */ } }
-          setShowTour(true)
-        }, 600)   // let the calendar draw first
+        hadPastBooking.current = !!data?.length
+        setTimeout(() => { if (!off) setShowTour(true) }, 600)   // let the calendar draw first
       })
     return () => { off = true }
   }, [session?.userId, tab])
+  // Someone with a past booking sees it once even if they leave mid-tour.
+  function tourShown() {
+    if (hadPastBooking.current) { try { localStorage.setItem(tourKey, 'shown-once') } catch { /* ignore */ } }
+  }
   function closeTour(reason) {
     try { localStorage.setItem(tourKey, reason || 'done') } catch { /* ignore */ }
     setShowTour(false)
@@ -3907,7 +3911,7 @@ export default function BookingEquipment() {
         <div className="section-title">Booking Equipment</div>
         <HelpPanel screen="booking" onTour={replayTour} />
       </div>
-      {showTour && <BookingTour supportName="ICT-RE" onClose={closeTour} />}
+      {showTour && <BookingTour onShown={tourShown} supportName="ICT-RE" onClose={closeTour} />}
       {tab === 'calendar'  && <BookingCalendar session={session} />}
       {tab === 'history'   && <BookingHistory session={session} />}
       {tab === 'eq_notes'  && <EquipmentNotesTab session={session} />}
