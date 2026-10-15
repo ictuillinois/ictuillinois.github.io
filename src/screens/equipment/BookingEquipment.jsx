@@ -3866,10 +3866,13 @@ export default function BookingEquipment() {
   const { session, sidebarSubTab, setSidebarSubTab } = useAppStore()
   const tab = sidebarSubTab || 'calendar'
 
-  // Booking tour. Shown by itself to a lab user on the calendar until they
-  // skip it, finish it, or have a booking already in the past; the "?"
-  // panel replays it for anyone. Remembered per person in this browser.
-  const tourKey = `ictlab_booking_tour_${session?.userId || 'x'}`
+  // Booking tour. Every lab user gets it once, existing users included: it
+  // shows on the calendar until they skip or finish it. Someone who already
+  // has a past booking sees it ONCE even if they leave mid-tour; someone new
+  // keeps getting it until they skip or finish. The "?" panel replays it for
+  // anyone. Remembered per person in this browser. (_v2: the first version
+  // marked existing users "booked" without ever showing it to them.)
+  const tourKey = `ictlab_booking_tour_v2_${session?.userId || 'x'}`
   const [showTour, setShowTour] = useState(false)
   useEffect(() => {
     if (session?.role !== 'lab_user' || tab !== 'calendar') return
@@ -3881,8 +3884,11 @@ export default function BookingEquipment() {
       .lt('end_time', new Date().toISOString()).not('status', 'in', '(cancelled,denied)').limit(1)
       .then(({ data, error }) => {
         if (off || error) return
-        if (data?.length) { try { localStorage.setItem(tourKey, 'booked') } catch { /* ignore */ } return }
-        setTimeout(() => { if (!off) setShowTour(true) }, 600)   // let the calendar draw first
+        setTimeout(() => {
+          if (off) return
+          if (data?.length) { try { localStorage.setItem(tourKey, 'shown-once') } catch { /* ignore */ } }
+          setShowTour(true)
+        }, 600)   // let the calendar draw first
       })
     return () => { off = true }
   }, [session?.userId, tab])

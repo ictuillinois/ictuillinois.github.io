@@ -1978,10 +1978,12 @@ Before ignoring a column, check that nothing in a team code path writes it.
 `src/components/BookingTour.jsx` — seven steps pointing at the real screen
 through `data-tour` marks (`untrained`, `retrain`, `eqlist`, `calendar`,
 `book`); a mark not on screen falls back, then to a centred card.
-- **Shown by itself** to a lab user on the calendar until they skip it,
-  finish it, or have a booking already in the past (checked against
-  equipment_bookings). Remembered per person in this browser
-  (`<app>_booking_tour_<userId>`). Replay: the "?" panel's "Take the tour of
+- **Every lab user gets it once**, existing users included. It shows by
+  itself on the calendar until they skip or finish it; someone who already
+  has a past booking (equipment_bookings) is marked on first show, so they
+  see it once even if they leave mid-tour. Remembered per person in this
+  browser (`<app>_booking_tour_v2_<userId>` — v2 because the first version
+  marked existing users done without showing it). Replay: the "?" panel's "Take the tour of
   this page" (`HelpPanel onTour`).
 - **Retraining due = locked:** an instrument unused for 3 months is greyed and
   cannot be selected (`isRetrainLocked`), like TRAINING REQUIRED.
