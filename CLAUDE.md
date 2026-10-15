@@ -2012,3 +2012,20 @@ right, on the same row, and the in-page copy steps aside
 (`HelpPanel placement`, store `moduleTipScreen`). After "Got it" the banner
 is gone and the "?" is back in the page header. A screen with a guided tour
 (lib/tours.js) still offers it from the banner's "?".
+
+## Lab Manager Guide — one source, both apps (Oct 2026, v3.0)
+
+Source: `ictlab/guide/template.html` (text; "ict" / "labhive" comment-marker
+pairs wrap app-only text) + `ictlab/guide/head.html` (styles). Build both HTML
+guides and all PDFs with `node scripts/build-lab-manager-guide.mjs` (run in
+ictlab; writes ictlab/public, labhive/public AND labhive/docs root — LabHive's
+PDF_URL is the site root, outside /app). Then build and push both apps.
+labhive's old `make-labhive-guide.mjs` (search-and-replace over the ICT HTML)
+is retired. **When a feature changes, update the guide text too.**
+
+v3.0 has NO screenshots on purpose: 17 of the 25 v2.0 "screenshots" were the
+same Equipment List page under other captions, and the rest showed the old
+LabHive branding in ICT-Lab. Add real ones with
+`scripts/take-guide-screenshots.mjs` (needs a manual sign-in).
+ICT = **Illinois Center for Transportation** (v2.0 wrongly said "Illinois
+Consolidated Technologies Lab").

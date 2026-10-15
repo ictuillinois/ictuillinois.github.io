@@ -1,0 +1,408 @@
+<body>
+<div class="page">
+<!--
+  Lab Manager Guide — ONE source for ICT-Lab and LabHive (Oct 2026).
+  Build both HTML files and both PDFs:   node scripts/build-lab-manager-guide.mjs
+  Placeholders: APP, URL, PROJ, LOGO, COVER_META, FOOTER_META (each in double braces)
+  Blocks: an "ict" comment marker pair wraps ICT-Lab-only text, a "labhive"
+  pair wraps LabHive-only text (see the markers used throughout below).
+  Screenshots: left out on purpose — the v2.0 ones mostly showed the wrong
+  page. Add them back with scripts/take-guide-screenshots.mjs.
+-->
+<!-- COVER -->
+<div class="cover">
+  {{LOGO}}
+  <div class="cover-tag">Official Documentation</div>
+  <h1>{{APP}} Platform<br>User Guide</h1>
+  <p class="cover-sub">Complete Reference for Lab Managers</p>
+  <div class="cover-line"></div>
+  <div class="cover-badge">Version 3.0 — October 2026</div>
+  <p class="cover-meta">{{COVER_META}}</p>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <a href="#sec-1" class="toc-item"><span class="toc-num">1</span><span class="toc-fill">Getting Started</span></a>
+  <ul class="toc-subs"><li><a href="#s1-login" class="toc-sub-link">Signing in</a></li><li><a href="#s1-dash" class="toc-sub-link">Dashboard &amp; sidebar</a></li><li><a href="#s1-help" class="toc-sub-link">Notifications, tours &amp; help</a></li></ul>
+  <a href="#sec-2" class="toc-item"><span class="toc-num">2</span><span class="toc-fill">Lab Management</span></a>
+  <ul class="toc-subs"><li><a href="#s2-users" class="toc-sub-link">Lab users &amp; lab managers</a></li><li><a href="#s2-approvals" class="toc-sub-link">Approval requests</a></li><li><a href="#s2-export" class="toc-sub-link">Export data</a></li></ul>
+  <a href="#sec-3" class="toc-item"><span class="toc-num">3</span><span class="toc-fill">Training Records</span></a>
+  <ul class="toc-subs"><li><a href="#s3-safety" class="toc-sub-link">Safety</a></li><li><a href="#s3-docs" class="toc-sub-link">Documents</a></li><li><a href="#s3-vehicle" class="toc-sub-link">Vehicle</a></li><li><a href="#s3-equip" class="toc-sub-link">Equipment &amp; retraining</a></li><li><a href="#s3-locker" class="toc-sub-link">Lockers</a></li><li><a href="#s3-exam" class="toc-sub-link">Alarm, exam<!--ict--> &amp; SDS<!--/ict--></a></li></ul>
+  <a href="#sec-4" class="toc-item"><span class="toc-num">4</span><span class="toc-fill">Equipment &amp; Maintenance</span></a>
+  <a href="#sec-5" class="toc-item"><span class="toc-num">5</span><span class="toc-fill">Equipment SOP</span></a>
+  <a href="#sec-6" class="toc-item"><span class="toc-num">6</span><span class="toc-fill">Booking Equipment</span></a>
+  <ul class="toc-subs"><li><a href="#s6-rules" class="toc-sub-link">Who can book what</a></li><li><a href="#s6-book" class="toc-sub-link">Making a booking</a></li><li><a href="#s6-manage" class="toc-sub-link">Approving, moving &amp; cancelling</a></li><li><a href="#s6-tabs" class="toc-sub-link">History, special treatment &amp; settings</a></li></ul>
+  <a href="#sec-7" class="toc-item"><span class="toc-num">7</span><span class="toc-fill">Task Board</span></a>
+  <a href="#sec-8" class="toc-item"><span class="toc-num">8</span><span class="toc-fill">Supply Inventory</span></a>
+  <a href="#sec-9" class="toc-item"><span class="toc-num">9</span><span class="toc-fill">Lab Messages</span></a>
+  <a href="#sec-10" class="toc-item"><span class="toc-num">10</span><span class="toc-fill">{{PROJ}}</span></a>
+  <ul class="toc-subs"><li><a href="#s10-sub" class="toc-sub-link">Sub projects</a></li><li><a href="#s10-mat" class="toc-sub-link">Materials &amp; folders</a></li><li><a href="#s10-red" class="toc-sub-link">Material reduction</a></li><li><a href="#s10-labels" class="toc-sub-link">Labels &amp; tested samples</a></li></ul>
+  <a href="#sec-11" class="toc-item"><span class="toc-num">11</span><span class="toc-fill">QR Labels</span></a>
+  <a href="#sec-12" class="toc-item"><span class="toc-num">12</span><span class="toc-fill">Profile &amp; Account Settings</span></a>
+  <a href="#sec-ref" class="toc-item"><span class="toc-num">&#9733;</span><span class="toc-fill">Quick Reference</span></a>
+</div>
+
+<!-- ══ SECTION 1 ══ -->
+<div class="sec-head" id="sec-1">
+  <div class="sec-head-num">Section 01</div>
+  <h2>🚀 Getting Started</h2>
+  <p class="sec-head-desc">Signing in, finding your way around, and getting help</p>
+</div>
+<div class="sec-body">
+<h3 id="s1-login">Signing in</h3>
+<p>{{APP}} runs in any modern browser — nothing to install. Go to:</p>
+<div class="note"><strong>Address:</strong> {{URL}}</div>
+<ol class="steps">
+  <li>Enter the <strong>email</strong> and <strong>password</strong> your administrator gave you, then click <span class="lbl g">Sign in</span>.</li>
+  <li>The first time, you are asked to choose a new password before you can continue.</li>
+  <li>Leave <strong>"Keep me signed in on this device"</strong> ticked on a computer only you use. Untick it on a shared one.</li>
+  <li>If the Terms of Service have changed since you last signed in, you are asked to accept them once.</li>
+</ol>
+<div class="tip"><strong>Forgot your password?</strong> Ask your org admin to reset it, or use <strong>Contact Us</strong> on the sign-in page.</div>
+<div class="note"><strong>One person, two roles:</strong> someone who is both a lab manager and a lab user has two accounts on the same email. They sign in once; each account keeps its own permissions.</div>
+
+<h3 id="s1-dash">Dashboard &amp; sidebar</h3>
+<p>After signing in you land on the <strong>Dashboard</strong>: one card per module you can use. Click a card to open it.</p>
+<div class="fg">
+  <div class="fg-row">
+    <div class="fc"><div class="fc-icon">🎓</div><div class="fc-title">Training Records</div><div class="fc-desc">Safety, documents, vehicle, equipment, alarm, locker<!--ict-->, exam and SDS<!--/ict--><!--labhive--> and exam<!--/labhive--> — per lab user.</div></div>
+    <div class="fc"><div class="fc-icon">👥</div><div class="fc-title">Lab Management</div><div class="fc-desc">Lab users, lab managers, account requests and data export.</div></div>
+  </div>
+  <div class="fg-row">
+    <div class="fc"><div class="fc-icon">🧪</div><div class="fc-title">{{PROJ}}</div><div class="fc-desc">Projects, sub projects, material folders, reductions and labels.</div></div>
+    <div class="fc"><div class="fc-icon">📅</div><div class="fc-title">Booking Equipment</div><div class="fc-desc">The shared booking calendar, approvals and booking rules.</div></div>
+  </div>
+  <div class="fg-row">
+    <div class="fc"><div class="fc-icon">🔧</div><div class="fc-title">Equipment &amp; Maintenance</div><div class="fc-desc">The equipment list, maintenance records and who may see each item.</div></div>
+    <div class="fc"><div class="fc-icon">📚</div><div class="fc-title">Equipment SOP</div><div class="fc-desc">SOPs, training videos, standards and exams per instrument.</div></div>
+  </div>
+  <div class="fg-row">
+    <div class="fc"><div class="fc-icon">📋</div><div class="fc-title">Task Board</div><div class="fc-desc">Tasks, meetings, timeline and daily reminders.</div></div>
+    <div class="fc"><div class="fc-icon">📦</div><div class="fc-title">Supply Inventory</div><div class="fc-desc">Room-by-room supply counts and reports.</div></div>
+  </div>
+  <div class="fg-row">
+    <div class="fc"><div class="fc-icon">💬</div><div class="fc-title">Lab Messages</div><div class="fc-desc">Conversations kept as threads, with attachments.</div></div>
+    <div class="fc"><div class="fc-icon">🔲</div><div class="fc-title">QR Labels</div><div class="fc-desc">Print equipment and material labels.</div></div>
+  </div>
+</div>
+<p>Choose which cards appear in <strong>Profile → Dashboard Icons</strong>.</p>
+<p>The <strong>left sidebar</strong> shows the tabs of the module you are in. Below them, <strong>Apps</strong> switches between modules, and <strong>Home</strong> returns to the dashboard. On some screens the lower part of the sidebar holds that screen's own panel instead — for example the equipment picker in Booking, or the project info on a project's folders page. On a phone, the menu button at the top left opens the sidebar.</p>
+
+<h3 id="s1-help">Notifications, tours &amp; help</h3>
+<ul>
+  <li><strong>🔔 Bell</strong> (top right) — your notifications: bookings, training decisions, tasks, messages, locker requests and more. Click one to go straight to it.</li>
+  <li><strong>? (top right) — Guided tours.</strong> A list of step-by-step tours: the <em>Website tour</em> and the <em>Booking Equipment</em> tour. Take any of them again whenever you like.</li>
+  <li><strong>? on each page</strong> — help and tips for that page. While a page's green tip banner is showing, its <strong>?</strong> sits at the right of the banner.</li>
+  <li><strong>Sara</strong> (bottom right) — answers common questions. Use <strong>Report a problem</strong> there to send a description and a screenshot to the administrators.</li>
+</ul>
+<div class="tip"><strong>New lab users</strong> get the Booking Equipment tour by themselves the first time they open Booking. It stops once they skip it or finish it.</div>
+</div>
+
+<!-- ══ SECTION 2 ══ -->
+<div class="sec-head" id="sec-2">
+  <div class="sec-head-num">Section 02</div>
+  <h2>👥 Lab Management</h2>
+  <p class="sec-head-desc">The people in your lab, account requests, and data export</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">Lab Users</span> <span class="tab-lbl">Lab Managers</span> <span class="tab-lbl">Organization Admins</span> <span class="tab-lbl">Approval Requests</span> <span class="tab-lbl">Export Data</span> <span class="tab-lbl">Lab Manager Guide</span></p>
+<h3 id="s2-users">Lab users &amp; lab managers</h3>
+<span class="nav">Lab Management → Lab Users / Lab Managers</span>
+<ul>
+  <li><strong>Add</strong> — enter name, email and a temporary password. The person must choose a new password at their first sign-in.</li>
+  <li><strong>Edit</strong> — details, assigned projects, and which dashboard icons the person gets.</li>
+  <li><strong>Deactivate</strong> — the person can no longer sign in; their records are kept. <strong>Delete</strong> removes the account.</li>
+  <li>Adding someone whose email already has an account (for example a lab user who becomes a lab manager) links the new account to the same sign-in.</li>
+</ul>
+<div class="warn"><strong>Organization Admins</strong> are shown read-only to lab managers. Only an org admin (or the super admin) can change an org admin's account.</div>
+<h3 id="s2-approvals">Approval requests</h3>
+<span class="nav">Lab Management → Approval Requests</span>
+<p>Requests to <strong>delete an account</strong> appear here. Before approving, choose who takes over that person's records, so nothing they own is lost. A count of pending requests shows at the top of Lab Management.</p>
+<h3 id="s2-export">Export data</h3>
+<span class="nav">Lab Management → Export Data</span>
+<p>Downloads one ZIP with a folder per person (lab users and lab managers separately). Each folder holds an Excel workbook — profile, every training record, bookings in the date range you choose, projects and materials — and the files they uploaded, sorted by source. Project folders hold a workbook per project and one folder per material. Anything that could not be included is listed on screen with the reason.</p>
+</div>
+
+<!-- ══ SECTION 3 ══ -->
+<div class="sec-head" id="sec-3">
+  <div class="sec-head-num">Section 03</div>
+  <h2>🎓 Training Records</h2>
+  <p class="sec-head-desc">Everything a lab user completes and keeps current</p>
+</div>
+<div class="sec-body">
+<p>Training Records opens on a grid of lab user cards. <strong>Click a card</strong> to open that person's records, then use the tabs inside the panel. The mark on each tab shows ✓ done, ⏳ waiting, or — not started. Switch <strong>This user / All users</strong> to see everyone's records at once — the audit view.</p>
+<div class="note"><strong>Privacy:</strong> a lab user's training records are visible only to them and to the lab managers and admins of their organization. A lab user can never approve their own records.</div>
+<h3 id="s3-safety">🦺 Safety</h3>
+<!--ict--><p>New lab users complete three steps: <strong>1</strong> watch the ICT safety training video; <strong>2</strong> read the Laboratory Safety Guide and complete the DRS online training; <strong>3</strong> watch both safety videos and pass the acknowledgement test. You can set which steps a person must do.</p><!--/ict-->
+<!--labhive--><p>New lab users complete the safety steps in order. You can set which steps a person must do.</p><!--/labhive-->
+<ul>
+  <li>Approve each step when it is submitted. After an approval, a bar names the next step.</li>
+  <li><strong>Some modules stay locked</strong> for a lab user until their safety training is approved.</li>
+</ul>
+<h3 id="s3-docs">📄 Lab User Documents</h3>
+<p>Certificates the lab user uploads (and copies of their signed forms). Each shows its status; click <span class="lbl g">Approve</span> on a pending one.</p>
+<h3 id="s3-vehicle">🚗 Vehicle</h3>
+<!--ict-->
+<p>Three sub-tabs: <span class="tab-lbl">Training records</span> <span class="tab-lbl">Use agreement</span> <span class="tab-lbl">Forms</span>.</p>
+<ul>
+  <li><strong>Forms</strong> (lab user) — they tick the vehicles they need, read the <em>Golf Cart Manual</em> page by page and confirm, then download, sign and upload the two forms. A copy goes to their Documents.</li>
+  <li><strong>Use agreement</strong> — the signed forms, with <span class="lbl g">Approve</span> / <span class="lbl r">Deny</span>.</li>
+  <li><strong>Training records</strong> — vehicle training dates, and the vehicles each person asked for. <span class="lbl g">Confirm</span> unlocks only once their forms are approved and the manual read.</li>
+  <li><strong>ICT vehicle list</strong> (sidebar, lab managers and admins) — the vehicles lab users can request. "Remove" hides a vehicle from new requests; past requests stay.</li>
+</ul>
+<!--/ict-->
+<!--labhive--><p>Vehicle training records for people who drive lab vehicles: date, trainer and confirmation.</p><!--/labhive-->
+<div class="tip">Vehicle and building-alarm training dates cannot be edited once confirmed.</div>
+<h3 id="s3-equip">🔧 Equipment &amp; retraining</h3>
+<p>Training per instrument, and the equipment exams passed. Equipment that needs training cannot be booked until it is approved. Equipment a lab user has <strong>not used for 3 months</strong> needs retraining: it is greyed out in Booking until the retraining is approved.</p>
+<h3 id="s3-locker">🗄️ Lab User Locker</h3>
+<ul>
+  <li>Lab users see only their own locker. Without one, they press <span class="lbl g">Request a locker</span> (with an optional note).</li>
+  <li>You get a notification. The <strong>Locker requests</strong> box above the locker grid lists who is waiting; pick a free locker and <span class="lbl g">Assign</span>, or <span class="lbl r">Decline</span>. The request also shows on that person's Locker tab.</li>
+  <li>Mark lockers <strong>Unavailable</strong> in the grid; the All Lockers table lists every assignment.</li>
+</ul>
+<h3 id="s3-exam">🔔 Building Alarm, 📝 Exam<!--ict--> &amp; 🧯 SDS<!--/ict--></h3>
+<ul>
+  <li><strong>Building Alarm</strong> — record alarm training, required for after-hours access.</li>
+  <li><strong>Exam</strong> — equipment exam results: score, pass/fail and date.</li>
+  <!--ict--><li><strong>SDS</strong> — the lab's safety data sheets. Lab managers upload PDFs, Word files, video or links; lab users can read them.</li><!--/ict-->
+</ul>
+</div>
+
+<!-- ══ SECTION 4 ══ -->
+<div class="sec-head" id="sec-4">
+  <div class="sec-head-num">Section 04</div>
+  <h2>🔧 Equipment &amp; Maintenance</h2>
+  <p class="sec-head-desc">The equipment list, its records, and what lab users may see</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">List of Equipment</span><!--labhive--> <span class="tab-lbl">Calibration</span><!--/labhive--> <span class="tab-lbl">Maintenance Records</span> <span class="tab-lbl">Settings</span></p>
+<h3>Adding or editing equipment</h3>
+<ol class="steps">
+  <li>Click <span class="lbl g">+ Add equipment</span> (or <span class="lbl">Import Excel</span> to load a whole list).</li>
+  <li>Enter name, nickname, category, location, manufacturer, serial number, date received and condition. Setting the condition to <strong>Out of Service</strong> marks it unusable.</li>
+  <li>Tick <strong>Responsible for Maintenance</strong> — each lab manager is listed once — and whether they get maintenance reminders.</li>
+  <li>Choose <strong>Lab user access</strong> (required):
+    <ul style="margin-top:6px">
+      <li><strong>Calibration &amp; maintenance</strong> → <em>Lab only</em>: hidden from lab users, and from the SOP and booking lists for everyone unless "Show lab-only equipment" is turned on.</li>
+      <li>Or the areas lab users may use: <strong>Equipment SOP</strong>, <strong>Booking calendar</strong>, <strong>Request training</strong>, <strong>Exam</strong>. Unticking Request training means no training record is needed to book it.</li>
+    </ul>
+  </li>
+  <li>Save. An item with no choice yet shows <strong>Waiting for decision</strong>.</li>
+</ol>
+<p><strong>Maintenance Records</strong> shows usage hours from bookings and the maintenance history.<!--labhive--> <strong>Calibration</strong> holds calibration dates and records.<!--/labhive--> <strong>Settings</strong> holds the equipment categories.</p>
+</div>
+
+<!-- ══ SECTION 5 ══ -->
+<div class="sec-head" id="sec-5">
+  <div class="sec-head-num">Section 05</div>
+  <h2>📚 Equipment SOP</h2>
+  <p class="sec-head-desc">SOPs, videos, standards and exams for each instrument</p>
+</div>
+<div class="sec-body">
+<ul>
+  <li>Pick an instrument, then add or update its <strong>SOP</strong>, <strong>training videos</strong>, <strong>standards</strong> and <strong>exam</strong> questions.</li>
+  <li>Lab users see videos and SOPs once their training for that instrument is approved, or with <strong>temporary access</strong> you grant.</li>
+  <li><strong>SOP Notes</strong> — lab users leave feedback or suggest improvements.</li>
+  <li>Lab-only equipment is hidden here for everyone. Lab managers and admins can turn on <strong>Show lab-only equipment</strong>.</li>
+</ul>
+<h3>Equipment QR labels</h3>
+<p>Scanning an equipment's QR label opens a page with its <strong>SOP</strong>, <strong>Book</strong>, <strong>Contact</strong> and <strong>Calibration</strong> options, after signing in. Options a lab user may not use for that item are hidden.</p>
+</div>
+
+<!-- ══ SECTION 6 ══ -->
+<div class="sec-head" id="sec-6">
+  <div class="sec-head-num">Section 06</div>
+  <h2>📅 Booking Equipment</h2>
+  <p class="sec-head-desc">The shared booking calendar and its rules</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">Book Equipment</span> <span class="tab-lbl">History &amp; Usage</span> <span class="tab-lbl">Special Treatment</span> <span class="tab-lbl">Settings</span> (admins)</p>
+<h3 id="s6-rules">Who can book what</h3>
+<ul>
+  <li><strong>TRAINING REQUIRED</strong> — greyed out; a lab user cannot select it until their training is approved.</li>
+  <li><strong>RETRAIN</strong> — not used for 3 months; greyed out until the retraining is approved.</li>
+  <li>Bookings are in the booker's own name. <strong>Lab users cannot book for someone else.</strong> Lab managers can, with <em>Book on behalf of</em> in the booking form.</li>
+</ul>
+<h3 id="s6-book">Making a booking</h3>
+<ol class="steps">
+  <li>Tick one or more instruments in the sidebar (<strong>Select all</strong> shows every booking on one calendar).</li>
+  <li>With several ticked, choose <strong>Same time for all</strong> (one drag books them all) or <strong>One by one</strong> (a time for each).</li>
+  <li><strong>Drag</strong> down on the calendar to pick the day and time. Past times cannot be booked.</li>
+  <li>Choose the <strong>purpose</strong> — Project, Thesis or Other — and tick <strong>"I am responsible for this booking and confirm it is for the purpose selected."</strong> Both are required.</li>
+  <li>After booking, add it to <strong>Google Calendar</strong>, <strong>Outlook</strong>, or download an <strong>.ics</strong> file.</li>
+</ol>
+<h3 id="s6-manage">Approving, moving &amp; cancelling</h3>
+<ul>
+  <li>Equipment set to <em>Requires Approval</em> creates <strong>pending</strong> bookings. Click one, then <span class="lbl g">Approve</span> or <span class="lbl r">Deny</span> with a reason; the booker is notified.</li>
+  <li><strong>Move</strong> a booking by dragging it; drag its top or bottom edge to change the time. A lab user can move only their own.</li>
+  <li><strong>Cancel</strong> is possible until the booking starts. Lab users should cancel what they will not use, so others can book it.</li>
+  <li><strong>Edit</strong> is possible until it ends; a booking in progress can be extended. <strong>A finished booking is locked</strong> — only admins can correct it.</li>
+  <li><strong>View lab user</strong> (above the calendar) shows one person's bookings.</li>
+  <li>Some equipment asks for photos of the area <strong>before and after use</strong>; missing photos can block that person's future bookings.</li>
+</ul>
+<h3 id="s6-tabs">History, special treatment &amp; settings</h3>
+<ul>
+  <li><strong>History &amp; Usage</strong> — past bookings, with CSV export.</li>
+  <li><strong>Special Treatment</strong> — instructions shown to anyone booking that equipment, which they must confirm before booking.</li>
+  <li><strong>Settings</strong> (admins) — which equipment can be booked, and which needs approval.</li>
+</ul>
+</div>
+
+<!-- ══ SECTION 7 ══ -->
+<div class="sec-head" id="sec-7">
+  <div class="sec-head-num">Section 07</div>
+  <h2>📋 Task Board</h2>
+  <p class="sec-head-desc">Tasks, meetings, deadlines and reminders</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">Overview</span> <span class="tab-lbl">My Tasks</span> <span class="tab-lbl">Team</span> <span class="tab-lbl">Calendar</span> <span class="tab-lbl">Timeline</span> <span class="tab-lbl">Meetings</span> <span class="tab-lbl">Reminders</span> <span class="tab-lbl">Assign Others</span> (admins)</p>
+<ul>
+  <li><strong>My Tasks</strong> — add a task with a deadline, priority and project; click its status circle to move it along. Moving a task to done sets it to 100%. Private tasks are hidden from teammates.</li>
+  <li><strong>Out of Lab</strong> (My Tasks sidebar) — mark days you will be away; they show as a red ✕ on the calendars.</li>
+  <li><strong>Team</strong> — every lab manager's tasks on one board.</li>
+  <li><strong>Timeline</strong> — each task as a bar from start to deadline, grouped by project. Link tasks ("waits on") to see the <strong>critical path</strong> — the chain that decides the finish date. Tasks without dates are listed as Undated.</li>
+  <li><strong>Meetings</strong> — schedule a meeting, then add action items for that date; the live drawing board lets you sketch together.</li>
+  <li><strong>Reminders</strong> — tick <em>Remind me daily</em> on a task to get a reminder every morning at 7am until it is done (it does not start before the task's start date).</li>
+</ul>
+</div>
+
+<!-- ══ SECTION 8 ══ -->
+<div class="sec-head" id="sec-8">
+  <div class="sec-head-num">Section 08</div>
+  <h2>📦 Supply Inventory</h2>
+  <p class="sec-head-desc">Room-by-room supply counts and reports</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">Inspection</span> <span class="tab-lbl">Export Data</span> <span class="tab-lbl">Rooms</span> <span class="tab-lbl">Supplies</span> <span class="tab-lbl">Import</span> <span class="tab-lbl">Settings</span></p>
+<ol class="steps">
+  <li><strong>Inspection</strong> — pick a room and count each supply. The box starts at the last count (grey); leave it untouched to keep that number.</li>
+  <li>A count below the minimum asks how many need ordering before you move on.</li>
+  <li>On the results screen, <span class="lbl g">Save &amp; next room</span> starts the next room that has supplies.</li>
+</ol>
+<ul>
+  <li><strong>Export Data</strong> — one inspection or the full history, as Excel or PDF, with clickable purchase links. <span class="lbl">Edit</span> corrects a count afterwards.</li>
+  <li><strong>Rooms / Supplies</strong> — card grids with photos; supplies are grouped by room. Each supply has a unit and a minimum. <strong>Import</strong> loads a list from Excel.</li>
+</ul>
+</div>
+
+<!-- ══ SECTION 9 ══ -->
+<div class="sec-head" id="sec-9">
+  <div class="sec-head-num">Section 09</div>
+  <h2>💬 Lab Messages</h2>
+  <p class="sec-head-desc">Conversations kept as threads</p>
+</div>
+<div class="sec-body">
+<ul>
+  <li>Start a message, then reply inside its thread; attach a file or photo to a message or a reply.</li>
+  <li>You are told about replies in the app, and by email if you turn that on in <strong>Profile → Notifications</strong>.</li>
+  <li>Choose a background for the message board.</li>
+</ul>
+</div>
+
+<!-- ══ SECTION 10 ══ -->
+<div class="sec-head" id="sec-10">
+  <div class="sec-head-num">Section 10</div>
+  <h2>🧪 {{PROJ}}</h2>
+  <p class="sec-head-desc">Projects, sub projects, material folders, reductions and labels</p>
+</div>
+<div class="sec-body">
+<p>Sidebar: <span class="tab-lbl">Material Inventory</span> <span class="tab-lbl">Tested Materials</span> <span class="tab-lbl">Manage Projects</span> <span class="tab-lbl">Material Types</span><!--labhive--> <span class="tab-lbl">Project Test Results</span> <span class="tab-lbl">Workspace</span> <span class="tab-lbl">Project Members</span><!--/labhive--></p>
+<p>The <strong>Projects · Materials · Search</strong> row switches between project cards, every material, and search. Lab users see the projects they are assigned to. <strong>Manage Projects</strong> creates projects and assigns lab users; <strong>Material Types</strong> sets the types offered when adding a material.</p>
+<h3 id="s10-sub">Sub projects</h3>
+<p>A project can be split into <strong>sub projects</strong> (optional), such as MIX or #2:</p>
+<p style="font-family:monospace;font-size:13px;background:#f4f6fb;padding:8px 12px;border-radius:6px">project → sub project → material folder → reductions</p>
+<ul>
+  <li>Open a project and its <strong>Sub projects</strong> tab. Add sub projects (up to 20 characters — the name is printed on the label), then tick the material folders that belong to each and click <span class="lbl g">Save changes</span>.</li>
+  <li>A folder can be in <strong>several</strong> sub projects; it then gets its own colour wherever it appears. Folders not ticked anywhere stay on the main project.</li>
+  <li>A project without sub projects shows a one-time "New: sub projects" message to everyone who can work on it.</li>
+  <li>A sub project can be removed only once no folder is connected to it.</li>
+</ul>
+<h3 id="s10-mat">Materials &amp; folders</h3>
+<ul>
+  <li>Open a project card; <span class="lbl g">Add material to …</span> appears. The first question is <strong>Sub project</strong> (required, main project last). The rest — name, PI, type, source, quantity, location, dates and photos — is as before.</li>
+  <li>Editing a material shows its sub projects as tick boxes.</li>
+  <li>The small sign beside <strong>2 · Project Materials</strong> opens the <strong>folders page</strong>: project → sub projects → folders → reductions as a tree, with the project info in the left sidebar. Click a folder to see its details below.</li>
+  <li><strong>Non-Project Material</strong> (Materials view) is for material that belongs to no project.</li>
+</ul>
+<h3 id="s10-red">Material reduction</h3>
+<p><span class="lbl">Material Reduction</span> splits a material into new ones — for example fractionation into sieve sizes. Each fraction becomes its own material, with its own barcode, quantity, location and label, listed under its parent's <strong>Material Reduction</strong> tab (never as a separate card). Fractions follow their parent's sub projects.</p>
+<h3 id="s10-labels">Labels &amp; tested samples</h3>
+<ul>
+  <li>Every material has a printable <strong>4×6 label</strong> with its own barcode and QR code. It lists Project info (with the sub project), Original Material, and — on a reduction — Reduced Material.</li>
+  <li>A <strong>tested sample</strong> gets its own label and identity: use the <strong>Tested</strong> pill (one label for samples from one or more projects), or the <em>Tested materials label</em> tab on a material. <strong>Tested Materials</strong> in the sidebar lists them all.</li>
+</ul>
+<!--labhive--><ul><li><strong>Project Test Results</strong> — record results and attach their files. <strong>Workspace</strong> — charts and analysis of the results. <strong>Project Members</strong> — team up so you share project data.</li></ul><!--/labhive-->
+</div>
+
+<!-- ══ SECTION 11 ══ -->
+<div class="sec-head" id="sec-11">
+  <div class="sec-head-num">Section 11</div>
+  <h2>🔲 QR Labels</h2>
+  <p class="sec-head-desc">Print equipment and material labels</p>
+</div>
+<div class="sec-body">
+<p>Tabs: <span class="tab-lbl">Equipment Barcode</span> <span class="tab-lbl">Records</span> <span class="tab-lbl">Material Labels</span> <span class="tab-lbl">Summary</span></p>
+<ul>
+  <li><strong>Equipment Barcode</strong> — make and print a QR label for an instrument. Labels print in black and white on any printer.</li>
+  <li><strong>Records</strong> — pick several instruments and print their labels together.</li>
+  <li><strong>Material Labels</strong> — print or reprint a project material's 4×6 label.</li>
+  <li><strong>Summary</strong> — materials by type across projects.</li>
+</ul>
+</div>
+
+<!-- ══ SECTION 12 ══ -->
+<div class="sec-head" id="sec-12">
+  <div class="sec-head-num">Section 12</div>
+  <h2>👤 Profile &amp; Account Settings</h2>
+  <p class="sec-head-desc">Your details, password, dashboard and notifications</p>
+</div>
+<div class="sec-body">
+<p>Click your name at the top right, or the Profile card.</p>
+<ul>
+  <li><strong>My Info</strong> — name, nickname, photo or avatar, and contact details.</li>
+  <li><strong>Password</strong> — change your password (at least 6 characters).</li>
+  <li><strong>Dashboard Icons</strong> — choose which cards appear on your dashboard. You can only choose from the modules your organization has given you.</li>
+  <li><strong>Notifications</strong> — for each kind of event, choose in-app and/or email: bookings, training decisions, tasks and comments, meetings, deadline and daily reminders, messages, icons granted, and invitations.</li>
+  <!--labhive--><li><strong>Storage</strong> — where your personal files are saved: LabHive cloud, Google Drive, OneDrive, or your own server (WebDAV). Only future uploads move.</li><!--/labhive-->
+  <li><strong>Delete Account</strong> — ask for your account to be removed; an admin reviews the request.</li>
+</ul>
+</div>
+
+<!-- ══ QUICK REFERENCE ══ -->
+<div class="sec-head" id="sec-ref" style="margin-top:40px;">
+  <div class="sec-head-num">Quick Reference</div>
+  <h2>★ Common Tasks</h2>
+  <p class="sec-head-desc">Where to go for the everyday jobs</p>
+</div>
+<div class="sec-body">
+<table>
+  <tr><th>Task</th><th>Where</th></tr>
+  <tr><td>Add a lab user</td><td>Lab Management → Lab Users → Add</td></tr>
+  <tr><td>Approve a certificate</td><td>Training Records → the person's card → Lab User Documents</td></tr>
+  <tr><td>Approve a safety step</td><td>Training Records → the person's card → Safety</td></tr>
+  <!--ict--><tr><td>Approve vehicle forms / confirm a vehicle</td><td>Training Records → Vehicle → Use agreement / Training records</td></tr><!--/ict-->
+  <tr><td>Assign a locker</td><td>Training Records → Lab User Locker → Locker requests → Assign</td></tr>
+  <tr><td>Approve or deny a booking</td><td>Booking Equipment → click the pending booking</td></tr>
+  <tr><td>Decide what lab users see of an instrument</td><td>Equipment &amp; Maintenance → Edit → Lab user access</td></tr>
+  <tr><td>Add a sub project</td><td>{{PROJ}} → open the project → Sub projects</td></tr>
+  <tr><td>Split a material by sieve size</td><td>{{PROJ}} → open the project → Material Reduction</td></tr>
+  <tr><td>Print a material label</td><td>The material → its label tab, or QR Labels → Material Labels</td></tr>
+  <tr><td>Export everyone's records</td><td>Lab Management → Export Data</td></tr>
+  <tr><td>Run a supply inspection</td><td>Supply Inventory → Inspection</td></tr>
+  <tr><td>Take a guided tour again</td><td>The ? at the top right → Guided tours</td></tr>
+  <tr><td>Report a problem</td><td>Sara (bottom right) → Report a problem</td></tr>
+</table>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  {{LOGO}}
+  <strong style="color:#0d47a1; font-size:13px;">{{APP}} Platform</strong> — Lab Manager User Guide v3.0<br>
+  {{FOOTER_META}}<br>
+  <br>For support, visit <strong style="color:#0d47a1;">{{URL}}/?support=1</strong>
+</div>
+</div><!-- /page -->
+</body>
+</html>

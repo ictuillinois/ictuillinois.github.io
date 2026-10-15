@@ -21,7 +21,7 @@ function LabManagerGuidePanel() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text1)' }}>Lab Manager Guide</div>
-          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>ICT-Lab Platform — Version 2.0, August 2026</div>
+          <div style={{ fontSize: 13, color: 'var(--text3)', marginTop: 2 }}>ICT-Lab Platform — Version 3.0, October 2026</div>
         </div>
         <a href={PDF_URL} download="ICT-Lab-Manager-Guide.pdf"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'var(--accent)', color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
