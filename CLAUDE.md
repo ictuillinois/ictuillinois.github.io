@@ -2003,3 +2003,12 @@ sets the store's `pendingTour`, which that screen starts (BookingEquipment
 watches for `'booking'`). **To add a tour:** one entry in TOURS + a
 `pendingTour` check on its screen. The page's own "?" help panel can still
 offer its tour (`HelpPanel onTour`).
+
+## The page "?" sits beside the green tip banner (Oct 2026)
+
+While a screen's green tip banner (`ModuleTip`, drawn by Layout above every
+screen) is showing, that screen's "?" help button is drawn at the banner's
+right, on the same row, and the in-page copy steps aside
+(`HelpPanel placement`, store `moduleTipScreen`). After "Got it" the banner
+is gone and the "?" is back in the page header. A screen with a guided tour
+(lib/tours.js) still offers it from the banner's "?".

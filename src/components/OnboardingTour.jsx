@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { TOURS, startTour } from '../lib/tours'
+import HelpPanel from './HelpPanel'
+import { useAppStore } from '../store/useAppStore'
 
 // ── Tour card definitions ──────────────────────────────────────────────────
 
@@ -105,6 +107,15 @@ export function ModuleTip({ screen, userId }) {
   const key = `ictlab_tip_${userId}_${screen}`
   const [visible, setVisible] = useState(() => !!tip && localStorage.getItem(key) !== 'seen')
 
+  // Tell HelpPanel the banner is up, so this screen's "?" moves beside it
+  const setModuleTipScreen = useAppStore(st => st.setModuleTipScreen)
+  const shown = visible && !!tip
+  useEffect(() => {
+    setModuleTipScreen(shown ? screen : null)
+    return () => setModuleTipScreen(null)
+  }, [shown, screen])
+  const tour = TOURS.find(t => t.screen === screen)
+
   if (!visible || !tip) return null
 
   function dismiss() {
@@ -113,8 +124,9 @@ export function ModuleTip({ screen, userId }) {
   }
 
   return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 16 }}>
     <div style={{
-      marginBottom: 16,
+      flex: 1, minWidth: 0,
       background: 'linear-gradient(135deg, #eaf7f2 0%, #f0fdf9 100%)',
       border: '1px solid #6ee7c3',
       borderLeft: '4px solid #1D9E75',
@@ -135,6 +147,8 @@ export function ModuleTip({ screen, userId }) {
         onClick={dismiss}
         style={{ flexShrink: 0, background: '#bbf7d0', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11, fontWeight: 700, color: '#14532d', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', marginTop: 1 }}
       >Got it ✓</button>
+    </div>
+    <HelpPanel screen={screen} placement="tip" onTour={tour ? () => startTour(tour) : undefined} />
     </div>
   )
 }

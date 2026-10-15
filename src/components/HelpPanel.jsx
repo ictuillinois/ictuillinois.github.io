@@ -180,12 +180,16 @@ const HELP_CONTENT = {
 
 // onTour: a screen with a guided tour (Booking Equipment) offers it here, so
 // it can be replayed any time.
-export default function HelpPanel({ screen, onTour }) {
-  const { session } = useAppStore()
+// placement: 'page' (in the screen's own header) or 'tip' (beside the green
+// tip banner, drawn by ModuleTip). While the banner shows, the page copy
+// steps aside, so the "?" shares the banner's row instead of taking its own.
+export default function HelpPanel({ screen, onTour, placement = 'page' }) {
+  const { session, moduleTipScreen } = useAppStore()
   const [open, setOpen] = useState(false)
   const [showCS, setShowCS] = useState(false)
   const help = HELP_CONTENT[screen]
   if (!help) return null
+  if (placement === 'page' && moduleTipScreen === screen) return null
 
   const isSolo = session?.loginMode === 'solo'
   const role = session?.role

@@ -76,6 +76,10 @@ export const useAppStore = create((set, get) => ({
   setPendingProfileTab: (tab) => set({ pendingProfileTab: tab }),
   // A guided tour to start on arrival at its screen (lib/tours.js)
   pendingTour: null,
+  // The screen whose green tip banner is showing: its "?" sits beside the
+  // banner instead of in the page (HelpPanel placement)
+  moduleTipScreen: null,
+  setModuleTipScreen: (screen) => set({ moduleTipScreen: screen }),
   setPendingTour: (key) => set({ pendingTour: key }),
   pendingBookingNotif: null,
   setPendingBookingNotif: (n) => set({ pendingBookingNotif: n }),
