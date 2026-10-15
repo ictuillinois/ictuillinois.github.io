@@ -729,7 +729,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
   }
 
   return (
-    <div className='booking-week-scroll' style={{ userSelect: 'none', overflowY: 'auto', overflowX: 'auto', maxHeight: 'calc(100vh - 240px)' }}>
+    <div className='booking-week-scroll' data-hour-px={2 * SLOT_H} style={{ userSelect: 'none', overflowY: 'auto', overflowX: 'auto', maxHeight: 'calc(100vh - 240px)' }}>
 
       {/* Sticky header row */}
       <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, 1fr)', minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
@@ -765,7 +765,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
             ? Math.min(TOTAL_H, (now.getHours() * 60 + now.getMinutes()) / 30 * SLOT_H)
             : 0
           return (
-          <div key={di} ref={el => colRefs.current[di] = el}
+          <div key={di} ref={el => colRefs.current[di] = el} data-tour-day={isDayPast ? 'past' : 'open'}
             style={{ position: 'relative', height: TOTAL_H, borderLeft: '1px solid var(--border)', cursor: (canBook && !isDayPast) ? 'crosshair' : 'default' }}
             onMouseDown={e => handleMouseDown(e, di)}
             onTouchStart={e => handleTouchStart(e, di)}>
@@ -3122,7 +3122,7 @@ function BookingCalendar({ session }) {
                 </div>
               )}
               {selectedEq.length > 1 && !multiDraftMode && (
-                <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
+                <div data-tour="multi" style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
                   <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 6 }}>📅 {selectedEq.length} equipment selected — how do you want to book them?</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     {[{ v: true, l: 'Same time for all' }, { v: false, l: 'One by one, each its own time' }].map(o => (
