@@ -60,6 +60,16 @@ jobs:
         with:
           version: latest
 
+      - name: Prepare the AWS key
+        env:
+          ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          SECRET: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          # A pasted key can carry a line break, which AWS rejects outright.
+          ID=$(printf %s "$ID" | tr -d '[:space:]'); SECRET=$(printf %s "$SECRET" | tr -d '[:space:]')
+          echo "::add-mask::$ID"; echo "::add-mask::$SECRET"
+          { echo "AWS_ACCESS_KEY_ID=$ID"; echo "AWS_SECRET_ACCESS_KEY=$SECRET"; } >> "$GITHUB_ENV"
+
       - name: Build the database address
         env:
           DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -86,9 +96,6 @@ jobs:
           fi
 
       - name: Download the backup
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp "s3://$BUCKET/backups/$WEEK/" pkg --recursive --only-show-errors
           [ -f pkg/manifest.json ] || { echo "No backup found at backups/$WEEK/"; exit 1; }
@@ -102,8 +109,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ env.LIVE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
         run: |
           STAMP="pre-restore-$(date -u +%Y-%m-%d-%H%M)"
           scripts/backup/dump.sh "safety/$STAMP"

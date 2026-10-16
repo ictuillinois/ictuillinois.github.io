@@ -34,6 +34,16 @@ jobs:
         with:
           version: latest
 
+      - name: Prepare the AWS key
+        env:
+          ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          SECRET: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          # A pasted key can carry a line break, which AWS rejects outright.
+          ID=$(printf %s "$ID" | tr -d '[:space:]'); SECRET=$(printf %s "$SECRET" | tr -d '[:space:]')
+          echo "::add-mask::$ID"; echo "::add-mask::$SECRET"
+          { echo "AWS_ACCESS_KEY_ID=$ID"; echo "AWS_SECRET_ACCESS_KEY=$SECRET"; } >> "$GITHUB_ENV"
+
       - name: Build the database address
         env:
           DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -54,9 +64,6 @@ jobs:
           scripts/backup/dump.sh "pkg/$WEEK"
 
       - name: Upload to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp "pkg/$WEEK" "s3://$BUCKET/backups/$WEEK/" --recursive --only-show-errors
           echo "saved to s3://$BUCKET/backups/$WEEK/"
