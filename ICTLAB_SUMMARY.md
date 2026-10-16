@@ -49,7 +49,8 @@ git push
 
 **GitHub push authentication:** The org has SAML SSO enforced. VS Code OAuth occasionally expires and blocks push. Use the PAT directly in the remote URL if that happens:
 ```bash
-git remote set-url origin https://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@github.com/ictuillinois/ictuillinois.github.io.git
+git remote set-url origin https://github.com/ictuillinois/ictuillinois.github.io.git
+# Sign-in comes from the macOS Keychain (credential.helper osxkeychain). Never put a token in a URL or a file: this repo is public.
 git push
 ```
 
