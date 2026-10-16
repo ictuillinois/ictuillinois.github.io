@@ -2052,7 +2052,10 @@ manifest.json. Kept 90 days (S3 lifecycle rule `backups-keep-12-weeks`);
 bucket Versioning is on. Result → a `backup` alert in the super admin bell.
 
 `.github/workflows/restore.yml` — "Restore ICT-Lab": week + target + type
-RESTORE. `this-project` takes a safety backup (backups/pre-restore-…) first,
+RESTORE. Default target `test-run`: GitHub starts a temporary local Supabase
+(supabase start) in the job, restores into it, checks every count, and
+discards it — how to prove a backup works without a third project (the free
+plan allows two). `this-project` takes a safety backup (backups/pre-restore-…) first,
 then wipes public + auth and loads the week in ONE transaction
 (scripts/backup/wipe.sql + data), re-uploads files, and checks every table's
 row count against the backup. `new-project` builds a fresh Supabase project

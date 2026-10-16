@@ -3,6 +3,10 @@
 # Actions → "Restore ICT-Lab" → Run workflow → type the week (the folder name,
 # e.g. 2026-10-25), choose where to restore, type RESTORE to confirm.
 #
+#   test-run      (default) Restores the week into a TEMPORARY Supabase that
+#                 GitHub starts inside this job, checks every table and file
+#                 against the backup, and throws it away. Touches nothing
+#                 real — use it to prove a backup can be restored.
 #   this-project  Replaces ALL data, logins and Storage files of the live
 #                 ICT-Lab project with that week's. A safety backup of the
 #                 current state is taken first (backups/pre-restore-<time>/),
@@ -23,8 +27,8 @@ on:
       target:
         description: 'Where to restore'
         type: choice
-        options: [this-project, new-project]
-        default: this-project
+        options: [test-run, this-project, new-project]
+        default: test-run
       confirm:
         description: 'Type RESTORE to confirm'
         required: true
@@ -81,7 +85,19 @@ jobs:
           echo "::add-mask::$URL"
           echo "SUPABASE_DB_URL=$URL" >> "$GITHUB_ENV"
 
+      - name: Start a temporary Supabase (test-run)
+        if: inputs.target == 'test-run'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sb" && cd "$RUNNER_TEMP/sb"
+          supabase init > /dev/null
+          supabase start > /dev/null
+          eval "$(supabase status -o env)"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          { echo "T_DB=$DB_URL"; echo "T_URL=$API_URL"; echo "T_KEY=$SERVICE_ROLE_KEY"; } >> "$GITHUB_ENV"
+          echo "temporary Supabase is up (thrown away when this job ends)"
+
       - name: Choose the target project
+        if: inputs.target != 'test-run'
         env:
           LIVE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEW_DB: ${{ secrets.RESTORE_DB_URL }}
