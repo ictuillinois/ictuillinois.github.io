@@ -69,8 +69,16 @@ jobs:
           ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
           SECRET: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
         run: |
-          # A pasted key can carry a line break, which AWS rejects outright.
-          ID=$(printf %s "$ID" | tr -d '[:space:]'); SECRET=$(printf %s "$SECRET" | tr -d '[:space:]')
+          # A pasted key can carry a line break, or a whole line of the .csv.
+          # Take the parts that have the shape of an AWS key and say so if
+          # there are none (lengths only — never the values).
+          RAW_ID="$ID"; RAW_SECRET="$SECRET"
+          ID=$(printf %s "$RAW_ID" | grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' | head -1 || true)
+          SECRET=$(printf %s "$RAW_SECRET" | grep -oE '[A-Za-z0-9/+]{40}' | head -1 || true)
+          [ -n "$ID" ] || { echo "BACKUP_AWS_ACCESS_KEY_ID has no AWS key ID in it (expected AKIA + 16 characters; it holds ${#RAW_ID} characters). Paste only the Access key ID."; exit 1; }
+          [ -n "$SECRET" ] || { echo "BACKUP_AWS_SECRET_ACCESS_KEY has no 40-character secret in it (it holds ${#RAW_SECRET} characters). Paste only the Secret access key."; exit 1; }
+          [ "${#RAW_ID}" -eq 20 ] || echo "note: the access key ID secret holds ${#RAW_ID} characters, not 20 — using the key found inside it"
+          [ "${#RAW_SECRET}" -eq 40 ] || echo "note: the secret key secret holds ${#RAW_SECRET} characters, not 40 — using the key found inside it"
           echo "::add-mask::$ID"; echo "::add-mask::$SECRET"
           { echo "AWS_ACCESS_KEY_ID=$ID"; echo "AWS_SECRET_ACCESS_KEY=$SECRET"; } >> "$GITHUB_ENV"
 
