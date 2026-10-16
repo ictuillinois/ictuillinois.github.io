@@ -60,16 +60,26 @@ jobs:
         with:
           version: latest
 
+      - name: Build the database address
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          [ -n "$DB_PASSWORD" ] || { echo "Add the secret SUPABASE_DB_PASSWORD (the database password only)."; exit 1; }
+          # Built here, not stored as one long secret: only the password is a
+          # secret, and encoding it means any character in it is safe.
+          URL=$(node -e 'console.log(`postgresql://postgres.ilqnwprvxwbhvrjstwsd:${encodeURIComponent(process.argv[1])}@aws-1-us-west-2.pooler.supabase.com:5432/postgres`)' "$DB_PASSWORD")
+          echo "::add-mask::$URL"
+          echo "SUPABASE_DB_URL=$URL" >> "$GITHUB_ENV"
+
       - name: Choose the target project
         env:
-          LIVE_DB: ${{ secrets.SUPABASE_DB_URL }}
           LIVE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEW_DB: ${{ secrets.RESTORE_DB_URL }}
           NEW_URL: ${{ secrets.RESTORE_SUPABASE_URL }}
           NEW_KEY: ${{ secrets.RESTORE_SERVICE_ROLE_KEY }}
         run: |
           if [ "${{ inputs.target }}" = "this-project" ]; then
-            { echo "T_DB=$LIVE_DB"; echo "T_URL=$LIVE_SUPABASE_URL"; echo "T_KEY=$LIVE_KEY"; } >> "$GITHUB_ENV"
+            { echo "T_DB=$SUPABASE_DB_URL"; echo "T_URL=$LIVE_SUPABASE_URL"; echo "T_KEY=$LIVE_KEY"; } >> "$GITHUB_ENV"
           else
             [ -n "$NEW_DB" ] && [ -n "$NEW_URL" ] && [ -n "$NEW_KEY" ] || { echo "Add the secrets RESTORE_DB_URL, RESTORE_SUPABASE_URL and RESTORE_SERVICE_ROLE_KEY for the new project first."; exit 1; }
             { echo "T_DB=$NEW_DB"; echo "T_URL=$NEW_URL"; echo "T_KEY=$NEW_KEY"; } >> "$GITHUB_ENV"
@@ -90,7 +100,6 @@ jobs:
       - name: Safety backup of the current state
         if: inputs.target == 'this-project'
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ env.LIVE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}

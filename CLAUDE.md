@@ -2060,7 +2060,9 @@ row count against the backup. `new-project` builds a fresh Supabase project
 
 Secrets (GitHub → Actions): BACKUP_AWS_ACCESS_KEY_ID / _SECRET_ACCESS_KEY (IAM
 user `ictlab-backup`, policy `ictlab-backups-only`: Put/Get/List on
-`ictlab-files/backups/*` only, no delete), SUPABASE_DB_URL (session pooler),
+`ictlab-files/backups/*` only, no delete), SUPABASE_DB_PASSWORD (the password ONLY — the
+workflow builds the session-pooler address and URL-encodes it; a hand-edited
+full connection string failed twice),
 SUPABASE_SERVICE_ROLE_KEY. The repo is PUBLIC: workflow steps print counts
 only. `s3-presign` refuses `backups/`, so the app can never reach a backup.
 Not in the package: personal files already in S3 (protected by Versioning),

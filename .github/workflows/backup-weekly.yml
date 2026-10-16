@@ -34,9 +34,19 @@ jobs:
         with:
           version: latest
 
+      - name: Build the database address
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          [ -n "$DB_PASSWORD" ] || { echo "Add the secret SUPABASE_DB_PASSWORD (the database password only)."; exit 1; }
+          # Built here, not stored as one long secret: only the password is a
+          # secret, and encoding it means any character in it is safe.
+          URL=$(node -e 'console.log(`postgresql://postgres.ilqnwprvxwbhvrjstwsd:${encodeURIComponent(process.argv[1])}@aws-1-us-west-2.pooler.supabase.com:5432/postgres`)' "$DB_PASSWORD")
+          echo "::add-mask::$URL"
+          echo "SUPABASE_DB_URL=$URL" >> "$GITHUB_ENV"
+
       - name: Make the backup package
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           WEEK=$(date -u +%Y-%m-%d)
