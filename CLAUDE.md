@@ -2029,3 +2029,15 @@ LabHive branding in ICT-Lab. Add real ones with
 `scripts/take-guide-screenshots.mjs` (needs a manual sign-in).
 ICT = **Illinois Center for Transportation** (v2.0 wrongly said "Illinois
 Consolidated Technologies Lab").
+
+## s3-presign: signed-in users only, never `backups/` (Oct 2026)
+
+`supabase/functions/s3-presign` hands out S3 links for `ictlab-files`. It had
+NO caller check and accepted any key, so anyone with the public anon key could
+list, download or delete every file in the bucket. It now requires a signed-in
+user (`auth.getUser()` — the anon key is not a user) and refuses reserved
+folders (`RESERVED`, today `backups/`), "..", absolute paths, and leaves
+reserved keys out of list results. `backups/` holds the weekly database
+backups (everyone's data + password hashes). **Keep both checks in any change
+to this function.** Deployed by pasting into Supabase → Edge Functions.
+Open gap: any signed-in user may still delete any non-reserved key.
