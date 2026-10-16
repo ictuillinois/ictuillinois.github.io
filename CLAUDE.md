@@ -2041,3 +2041,27 @@ reserved keys out of list results. `backups/` holds the weekly database
 backups (everyone's data + password hashes). **Keep both checks in any change
 to this function.** Deployed by pasting into Supabase → Edge Functions.
 Open gap: any signed-in user may still delete any non-reserved key.
+
+## Weekly backup + one-click restore (ICT-Lab, Oct 2026)
+
+`.github/workflows/backup-weekly.yml` — Sundays 08:17 UTC (and "Run workflow"
+any time) → `s3://ictlab-files/backups/<YYYY-MM-DD>/`: roles.sql, schema.sql,
+data.sql.gz (public + auth, so logins survive), cron_jobs.json,
+row_counts.json, files/ (every Supabase Storage file + bucket settings),
+manifest.json. Kept 90 days (S3 lifecycle rule `backups-keep-12-weeks`);
+bucket Versioning is on. Result → a `backup` alert in the super admin bell.
+
+`.github/workflows/restore.yml` — "Restore ICT-Lab": week + target + type
+RESTORE. `this-project` takes a safety backup (backups/pre-restore-…) first,
+then wipes public + auth and loads the week in ONE transaction
+(scripts/backup/wipe.sql + data), re-uploads files, and checks every table's
+row count against the backup. `new-project` builds a fresh Supabase project
+(needs RESTORE_DB_URL / RESTORE_SUPABASE_URL / RESTORE_SERVICE_ROLE_KEY).
+
+Secrets (GitHub → Actions): BACKUP_AWS_ACCESS_KEY_ID / _SECRET_ACCESS_KEY (IAM
+user `ictlab-backup`, policy `ictlab-backups-only`: Put/Get/List on
+`ictlab-files/backups/*` only, no delete), SUPABASE_DB_URL (session pooler),
+SUPABASE_SERVICE_ROLE_KEY. The repo is PUBLIC: workflow steps print counts
+only. `s3-presign` refuses `backups/`, so the app can never reach a backup.
+Not in the package: personal files already in S3 (protected by Versioning),
+Edge Functions and their secrets (code is in git).

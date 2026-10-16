@@ -1,0 +1,70 @@
+# Weekly backup of ICT-Lab (data, logins and Supabase Storage files) to
+# s3://ictlab-files/backups/<date>/ — kept 90 days by an S3 lifecycle rule.
+# Restore with the "Restore ICT-Lab" workflow. Scripts: scripts/backup/.
+# This repo is PUBLIC: steps print counts only, never data or file names.
+name: Weekly backup (ICT-Lab)
+
+on:
+  schedule:
+    - cron: '17 8 * * 0'   # Sundays 08:17 UTC = 3:17am Chicago (2:17am in winter)
+  workflow_dispatch:        # "Run workflow" = back up now
+
+concurrency:
+  group: ictlab-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_URL: https://ilqnwprvxwbhvrjstwsd.supabase.co
+  BUCKET: ictlab-files
+  AWS_DEFAULT_REGION: us-east-1
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Make the backup package
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          WEEK=$(date -u +%Y-%m-%d)
+          echo "WEEK=$WEEK" >> "$GITHUB_ENV"
+          scripts/backup/dump.sh "pkg/$WEEK"
+
+      - name: Upload to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 cp "pkg/$WEEK" "s3://$BUCKET/backups/$WEEK/" --recursive --only-show-errors
+          echo "saved to s3://$BUCKET/backups/$WEEK/"
+
+      - name: Tell the super admin
+        if: always()
+        env:
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OUTCOME: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            TITLE="Weekly backup saved ($WEEK)"
+            BODY=$(node -e 'const m=require(process.argv[1]); console.log(`${m.rows_total} rows in ${m.tables} tables, ${m.auth_users} logins, ${m.storage.files} files. In S3: backups/${process.argv[2]}/`)' "$PWD/pkg/$WEEK/manifest.json" "$WEEK")
+          else
+            TITLE="Weekly backup FAILED (${WEEK:-today})"
+            BODY="Open the run to see why: $RUN_URL"
+          fi
+          node -e 'process.stdout.write(JSON.stringify({ type: "backup", title: process.argv[1], body: process.argv[2], read: false }))' "$TITLE" "$BODY" > note.json
+          curl -s -o /dev/null -w "bell: HTTP %{http_code}\n" -X POST "$SUPABASE_URL/rest/v1/admin_notifications" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" --data @note.json

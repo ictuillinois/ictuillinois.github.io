@@ -1,0 +1,132 @@
+# Restore ICT-Lab from a weekly backup (s3://ictlab-files/backups/<week>/).
+#
+# Actions → "Restore ICT-Lab" → Run workflow → type the week (the folder name,
+# e.g. 2026-10-25), choose where to restore, type RESTORE to confirm.
+#
+#   this-project  Replaces ALL data, logins and Storage files of the live
+#                 ICT-Lab project with that week's. A safety backup of the
+#                 current state is taken first (backups/pre-restore-<time>/),
+#                 and the data load is one transaction: if it fails, nothing
+#                 changes.
+#   new-project   Builds a fresh, empty Supabase project from the backup
+#                 (structure + data + files). Needs the secrets RESTORE_DB_URL,
+#                 RESTORE_SUPABASE_URL and RESTORE_SERVICE_ROLE_KEY for that
+#                 project; the website must then be pointed at it.
+name: Restore ICT-Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      week:
+        description: 'Backup folder to restore (e.g. 2026-10-25)'
+        required: true
+      target:
+        description: 'Where to restore'
+        type: choice
+        options: [this-project, new-project]
+        default: this-project
+      confirm:
+        description: 'Type RESTORE to confirm'
+        required: true
+
+concurrency:
+  group: ictlab-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  LIVE_SUPABASE_URL: https://ilqnwprvxwbhvrjstwsd.supabase.co
+  BUCKET: ictlab-files
+  AWS_DEFAULT_REGION: us-east-1
+  WEEK: ${{ inputs.week }}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check the request
+        run: |
+          [ "${{ inputs.confirm }}" = "RESTORE" ] || { echo "Type RESTORE in the confirm box to run a restore."; exit 1; }
+          echo "$WEEK" | grep -Eq '^[A-Za-z0-9_-]+$' || { echo "Week must be a backup folder name like 2026-10-25."; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Choose the target project
+        env:
+          LIVE_DB: ${{ secrets.SUPABASE_DB_URL }}
+          LIVE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEW_DB: ${{ secrets.RESTORE_DB_URL }}
+          NEW_URL: ${{ secrets.RESTORE_SUPABASE_URL }}
+          NEW_KEY: ${{ secrets.RESTORE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ inputs.target }}" = "this-project" ]; then
+            { echo "T_DB=$LIVE_DB"; echo "T_URL=$LIVE_SUPABASE_URL"; echo "T_KEY=$LIVE_KEY"; } >> "$GITHUB_ENV"
+          else
+            [ -n "$NEW_DB" ] && [ -n "$NEW_URL" ] && [ -n "$NEW_KEY" ] || { echo "Add the secrets RESTORE_DB_URL, RESTORE_SUPABASE_URL and RESTORE_SERVICE_ROLE_KEY for the new project first."; exit 1; }
+            { echo "T_DB=$NEW_DB"; echo "T_URL=$NEW_URL"; echo "T_KEY=$NEW_KEY"; } >> "$GITHUB_ENV"
+          fi
+
+      - name: Download the backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws s3 cp "s3://$BUCKET/backups/$WEEK/" pkg --recursive --only-show-errors
+          [ -f pkg/manifest.json ] || { echo "No backup found at backups/$WEEK/"; exit 1; }
+          gunzip -k pkg/data.sql.gz
+          # auth's migration bookkeeping already exists in any Supabase project
+          awk '/^COPY "auth"\."schema_migrations"/{skip=1} skip&&/^\\\.$/{skip=0; next} !skip' pkg/data.sql > pkg/data.load.sql
+          node -e 'const m=require(process.argv[1]); console.log(`backup of ${m.made_at}: ${m.rows_total} rows, ${m.auth_users} logins, ${m.storage.files} files`)' "$PWD/pkg/manifest.json"
+
+      - name: Safety backup of the current state
+        if: inputs.target == 'this-project'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ env.LIVE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          STAMP="pre-restore-$(date -u +%Y-%m-%d-%H%M)"
+          scripts/backup/dump.sh "safety/$STAMP"
+          aws s3 cp "safety/$STAMP" "s3://$BUCKET/backups/$STAMP/" --recursive --only-show-errors
+          echo "current state saved to backups/$STAMP/ — restore that folder to undo this restore"
+
+      - name: Restore the database
+        run: |
+          if [ "${{ inputs.target }}" = "this-project" ]; then
+            psql "$T_DB" -v ON_ERROR_STOP=1 --single-transaction -q \
+              -f scripts/backup/wipe.sql -f pkg/data.load.sql > /dev/null
+          else
+            psql "$T_DB" -v ON_ERROR_STOP=1 --single-transaction -q \
+              -f pkg/roles.sql -f pkg/schema.sql \
+              -c 'SET session_replication_role = replica' -f pkg/data.load.sql > /dev/null
+          fi
+          echo "database restored"
+
+      - name: Restore the files
+        env:
+          SUPABASE_URL: ${{ env.T_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.T_KEY }}
+        run: node scripts/backup/storage.mjs upload pkg/files
+
+      - name: Check it matches the backup
+        run: |
+          psql "$T_DB" -At -v ON_ERROR_STOP=1 -f scripts/backup/counts.sql > after.json
+          node -e '
+            const fs = require("fs")
+            const want = JSON.parse(fs.readFileSync("pkg/row_counts.json", "utf8"))
+            const got = JSON.parse(fs.readFileSync("after.json", "utf8"))
+            const off = Object.keys(want).filter(t => t !== "auth.schema_migrations" && Number(got[t] ?? -1) !== Number(want[t]))
+            if (off.length) { console.log(`${off.length} table(s) differ from the backup: ${off.join(", ")}`); process.exit(1) }
+            console.log(`all ${Object.keys(want).length} tables match the backup`)
+          '
