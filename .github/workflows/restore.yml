@@ -145,8 +145,13 @@ jobs:
             psql "$T_DB" -v ON_ERROR_STOP=1 --single-transaction -q \
               -f scripts/backup/wipe.sql -f pkg/data.load.sql > /dev/null
           else
+            # Roles: best effort, outside the transaction. Supabase creates its
+            # standard roles itself, and some role settings (e.g.
+            # log_min_messages) are not ours to change on a managed server.
+            psql "$T_DB" -q -f pkg/roles.sql > /dev/null 2> roles.err || true
+            echo "roles: $(grep -c ERROR roles.err || true) line(s) skipped"
             psql "$T_DB" -v ON_ERROR_STOP=1 --single-transaction -q \
-              -f pkg/roles.sql -f pkg/schema.sql \
+              -f pkg/schema.sql \
               -c 'SET session_replication_role = replica' -f pkg/data.load.sql > /dev/null
           fi
           echo "database restored"
