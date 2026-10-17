@@ -65,7 +65,11 @@ function EquipmentInfo({ equipment, session }) {
   const photoRef = useRef(null)
   const sopPdfRef = useRef(null)
 
-  useEffect(() => { load() }, [equipment.id])
+  useEffect(() => {
+    // A form left open on the previous equipment must not stay open on this one
+    setEditDetails(false); setShowVideoForm(false); setShowSopForm(false); setNewStep('')
+    load()
+  }, [equipment.id])
 
   async function load() {
     setLoading(true)
@@ -87,8 +91,11 @@ function EquipmentInfo({ equipment, session }) {
       sb.from('equipment_sop').select('*').eq('equipment_id', equipment.id).maybeSingle(),
     ])
     setDetails(det || null); setVideos(vid || []); setSop(s || null)
-    if (det) setDetailsForm({ photo_url: det.photo_url || '', website_url: det.website_url || '', notes: det.notes || '' })
-    if (s) setSopForm({ title: s.title || '', pdf_url: s.pdf_url || '', steps: s.steps || [] })
+    // Always reset, also when this equipment has nothing saved yet: with
+    // `if (det)` the forms kept the PREVIOUS equipment's photo, website,
+    // notes and SOP, and saving would have copied them onto this one.
+    setDetailsForm({ photo_url: det?.photo_url || '', website_url: det?.website_url || '', notes: det?.notes || '' })
+    setSopForm({ title: s?.title || '', pdf_url: s?.pdf_url || '', steps: s?.steps || [] })
     setLoading(false)
   }
 
