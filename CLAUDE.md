@@ -2072,3 +2072,12 @@ SUPABASE_SERVICE_ROLE_KEY. The repo is PUBLIC: workflow steps print counts
 only. `s3-presign` refuses `backups/`, so the app can never reach a backup.
 Not in the package: personal files already in S3 (protected by Versioning),
 Edge Functions and their secrets (code is in git).
+
+### Monday backup notice
+`.github/workflows/backup-notice.yml` — Mondays 9am Chicago (cron at 14:07
+and 15:07 UTC; an hour check keeps one, so daylight saving never drifts it)
+reads the newest `backups/YYYY-MM-DD/manifest.json` and inserts a `backup`
+notification for every active admin / lab manager of the ICT org: "Weekly
+backup saved ✓" with counts, or "No backup this week ⚠" if the newest is
+older than 3 days. The body ends with the backup's GitHub run URL; the bell
+opens it on click (type `backup`). Test: Run workflow with `only_email`.

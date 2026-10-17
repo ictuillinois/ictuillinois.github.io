@@ -1,0 +1,98 @@
+# Monday 9am (Chicago): tell every active lab manager and admin of ICT-Lab,
+# in their notification bell, that the weekend backup was saved — or that it
+# is missing. Clicking the notification opens the backup's GitHub run page
+# (this repo is public, so it opens without signing in; it shows counts only).
+# The super admin already gets an alert from the backup job itself.
+name: Monday backup notice (ICT-Lab)
+
+on:
+  schedule:
+    # 9:07am Chicago is 14:07 UTC in summer and 15:07 UTC in winter: run at
+    # both and let the hour check below keep exactly one.
+    - cron: '7 14,15 * * 1'
+  workflow_dispatch:
+    inputs:
+      only_email:
+        description: 'Test: send only to the account with this email (empty = everyone)'
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SUPABASE_URL: https://ilqnwprvxwbhvrjstwsd.supabase.co
+  ICT_ORG_ID: 5bab5b33-fff9-4a4a-b617-3dac179f9678
+  BUCKET: ictlab-files
+  AWS_DEFAULT_REGION: us-east-1
+
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Only at 9am Chicago (scheduled runs)
+        if: github.event_name == 'schedule'
+        run: |
+          [ "$(TZ=America/Chicago date +%H)" = "09" ] || { echo "not 9am in Chicago — the other run sends it"; echo "SKIP=1" >> "$GITHUB_ENV"; }
+
+      - name: Prepare the AWS key
+        if: env.SKIP != '1'
+        env:
+          ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          SECRET: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          ID=$(printf %s "$ID" | grep -oE '(AKIA|ASIA)[A-Z0-9]{16}' | head -1 || true)
+          SECRET=$(printf %s "$SECRET" | grep -oE '[A-Za-z0-9/+]{40}' | head -1 || true)
+          echo "::add-mask::$ID"; echo "::add-mask::$SECRET"
+          { echo "AWS_ACCESS_KEY_ID=$ID"; echo "AWS_SECRET_ACCESS_KEY=$SECRET"; } >> "$GITHUB_ENV"
+
+      - name: Find the newest backup
+        if: env.SKIP != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Weekly folders are named YYYY-MM-DD; pre-restore safety copies are not counted
+          LATEST=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix backups/ --delimiter / \
+                     --query 'CommonPrefixes[].Prefix' --output text | tr '\t' '\n' \
+                   | grep -E '^backups/[0-9]{4}-[0-9]{2}-[0-9]{2}/$' | sort | tail -1 | cut -d/ -f2 || true)
+          echo "LATEST=$LATEST" >> "$GITHUB_ENV"
+          if [ -n "$LATEST" ]; then aws s3 cp "s3://$BUCKET/backups/$LATEST/manifest.json" manifest.json --only-show-errors; fi
+          # The newest successful backup run, for the link
+          curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/backup-weekly.yml/runs?status=success&per_page=1" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=(JSON.parse(s).workflow_runs||[])[0];console.log(r?r.html_url:"")})' > run_url.txt
+          echo "newest backup: ${LATEST:-none}"
+
+      - name: Notify lab managers and admins
+        if: env.SKIP != '1'
+        env:
+          KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ONLY_EMAIL: ${{ inputs.only_email }}
+          WORKFLOW_PAGE: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/backup-weekly.yml
+        run: |
+          node <<'JS'
+          const fs = require('fs')
+          const { SUPABASE_URL, KEY, ICT_ORG_ID, LATEST, ONLY_EMAIL, WORKFLOW_PAGE } = process.env
+          const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }
+          const runUrl = fs.readFileSync('run_url.txt', 'utf8').trim() || WORKFLOW_PAGE
+          const m = fs.existsSync('manifest.json') ? JSON.parse(fs.readFileSync('manifest.json', 'utf8')) : null
+          const ageDays = LATEST ? (Date.now() - Date.parse(LATEST + 'T00:00:00Z')) / 86400000 : Infinity
+          const fresh = !!m && ageDays <= 3
+          const day = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' })
+          const title = fresh ? 'Weekly backup saved ✓' : 'No backup this week ⚠'
+          const body = fresh
+            ? `${day(LATEST)}: ${m.rows_total.toLocaleString('en-US')} rows, ${m.auth_users} logins, ${m.storage.files} files · S3 ictlab-files/backups/${LATEST}/ · ${runUrl}`
+            : `The weekend backup did not run or did not finish${LATEST ? ` (newest: ${LATEST})` : ''}. Tell the super admin. · ${WORKFLOW_PAGE}`
+          ;(async () => {
+            let q = `${SUPABASE_URL}/rest/v1/users?select=id,email&organization_id=eq.${ICT_ORG_ID}&is_active=eq.true&role=in.(admin,user)`
+            if (ONLY_EMAIL) q += `&email=ilike.${encodeURIComponent(ONLY_EMAIL.trim())}`
+            const users = await (await fetch(q, { headers: H })).json()
+            if (!Array.isArray(users)) throw new Error('could not read users: ' + JSON.stringify(users).slice(0, 200))
+            if (!users.length) { console.log('no matching lab managers or admins — nothing sent'); return }
+            const rows = users.map(u => ({ user_id: u.id, type: 'backup', title, body, read: false }))
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, { method: 'POST', headers: H, body: JSON.stringify(rows) })
+            if (!res.ok) throw new Error(`notifications: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`)
+            console.log(`${fresh ? 'backup notice' : 'MISSING-backup notice'} sent to ${users.length} account(s)`)
+          })().catch(e => { console.error(e.message); process.exit(1) })
+          JS
