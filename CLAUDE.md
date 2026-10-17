@@ -2077,7 +2077,7 @@ Edge Functions and their secrets (code is in git).
 `.github/workflows/backup-notice.yml` — Mondays 9am Chicago (cron at 14:07
 and 15:07 UTC; an hour check keeps one, so daylight saving never drifts it)
 reads the newest `backups/YYYY-MM-DD/manifest.json` and inserts a `backup`
-notification for every active admin / lab manager of the ICT org: "Weekly
+notification for every active admin / lab manager (no org filter — ICT-Lab's DB holds only ICT; 5bab5b33… is ICT's id in LabHive): "Weekly
 backup saved ✓" with counts, or "No backup this week ⚠" if the newest is
 older than 3 days. The body ends with the backup's GitHub run URL; the bell
 opens it on click (type `backup`). Test: Run workflow with `only_email`.

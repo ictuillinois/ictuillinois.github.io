@@ -22,7 +22,6 @@ permissions:
 
 env:
   SUPABASE_URL: https://ilqnwprvxwbhvrjstwsd.supabase.co
-  ICT_ORG_ID: 5bab5b33-fff9-4a4a-b617-3dac179f9678
   BUCKET: ictlab-files
   AWS_DEFAULT_REGION: us-east-1
 
@@ -73,7 +72,7 @@ jobs:
         run: |
           node <<'JS'
           const fs = require('fs')
-          const { SUPABASE_URL, KEY, ICT_ORG_ID, LATEST, ONLY_EMAIL, WORKFLOW_PAGE } = process.env
+          const { SUPABASE_URL, KEY, LATEST, ONLY_EMAIL, WORKFLOW_PAGE } = process.env
           const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }
           const runUrl = fs.readFileSync('run_url.txt', 'utf8').trim() || WORKFLOW_PAGE
           const m = fs.existsSync('manifest.json') ? JSON.parse(fs.readFileSync('manifest.json', 'utf8')) : null
@@ -85,7 +84,10 @@ jobs:
             ? `${day(LATEST)}: ${m.rows_total.toLocaleString('en-US')} rows, ${m.auth_users} logins, ${m.storage.files} files · S3 ictlab-files/backups/${LATEST}/ · ${runUrl}`
             : `The weekend backup did not run or did not finish${LATEST ? ` (newest: ${LATEST})` : ''}. Tell the super admin. · ${WORKFLOW_PAGE}`
           ;(async () => {
-            let q = `${SUPABASE_URL}/rest/v1/users?select=id,email&organization_id=eq.${ICT_ORG_ID}&is_active=eq.true&role=in.(admin,user)`
+            // No organization filter: this is ICT-Lab's own database, which holds
+            // only ICT. (5bab5b33… is ICT's id in LabHive, not here — filtering
+            // on it matched no one.)
+            let q = `${SUPABASE_URL}/rest/v1/users?select=id,email&is_active=eq.true&role=in.(admin,user)`
             if (ONLY_EMAIL) q += `&email=ilike.${encodeURIComponent(ONLY_EMAIL.trim())}`
             const users = await (await fetch(q, { headers: H })).json()
             if (!Array.isArray(users)) throw new Error('could not read users: ' + JSON.stringify(users).slice(0, 200))
@@ -93,7 +95,7 @@ jobs:
               // Say which condition excluded everyone — counts only, the logs are public
               const n = async f => (await (await fetch(`${SUPABASE_URL}/rest/v1/users?select=id${f}`, { headers: { ...H, Prefer: 'count=exact', Range: '0-0' } })).headers.get('content-range') || '').split('/')[1]
               const e = ONLY_EMAIL ? `&email=ilike.${encodeURIComponent(ONLY_EMAIL.trim())}` : ''
-              console.log(`nothing sent. accounts with that email: ${await n(e)}; active: ${await n(e + '&is_active=eq.true')}; active admin/lab manager: ${await n(e + '&is_active=eq.true&role=in.(admin,user)')}; in the ICT org id: ${await n(e + `&is_active=eq.true&role=in.(admin,user)&organization_id=eq.${ICT_ORG_ID}`)}; admins+lab managers in the org overall: ${await n(`&is_active=eq.true&role=in.(admin,user)&organization_id=eq.${ICT_ORG_ID}`)}`)
+              console.log(`nothing sent. accounts with that email: ${await n(e)}; active: ${await n(e + '&is_active=eq.true')}; active admin/lab manager: ${await n(e + '&is_active=eq.true&role=in.(admin,user)')}`)
               return
             }
             const rows = users.map(u => ({ user_id: u.id, type: 'backup', title, body, read: false }))
