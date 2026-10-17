@@ -906,8 +906,8 @@ export default function EquipmentHub() {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, flexShrink: 0 }}>#{idx + 1}</span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: selected?.id === e.id ? 600 : 500, fontSize: 13, color: selected?.id === e.id ? 'var(--accent)' : 'var(--text)' }}>{e.nickname || e.equipment_name}</div>
-                    {e.nickname && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{e.equipment_name}</div>}
+                    <div style={{ fontWeight: selected?.id === e.id ? 600 : 500, fontSize: 13, color: selected?.id === e.id ? 'var(--accent)' : 'var(--text)' }}>{e.equipment_name || e.nickname}</div>
+                    {e.nickname && e.nickname !== e.equipment_name && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{e.nickname}</div>}
                     {e.location && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{e.location}</div>}
                   </div>
                 </div>
@@ -927,8 +927,9 @@ export default function EquipmentHub() {
   ) : (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
-        {selected.nickname && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
+        {/* The equipment's name is the title; its nickname sits under it, small (Oct 2026) */}
+        <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.equipment_name || selected.nickname}</div>
+        {selected.nickname && selected.nickname !== selected.equipment_name && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.nickname}</div>}
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
         {[
