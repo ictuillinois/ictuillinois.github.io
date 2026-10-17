@@ -2055,7 +2055,9 @@ bucket Versioning is on. Result → a `backup` alert in the super admin bell.
 RESTORE. Default target `test-run`: GitHub starts a temporary local Supabase
 (supabase start) in the job, restores into it, checks every count, and
 discards it — how to prove a backup works without a third project (the free
-plan allows two). `this-project` takes a safety backup (backups/pre-restore-…) first,
+plan allows two). First passed Oct 17 2026: 103/103 tables matched, 82 files
+restored. roles.sql loads best-effort outside the transaction (a fresh
+Supabase refuses some role settings, e.g. log_min_messages). `this-project` takes a safety backup (backups/pre-restore-…) first,
 then wipes public + auth and loads the week in ONE transaction
 (scripts/backup/wipe.sql + data), re-uploads files, and checks every table's
 row count against the backup. `new-project` builds a fresh Supabase project
