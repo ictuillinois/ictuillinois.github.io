@@ -89,7 +89,13 @@ jobs:
             if (ONLY_EMAIL) q += `&email=ilike.${encodeURIComponent(ONLY_EMAIL.trim())}`
             const users = await (await fetch(q, { headers: H })).json()
             if (!Array.isArray(users)) throw new Error('could not read users: ' + JSON.stringify(users).slice(0, 200))
-            if (!users.length) { console.log('no matching lab managers or admins — nothing sent'); return }
+            if (!users.length) {
+              // Say which condition excluded everyone — counts only, the logs are public
+              const n = async f => (await (await fetch(`${SUPABASE_URL}/rest/v1/users?select=id${f}`, { headers: { ...H, Prefer: 'count=exact', Range: '0-0' } })).headers.get('content-range') || '').split('/')[1]
+              const e = ONLY_EMAIL ? `&email=ilike.${encodeURIComponent(ONLY_EMAIL.trim())}` : ''
+              console.log(`nothing sent. accounts with that email: ${await n(e)}; active: ${await n(e + '&is_active=eq.true')}; active admin/lab manager: ${await n(e + '&is_active=eq.true&role=in.(admin,user)')}; in the ICT org id: ${await n(e + `&is_active=eq.true&role=in.(admin,user)&organization_id=eq.${ICT_ORG_ID}`)}; admins+lab managers in the org overall: ${await n(`&is_active=eq.true&role=in.(admin,user)&organization_id=eq.${ICT_ORG_ID}`)}`)
+              return
+            }
             const rows = users.map(u => ({ user_id: u.id, type: 'backup', title, body, read: false }))
             const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, { method: 'POST', headers: H, body: JSON.stringify(rows) })
             if (!res.ok) throw new Error(`notifications: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`)
