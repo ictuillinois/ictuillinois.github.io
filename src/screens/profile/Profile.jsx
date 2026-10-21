@@ -3,7 +3,7 @@ import ScrollTabs from '../../components/ScrollTabs'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
 import { passwordError } from '../../lib/passwordPolicy'
 import { ROLE_LABELS, ROLE_ORDER, syncUserRoles, describeRoleChange } from '../../lib/userRoles'
-import { SAFETY_STEPS, requiredSafetySteps } from '../labsafety/safetySteps'
+import { SAFETY_STEPS, requiredSafetySteps, storedSafetySteps } from '../labsafety/safetySteps'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { applyDefaultIcons } from '../../lib/defaultIcons'
 import { generateTempPassword } from '../../lib/tempPassword'
@@ -1528,11 +1528,8 @@ export function LabUsersPanel({ toast, session }) {
   const [showModal, setShowModal] = useState(false)
   const [editLabUser, setEditLabUser] = useState(null)
   const [iconLabUser, setIconLabUser] = useState(null)
-  const [importPreview, setImportPreview] = useState(null)
-  const [importing, setImporting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const fileRef = useRef(null)
 
   useEffect(() => { load() }, [])
 
@@ -1593,7 +1590,7 @@ export function LabUsersPanel({ toast, session }) {
       if (perr) { toast(perr); return }
     }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
-    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: (form.requiredSteps?.length && form.requiredSteps.length < SAFETY_STEPS.length) ? form.requiredSteps : null, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
+    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: storedSafetySteps(form.requiredSteps), annual_resafety: form.annualResafety !== false, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
     if (!id && actualEmail) {
       try {
         const authUser = await createAuthUser(actualEmail, newPassword)
@@ -1630,45 +1627,14 @@ export function LabUsersPanel({ toast, session }) {
     toast(err ? `Could not delete: ${err}` : 'Lab user deleted.')
   }
 
-  async function parseExcel(file) {
-    const XLSX = await import('xlsx')
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = e => {
-        try {
-          const wb = XLSX.read(e.target.result, { type: 'binary' })
-          const ws = wb.Sheets[wb.SheetNames[0]]
-          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-          const items = []
-          for (let i = 1; i < rows.length; i++) {
-            const [name, email, phone, degree, year_semester, supervisor, project_group] = rows[i]
-            if (name?.trim()) items.push({ name: name.trim(), email: email||'', phone: phone||'', degree: degree||'', year_semester: year_semester||'', supervisor: supervisor||'', project_group: project_group||'' })
-          }
-          resolve(items)
-        } catch(err) { reject(err) }
-      }
-      reader.onerror = reject
-      reader.readAsBinaryString(file)
-    })
-  }
-
-  async function confirmImport() {
-    if (!importPreview) return
-    setImporting(true)
-    let added = 0
-    for (const s of importPreview) {
-      const { error } = await sb.from('users').insert({ ...s, pin: '', role: 'lab_user', is_active: true, admin_level: 0, must_change_password: true, terms_accepted_version: null })
-      if (!error) added++
-    }
-    setImportPreview(null); setImporting(false); load(); toast(`${added} labUsers imported. Set their passwords individually to activate login.`)
-  }
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labUsers.length} lab user{labUsers.length !== 1 ? 's' : ''}</div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>⬇️ Import Excel</button>
+          {/* Excel import is its own tab now (account + welcome email +
+              safety steps per person, with a history of sends and sign-ins) */}
+          <button className="btn btn-sm" onClick={() => useAppStore.getState().setSidebarSubTab('importusers')}>Import from Excel</button>
           <button className="btn btn-sm btn-primary" onClick={() => { setEditLabUser(null); setShowModal(true) }}>+ Add lab user</button>
         </div>
       </div>
@@ -1677,18 +1643,6 @@ export function LabUsersPanel({ toast, session }) {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ paddingLeft: 36, width: '100%', boxSizing: 'border-box' }} />
         {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text3)' }}>×</button>}
       </div>
-      <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={async e => { try { setImportPreview(await parseExcel(e.target.files[0])) } catch { toast('Error reading file.') } }} />
-      {importPreview && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Import preview — {importPreview.length} lab users</div>
-          {importPreview.slice(0,3).map((s,i) => <div key={i} style={{ fontSize: 13, padding: '2px 0', color: 'var(--text2)' }}>· {s.name}</div>)}
-          {importPreview.length > 3 && <div style={{ fontSize: 12, color: 'var(--text3)' }}>…and {importPreview.length - 3} more</div>}
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-            <button className="btn btn-primary btn-sm" onClick={confirmImport} disabled={importing}>{importing ? 'Importing…' : 'Import now'}</button>
-            <button className="btn btn-sm" onClick={() => setImportPreview(null)}>Cancel</button>
-          </div>
-        </div>
-      )}
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">👥</div>{search ? 'No lab users match your search.' : 'No lab users yet.'}</div>
         : (
@@ -1818,7 +1772,8 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
     selectedProjectIds: labUser.assigned_project_ids || [],
     nickname: labUser.nick_name || '',
     requiredSteps: requiredSafetySteps(labUser.required_safety_steps),
-  } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '', requiredSteps: SAFETY_STEPS.map(x => x.number) })
+    annualResafety: labUser.annual_resafety !== false,
+  } : { firstName: '', lastName: '', emailAddr: '', supervisor: '', password: '', year_semester: '', project_group: '', selectedProjectIds: [], nickname: '', requiredSteps: SAFETY_STEPS.map(x => x.number), annualResafety: true })
   const [orgProjects, setOrgProjects] = useState([])
   const [showPw, setShowPw] = useState(false)
 
@@ -1910,6 +1865,7 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
           <div style={{ fontSize:12, color:'var(--text3)', marginBottom:6, lineHeight:1.5 }}>
             All steps by default. Untick any this person does not need — a lab user
             who is rarely in the lab may only need some of the safety training.
+            After the yearly reset on Sep 1, untick steps here to excuse someone.
           </div>
           <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'8px 12px' }}>
             {SAFETY_STEPS.map(st => {
@@ -1923,16 +1879,22 @@ function LabUserModal({ labUser, session, onClose, onSave }) {
               )
             })}
           </div>
-          {/* Unticking everything is the one case that must not be taken
-              literally: it would mean no safety training at all. It saves as
-              "all steps" and says so, rather than quietly doing the opposite
-              of what a blank box looks like. */}
+          {/* Unticking everything is saved as an explicit "none required"
+              ([0]) — never as an empty value, which means all steps. Said
+              out loud, because it lets this person skip safety training. */}
           {form.requiredSteps.length === 0 && (
             <div style={{ fontSize:12, color:'#92400e', background:'#fff8f0', border:'1px solid #f59e0b', borderRadius:8, padding:'8px 10px', marginTop:6, lineHeight:1.5 }}>
-              No steps selected — this user will be required to complete <strong>all</strong> of them.
-              Tick at least one to narrow it.
+              No steps selected — this user will <strong>not</strong> need any safety training to use ICT-Lab.
             </div>
           )}
+          <div onClick={() => setForm(f => ({ ...f, annualResafety: !f.annualResafety }))}
+            style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13, cursor:'pointer', userSelect:'none', padding:'8px 12px', marginTop:8, border:'1px solid var(--border)', borderRadius:'var(--radius)' }}>
+            <input type="checkbox" readOnly checked={form.annualResafety !== false} style={{ width:'auto', flexShrink:0, marginTop:2 }} />
+            <span style={{ lineHeight:1.4 }}>
+              <strong>Yearly re-safety</strong> — on Sep 1 every year this person must pass Steps 1, 2 and 3 again
+              before ICT-Lab opens for them.
+            </span>
+          </div>
         </div>
         <div style={{ display:'flex', gap:10, marginTop:8 }}>
           <button type="button" className="btn btn-primary" onClick={()=>onSave(form, labUser?.id)}>Save</button>

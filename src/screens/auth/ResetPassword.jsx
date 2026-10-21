@@ -32,6 +32,7 @@ export default function ResetPassword({ onDone }) {
     const { data: { user } } = await sb.auth.getUser()
     if (user?.id) {
       await sb.from('users').update({ must_change_password: false }).eq('auth_id', user.id)
+      await sb.from('users').update({ password_set_at: new Date().toISOString() }).eq('auth_id', user.id).is('password_set_at', null)
     }
     setSaving(false)
     setDone(true)

@@ -2099,3 +2099,48 @@ the table. `rls_phase1.sql` re-grants every public table (except locked
 `*_backup_*` tables) to authenticated + service_role, plus anon SELECT on
 settings (sign-in page). Existing tables kept their grants; this matters for
 new tables and for a restore into a fresh project.
+
+## Import lab users + yearly re-safety (ICT-Lab, Oct 2026)
+
+Lab Management → **Import lab users** (sidebar key `importusers`, under Lab
+Users; admins + lab managers). `src/screens/labmanagement/ImportLabUsers.jsx`.
+It REPLACES the old "Import Excel" button on Lab Users (that one inserted
+names with no login) — the button there now opens this tab.
+
+- Template is a real file: `public/lab-users-template.xlsx` (download →
+  fill → upload). **Max 50 per file**, said on the page; more = more files.
+- Review: editable rows, Step 1/2/3 + Yearly re-safety ticks (header ticks
+  set a column). Invalid email, same email twice, or an email that already
+  has an account (any org) → red row, Add is blocked until fixed.
+- Accounts are made by the Edge Function **`create-lab-users`**
+  (service role; `auth.signUp` from the browser is rate-limited per IP).
+  Actions `check` / `create` / `reset`. Caller must be an active admin/lab
+  manager of the org, or the super admin.
+- Email now, or a Chicago date+time → `email_notifications_queue.send_after`.
+  `send-emails` skips rows until `send_after` and pauses 600ms between sends
+  (Resend ≈ 2 req/s). History: batches (`lab_user_imports`), per person
+  welcome status, first sign-in (`users.password_set_at`, set by
+  ForcePasswordChange / ResetPassword), safety progress. Resend = new temp
+  password (`reset`) and the older unsent email is retired (attempts 99).
+- **No-steps sentinel:** `required_safety_steps = [0]` means none required
+  (`NO_SAFETY_STEPS`, `storedSafetySteps()`); null/empty still means ALL.
+- **Self-approval:** imported users get `safety_self_approve = true`; trigger
+  `zz_safety_self_approve` (fires after `guard_training_approval_trg`) marks a
+  newly submitted step complete. Hand-added users still need approval. Managers
+  are not notified about self-approving users' submissions.
+- **Yearly re-safety:** `users.annual_resafety` (default TRUE — applies to every
+  lab user, imported or not). pg_cron `annual-safety-reset` (`5 5 1 9 *`, Sep 1
+  00:05 Chicago) runs `annual_safety_reset()`: archives progress to
+  `lab_safety_progress_history`, deletes it, sets required steps back to all,
+  notifies. Lock is immediate. To excuse someone afterwards, untick steps in
+  Lab Users → Edit. Browser "read to the end" markers carry the safety year
+  (`safetyCycleSuffix()`), so a reset is not skipped on the same laptop.
+- `guard_user_admin_fields` (users BEFORE UPDATE): non-managers cannot change
+  role / admin_level / is_active / organization_id / required_safety_steps /
+  annual_resafety / safety_self_approve / import_batch_id — users_policy lets
+  any org member update any users row.
+- Queue SELECT of other people's rows is now managers-only (welcome emails
+  hold temporary passwords).
+- SQL: `lab_user_import_setup.sql` (ICT-Lab only; after training_privacy.sql).
+  The policies are also in rls_phase1.sql + its keep array.
+- LabHive: not built yet — generic org safety steps to be decided.

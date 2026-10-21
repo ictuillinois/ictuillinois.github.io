@@ -23,7 +23,14 @@ export const ALL_SAFETY_STEP_NUMBERS = SAFETY_STEPS.map(s => s.number)
 // it, must end up with the strictest setting rather than the loosest. An empty
 // array meaning "none required" would silently let someone skip safety
 // training entirely.
+//
+// "None required" therefore has its own explicit value, NO_SAFETY_STEPS ([0]),
+// which only a deliberate untick of every step stores (Edit lab user, or the
+// Excel import). It never arises by accident.
+export const NO_SAFETY_STEPS = [0]
+
 export function requiredSafetySteps(value) {
+  if (Array.isArray(value) && value.length === 1 && Number(value[0]) === 0) return []
   if (!Array.isArray(value) || value.length === 0) return ALL_SAFETY_STEP_NUMBERS
   const valid = value
     .map(Number)
@@ -35,4 +42,13 @@ export function requiredSafetySteps(value) {
 export function safetyComplete(required, completedStepNumbers) {
   const done = new Set(completedStepNumbers)
   return requiredSafetySteps(required).every(n => done.has(n))
+}
+
+// What to store for a set of ticked steps: null = all (the default), [0] =
+// none, otherwise the ticked numbers.
+export function storedSafetySteps(ticked) {
+  const t = (ticked || []).map(Number).filter(n => ALL_SAFETY_STEP_NUMBERS.includes(n)).sort((a, b) => a - b)
+  if (t.length === 0) return NO_SAFETY_STEPS
+  if (t.length === ALL_SAFETY_STEP_NUMBERS.length) return null
+  return t
 }

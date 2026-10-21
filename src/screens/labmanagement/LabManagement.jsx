@@ -3,10 +3,12 @@ import { useAppStore } from '../../store/useAppStore'
 import { LabUsersPanel, LabManagersPanel, ApprovalRequestsPanel } from '../profile/Profile'
 import { sb } from '../../lib/supabase'
 import ExportData from './ExportData'
+import ImportLabUsers from './ImportLabUsers'
 import HelpPanel from '../../components/HelpPanel'
 
 const TAB_TITLES = {
   labusers:    'Lab Users',
+  importusers: 'Import lab users',
   labmanagers: 'Lab Managers',
   orgadmins:   'Organization Admins',
   approvals: 'Approval Requests',
@@ -42,7 +44,7 @@ export default function LabManagement() {
   const [pendingCount, setPendingCount] = useState(0)
 
   // Tabs live in the sidebar (Layout getScreenTabs 'labmanagement')
-  const tab = ['labusers', 'labmanagers', 'orgadmins', 'approvals', 'exportdata', 'guide'].includes(sidebarSubTab) ? sidebarSubTab : 'labusers'
+  const tab = ['labusers', 'importusers', 'labmanagers', 'orgadmins', 'approvals', 'exportdata', 'guide'].includes(sidebarSubTab) ? sidebarSubTab : 'labusers'
 
   useEffect(() => { loadPendingCount() }, [])
 
@@ -67,6 +69,7 @@ export default function LabManagement() {
         )}
       </div>
       {tab === 'labusers'  && <LabUsersPanel toast={toast} session={session} />}
+      {tab === 'importusers' && <ImportLabUsers session={session} toast={toast} />}
       {tab === 'labmanagers'     && <LabManagersPanel    toast={toast} session={session} role="user" />}
       {tab === 'orgadmins'       && <LabManagersPanel    toast={toast} session={session} role="admin" />}
       {tab === 'approvals' && <ApprovalRequestsPanel toast={toast} session={session} onCountChange={setPendingCount} />}

@@ -1417,14 +1417,22 @@ $b$);
 
 SELECT _apply_rls('email_notifications_queue', 'email_queue_insert',
   $b$FOR INSERT TO authenticated WITH CHECK (true)$b$);
+-- Welcome emails carry temporary passwords: other people's rows only for
+-- those who manage the organization (Oct 2026, lab_user_import_setup.sql).
 SELECT _apply_rls('email_notifications_queue', 'email_queue_select', $b$
 FOR SELECT TO authenticated
 USING (
   is_super_admin()
   OR user_id::text IN (SELECT uid::text FROM my_user_ids() AS uid)
   OR user_id::text = my_solo_id()::text
-  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_org_ids() AS oid))
+  OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
 )
+$b$);
+-- Import lab users → Send now / Change time on scheduled welcome emails
+SELECT _apply_rls('email_notifications_queue', 'email_queue_update_managers', $b$
+FOR UPDATE TO authenticated
+USING (sent = false AND (is_super_admin() OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))))
+WITH CHECK (sent = false AND (is_super_admin() OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))))
 $b$);
 
 
@@ -1543,6 +1551,18 @@ WITH CHECK (
 )
 $b$);
 
+-- Import lab users (Oct 2026): created by lab_user_import_setup.sql
+SELECT _apply_rls('lab_user_imports', 'lab_user_imports_policy', $b$
+FOR ALL TO authenticated
+USING      (is_super_admin() OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+$b$);
+-- Each Sep 1's archived safety progress: read-only, managers of the org
+SELECT _apply_rls('lab_safety_progress_history', 'lab_safety_history_read', $b$
+FOR SELECT TO authenticated
+USING (is_super_admin() OR user_id::text IN (SELECT id::text FROM users WHERE organization_id IN (SELECT oid FROM my_managed_org_ids() AS oid)))
+$b$);
+
 SELECT _apply_rls('team_workspace_invites', 'team_workspace_invites_policy', $b$
 FOR ALL TO authenticated
 USING (
@@ -1637,7 +1657,8 @@ DECLARE
     'admin_notif_insert','admin_notif_select','admin_notif_update',
     'feedback_responses_policy','notification_prefs_policy','notification_prefs_select_org',
     'support_messages_insert','support_messages_select','support_messages_update','support_messages_delete',
-    'account_deletion_policy','email_queue_insert','email_queue_select',
+    'account_deletion_policy','email_queue_insert','email_queue_select','email_queue_update_managers',
+    'lab_user_imports_policy','lab_safety_history_read',
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',
     'team_workspace_invites_policy','team_workspace_members_policy',
     'sds_documents_policy',

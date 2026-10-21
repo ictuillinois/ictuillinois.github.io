@@ -37,9 +37,16 @@ const FAQ = [
   {
     id: 'safety',
     q: 'How do I complete lab safety training?',
-    a: 'Open Training Records → Safety. The steps are:\n1. Watch the ICT safety training video\n2. Read the Laboratory Safety Guide and complete the DRS online training\n3. Watch both safety videos and pass the acknowledgement test\nA Research Engineer approves each step. Some modules stay locked until your safety training is approved.',
-    keywords: ['safety', 'lab safety', 'drs', 'safety video', 'safety training', 'acknowledgement', 'step 1', 'step 2', 'step 3', 'locked'],
+    a: 'Open Training Records → Safety. The steps are:\n1. Watch the ICT safety training video\n2. Read the Laboratory Safety Guide and complete the DRS online training\n3. Watch both safety videos and pass the acknowledgement test\nA Research Engineer approves each step. Some modules stay locked until your safety training is approved.\n\nEvery Sep 1 the safety training is renewed: you complete Steps 1, 2 and 3 again before ICT-Lab opens for you.',
+    keywords: ['safety', 'lab safety', 'drs', 'safety video', 'safety training', 'acknowledgement', 'step 1', 'step 2', 'step 3', 'locked', 'yearly', 'sep 1', 'september', 'renew'],
     followups: ['training', 'access', 'contact'],
+  },
+  {
+    id: 'import',
+    q: 'How do I add many lab users from Excel?',
+    a: 'Lab managers and admins: open Lab Management → Import lab users → New import.\n1. Download the template and fill in first name, last name, email and supervisor — up to 50 people per file (use more files for a longer list)\n2. Upload it, then edit, remove or add rows and tick the safety steps each person must do, plus Yearly re-safety\n3. Confirm, then send the welcome email now or pick a date and time\nA row whose email already has an account must be removed or changed first. Imported lab users\' completed safety steps count as approved without review. The history shows who got the email and who has signed in.',
+    keywords: ['import', 'excel', 'template', 'bulk', 'many users', 'add users', 'spreadsheet', 'xlsx', 'welcome email', 'schedule email'],
+    followups: ['safety', 'contact'],
   },
   {
     id: 'booking',

@@ -25,6 +25,10 @@ export default function ForcePasswordChange() {
     if (updateErr) { setError(updateErr.message || 'Failed to update password. Try again.'); setLoading(false); return }
 
     await sb.from('users').update({ must_change_password: false }).eq('id', session.userId)
+    // When they first chose their own password — the Import lab users history
+    // reads it. Separate, and only while empty, so a database without the
+    // column cannot stop the update above.
+    await sb.from('users').update({ password_set_at: new Date().toISOString() }).eq('id', session.userId).is('password_set_at', null)
 
     const updated = { ...session, mustChangePassword: false }
     setSession(updated)

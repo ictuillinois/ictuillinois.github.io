@@ -17,9 +17,27 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 // Safety-step submission path (Steps 1-4) must call this; before this fix
 // only Step 4 notified managers at all, so uploads from Steps 1-3 (the
 // certificates managers actually need to approve) never surfaced anywhere.
-async function notifyManagersOfSafetySubmission(orgId, uploaderName, stepLabel) {
+// "Read to the end" markers live in the browser. Every Sep 1 the yearly
+// re-safety clears everyone's progress in the database (annual_safety_reset),
+// so the markers carry the safety year too — otherwise a returning user on
+// the same laptop could skip straight past the reading. Empty for the
+// 2026-27 year so markers set before this existed still count.
+function safetyCycleSuffix() {
+  const now = new Date()
+  const year = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+  return year > 2026 ? `_c${year}` : ''
+}
+
+async function notifyManagersOfSafetySubmission(orgId, uploaderName, stepLabel, uploaderId = null) {
   if (!orgId) return
   try {
+    // Lab users added by the Excel import approve their own steps (a trigger
+    // marks the step complete on submit), so there is nothing to review.
+    // select('*'): naming the column would fail the read where it is missing.
+    if (uploaderId) {
+      const { data: me } = await sb.from('users').select('*').eq('id', uploaderId).maybeSingle()
+      if (me?.safety_self_approve) return
+    }
     const { data: managers } = await sb.from('users').select('id, email, phone')
       .eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
     if (!managers?.length) return
@@ -249,7 +267,7 @@ function PDFSafetyContent({
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(null)
 
-  const storageKey = `${localKeyBase}_done_${user?.id}`
+  const storageKey = `${localKeyBase}_done_${user?.id}${safetyCycleSuffix()}`
   const certV2Key  = `${localKeyBase}_v2_${user?.id}`
   const [hasReachedEnd, setHasReachedEnd] = useState(() => !!localStorage.getItem(storageKey))
   const [autoUpdating, setAutoUpdating]   = useState(false)
@@ -528,7 +546,7 @@ function PDFSafetyContent({
       }, { onConflict: 'user_id,step_number' })
 
       await autoSaveToDocumentsTab(user.id, certUrl, certTitle)
-      if (!autoUpdate) notifyManagersOfSafetySubmission(session.organizationId, fullName, `ICT Safety ${partLabel}`)
+      if (!autoUpdate) notifyManagersOfSafetySubmission(session.organizationId, fullName, `ICT Safety ${partLabel}`, user.id)
 
       if (!autoUpdate) doc.save(`ICT-Safety-${partLabel.replace(/\s+/g, '-')}-${fullName.replace(/\s+/g, '-')}.pdf`)
       if (autoUpdate) localStorage.setItem(certV2Key, '1')
@@ -793,7 +811,7 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage, maxPages }) {
   const [open, setOpen]           = useState(false)
   const [rendering, setRendering] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [done, setDone] = useState(() => !!localStorage.getItem(localKey))
+  const [done, setDone] = useState(() => !!localStorage.getItem(localKey + safetyCycleSuffix()))
 
   const canvasRef    = useRef(null)
   const wrapperRef   = useRef(null)
@@ -888,7 +906,7 @@ function SimplePDFViewer({ pdfPath, localKey, onLastPage, maxPages }) {
     if (!pdfDoc || n < 1 || n > effectiveLast) return
     setCurrentPage(n)
     if (n === effectiveLast && !done) {
-      localStorage.setItem(localKey, '1')
+      localStorage.setItem(localKey + safetyCycleSuffix(), '1')
       setDone(true)
       onLastPage?.()
     }
@@ -1012,7 +1030,7 @@ function Step3PolicyContent({ user, isManager, stepRow, onCertGenerated }) {
     if (upsertErr) { console.error('[LabSafety] saveProgress failed:', upsertErr); return false }
     if (allDone && !wasAllDoneBefore) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
-      notifyManagersOfSafetySubmission(session.organizationId, fullName, 'ICT Safety Compliance Documents')
+      notifyManagersOfSafetySubmission(session.organizationId, fullName, 'ICT Safety Compliance Documents', user.id)
     }
     onCertGenerated({ certificate_url: JSON.stringify(urls), submitted_at: submittedAt })
     return true
@@ -1509,7 +1527,7 @@ function Step3VideosContent({ user, isManager }) {
 
     if (r.passed && orgId) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
-      notifyManagersOfSafetySubmission(orgId, fullName, 'the Lab User Quiz (Step 3)')
+      notifyManagersOfSafetySubmission(orgId, fullName, 'the Lab User Quiz (Step 3)', userId)
     }
     setSaving(false)
   }
@@ -1657,7 +1675,7 @@ function Step4VideoContent({ user, isManager }) {
 
     if (r.passed && orgId) {
       const fullName = user?.nick_name?.trim() || [user?.name, user?.last_name].filter(Boolean).join(' ') || 'A lab user'
-      notifyManagersOfSafetySubmission(orgId, fullName, 'the Building Safety knowledge check (Step 1)')
+      notifyManagersOfSafetySubmission(orgId, fullName, 'the Building Safety knowledge check (Step 1)', userId)
     }
     setSaving(false)
   }
@@ -2010,6 +2028,12 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
 
   if (!user) return null
 
+  if (mySteps.length === 0) return (
+    <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--text2)', fontSize: 14 }}>
+      No safety steps are required for {user.name || 'this lab user'}.
+    </div>
+  )
+
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
 
@@ -2341,6 +2365,14 @@ export default function SafetyTab({ asTab = false, targetUser = null }) {
   }
 
   function handleCertGenerated(userId, stepNumber, extra) {
+    // A self-approving lab user's step is marked complete by a database
+    // trigger on submit; read it back so the screen does not say "waiting
+    // for approval" until the next reload.
+    sb.from('lab_safety_progress').select('completed').eq('user_id', userId).eq('step_number', stepNumber).maybeSingle()
+      .then(({ data }) => {
+        if (!data?.completed) return
+        setProgress(prev => ({ ...prev, [userId]: { ...(prev[userId] || {}), [stepNumber]: { ...(prev[userId]?.[stepNumber] || {}), completed: true } } }))
+      }, () => {})
     setProgress(prev => ({
       ...prev,
       [userId]: {

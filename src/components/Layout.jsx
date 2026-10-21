@@ -89,6 +89,8 @@ function getScreenTabs(screen, session) {
 
   if (screen === 'labmanagement') return [
     { key: 'labusers',  icon: '👥', label: 'Lab Users' },
+    // Under Lab Users: replaces the old Import Excel button there
+    ...(isAdmin || isLabManager ? [{ key: 'importusers', icon: '📥', label: 'Import lab users' }] : []),
     { key: 'labmanagers',     icon: '👨‍💼', label: 'Lab Managers' },
     { key: 'orgadmins',       icon: '🏛️', label: 'Organization Admins' },
     { key: 'approvals', icon: '📋', label: 'Approval Requests' },

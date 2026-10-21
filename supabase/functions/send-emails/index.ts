@@ -60,6 +60,9 @@ Deno.serve(async () => {
     .select("*")
     .eq("sent", false)
     .lt("attempts", MAX_ATTEMPTS)
+    // A scheduled email (Import lab users → "send later") waits until its
+    // time. Rows without send_after go out on the next run, as before.
+    .or(`send_after.is.null,send_after.lte.${new Date().toISOString()}`)
     .order("created_at", { ascending: true })
     .limit(BATCH);
 
@@ -71,7 +74,13 @@ Deno.serve(async () => {
   }
 
   let sent = 0, failed = 0;
+  let first = true;
   for (const row of rows ?? []) {
+    // Resend accepts about 2 requests a second. An import queues up to 50
+    // welcome emails at once; without a pause most of them came back 429 and
+    // used up an attempt each.
+    if (!first) await new Promise(r => setTimeout(r, 600));
+    first = false;
     try {
       if (!row.to_email) throw new Error("missing to_email");
 

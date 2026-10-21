@@ -11,32 +11,55 @@ import { buildEmailHtml } from './emailTemplate.js'
 const LAB_URL  = 'https://ictlab.labhive.app'
 const MAIN_URL = 'https://ict.illinois.edu'
 
-const STEPS = [
-  `<strong>ICT Lab Access Website.</strong> To access the ICT labs we use a separate
+// `required`: the safety steps this person must do (null = all three).
+// `selfApprove`: lab users added by the Excel import — their completed steps
+// count as approved at once, so the email must not promise a manager review.
+function stepsFor({ required = null, selfApprove = false } = {}) {
+  const req = Array.isArray(required) ? required.filter(n => n > 0) : [1, 2, 3]
+  const named = req.map(n => `Step ${n}`)
+  const order = named.length <= 1 ? named.join('')
+    : `${named.slice(0, -1).join(', ')}${named.length > 2 ? ',' : ''} and then ${named[named.length - 1]}`
+  const out = [
+    { html: `<strong>ICT Lab Access Website.</strong> To access the ICT labs we use a separate
    website: <a href="${LAB_URL}" style="color:#1D9E75;font-weight:600;">${LAB_URL}</a>.
    Please note this is different from the main ICT website,
    <a href="${MAIN_URL}" style="color:#1D9E75;">${MAIN_URL}</a>.`,
-
-  `When you open the ICT Lab Access website, you will be asked to enter your
+      text: `ICT Lab Access Website. To access the ICT labs we use a separate website: ${LAB_URL}. Please note this is different from the main ICT website, ${MAIN_URL}.` },
+    { html: `When you open the ICT Lab Access website, you will be asked to enter your
    temporary password — it is included in this email. Use it to log in, then
    change it to your own password.`,
-
-  `Once you log in, you will be asked to complete the required safety training
+      text: 'When you open the ICT Lab Access website, you will be asked to enter your temporary password — it is included in this email. Use it to log in, then change it to your own password.' },
+  ]
+  if (req.length === 0) {
+    out.push({ html: 'No safety training is required for your account — once you have chosen your password you can use the website straight away.',
+               text: 'No safety training is required for your account — once you have chosen your password you can use the website straight away.' })
+  } else {
+    out.push(
+      { html: `Once you log in, you will be asked to complete the required safety training
    before you can reach the homepage and use the website features.`,
-
-  `Under the <strong>Safety</strong> tab, please start with Step 1, followed by
-   Step 2, and then Step 3.`,
-
-  `Once you have uploaded the required certifications and passed the knowledge
+        text: 'Once you log in, you will be asked to complete the required safety training before you can reach the homepage and use the website features.' },
+      { html: `Under the <strong>Safety</strong> tab, please ${req.length === 1 ? `complete ${order}` : `start with ${order}`}.`,
+        text: `Under the Safety tab, please ${req.length === 1 ? `complete ${order}` : `start with ${order}`}.` },
+      selfApprove
+        ? { html: `Once you have uploaded the required certifications and passed the knowledge
+   tests, your access opens straight away — no approval wait.`,
+            text: 'Once you have uploaded the required certifications and passed the knowledge tests, your access opens straight away — no approval wait.' }
+        : { html: `Once you have uploaded the required certifications and passed the knowledge
    tests, a lab manager will review and approve your access. After approval you
    may begin using the website and accessing the available lab features.`,
+            text: 'Once you have uploaded the required certifications and passed the knowledge tests, a lab manager will review and approve your access. After approval you may begin using the website and accessing the available lab features.' },
+    )
+  }
+  out.push({ html: `Please let us know if you have any questions or need assistance during the
+   process.`, text: 'Please let us know if you have any questions or need assistance during the process.' })
+  return out
+}
 
-  `Please let us know if you have any questions or need assistance during the
-   process.`,
-]
-
-export async function queueWelcomeEmail(sb, { name, toEmail, orgId, userId = null, password = null }) {
-  if (!toEmail) return
+// `sendAfter`: an ISO time — the email waits in the queue until then
+// (Import lab users → "send later"). Returns the Supabase error, if any.
+export async function queueWelcomeEmail(sb, { name, toEmail, orgId, userId = null, password = null, sendAfter = null, required = null, selfApprove = false }) {
+  if (!toEmail) return null
+  const STEPS = stepsFor({ required, selfApprove })
   let orgContact = null
   if (orgId) {
     const { data: org } = await sb.from('organizations').select('name, contact_name, contact_email').eq('id', orgId).maybeSingle()
@@ -55,12 +78,7 @@ Please follow the steps below to complete your ICT website registration and safe
 
 Thank you, and welcome to ICT!
 
-1. ICT Lab Access Website. To access the ICT labs we use a separate website: ${LAB_URL}. Please note this is different from the main ICT website, ${MAIN_URL}.
-2. When you open the ICT Lab Access website, you will be asked to enter your temporary password — it is included in this email. Use it to log in, then change it to your own password.
-3. Once you log in, you will be asked to complete the required safety training before you can reach the homepage and use the website features.
-4. Under the Safety tab, please start with Step 1, followed by Step 2, and then Step 3.
-5. Once you have uploaded the required certifications and passed the knowledge tests, a lab manager will review and approve your access. After approval you may begin using the website and accessing the available lab features.
-6. Please let us know if you have any questions or need assistance during the process.
+${STEPS.map((t, i) => `${i + 1}. ${t.text}`).join('\n')}
 
 Again, welcome to ICT! We look forward to working with you.`
 
@@ -72,7 +90,7 @@ Again, welcome to ICT! We look forward to working with you.`
               for you, and you will be able to start exploring the website features.</p>
             <p style="${para}">Thank you, and welcome to ICT!</p>
             <ol style="margin:0 0 24px;padding-left:20px;font-size:14px;color:#4B5563;line-height:1.7;">
-              ${STEPS.map(t => `<li style="margin-bottom:10px;">${t}</li>`).join('\n              ')}
+              ${STEPS.map(t => `<li style="margin-bottom:10px;">${t.html}</li>`).join('\n              ')}
             </ol>
             <p style="margin:0 0 28px;font-size:14px;color:#4B5563;line-height:1.7;">
               Again, welcome to ICT! We look forward to working with you.</p>`
@@ -89,8 +107,9 @@ Again, welcome to ICT! We look forward to working with you.`
     credentials: password ? { email: toEmail, password } : null,
   })
 
-  const { error } = await sb.from('email_notifications_queue').insert({
-    to_email: toEmail, subject, body, html_body: htmlBody, user_id: userId, type: 'welcome',
-  })
+  const row = { to_email: toEmail, subject, body, html_body: htmlBody, user_id: userId, type: 'welcome' }
+  if (sendAfter) row.send_after = sendAfter
+  const { error } = await sb.from('email_notifications_queue').insert(row)
   if (error) console.warn('Welcome email queue failed:', error.message)
+  return error || null
 }

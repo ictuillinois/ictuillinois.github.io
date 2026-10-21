@@ -173,7 +173,7 @@ a.toc-sub-link:hover { text-decoration: underline; color: #1a3a6e; }
   <a href="#sec-1" class="toc-item"><span class="toc-num">1</span><span class="toc-fill">Getting Started</span></a>
   <ul class="toc-subs"><li><a href="#s1-login" class="toc-sub-link">Signing in</a></li><li><a href="#s1-dash" class="toc-sub-link">Dashboard &amp; sidebar</a></li><li><a href="#s1-help" class="toc-sub-link">Notifications, tours &amp; help</a></li></ul>
   <a href="#sec-2" class="toc-item"><span class="toc-num">2</span><span class="toc-fill">Lab Management</span></a>
-  <ul class="toc-subs"><li><a href="#s2-users" class="toc-sub-link">Lab users &amp; lab managers</a></li><li><a href="#s2-approvals" class="toc-sub-link">Approval requests</a></li><li><a href="#s2-export" class="toc-sub-link">Export data</a></li></ul>
+  <ul class="toc-subs"><li><a href="#s2-users" class="toc-sub-link">Lab users &amp; lab managers</a></li><li><a href="#s2-import" class="toc-sub-link">Import lab users</a></li><li><a href="#s2-approvals" class="toc-sub-link">Approval requests</a></li><li><a href="#s2-export" class="toc-sub-link">Export data</a></li></ul>
   <a href="#sec-3" class="toc-item"><span class="toc-num">3</span><span class="toc-fill">Training Records</span></a>
   <ul class="toc-subs"><li><a href="#s3-safety" class="toc-sub-link">Safety</a></li><li><a href="#s3-docs" class="toc-sub-link">Documents</a></li><li><a href="#s3-vehicle" class="toc-sub-link">Vehicle</a></li><li><a href="#s3-equip" class="toc-sub-link">Equipment &amp; retraining</a></li><li><a href="#s3-locker" class="toc-sub-link">Lockers</a></li><li><a href="#s3-exam" class="toc-sub-link">Alarm, exam &amp; SDS</a></li></ul>
   <a href="#sec-4" class="toc-item"><span class="toc-num">4</span><span class="toc-fill">Equipment &amp; Maintenance</span></a>
@@ -253,16 +253,26 @@ a.toc-sub-link:hover { text-decoration: underline; color: #1a3a6e; }
   <p class="sec-head-desc">The people in your lab, account requests, and data export</p>
 </div>
 <div class="sec-body">
-<p>Tabs: <span class="tab-lbl">Lab Users</span> <span class="tab-lbl">Lab Managers</span> <span class="tab-lbl">Organization Admins</span> <span class="tab-lbl">Approval Requests</span> <span class="tab-lbl">Export Data</span> <span class="tab-lbl">Lab Manager Guide</span></p>
+<p>Tabs: <span class="tab-lbl">Lab Users</span> <span class="tab-lbl">Import lab users</span> <span class="tab-lbl">Lab Managers</span> <span class="tab-lbl">Organization Admins</span> <span class="tab-lbl">Approval Requests</span> <span class="tab-lbl">Export Data</span> <span class="tab-lbl">Lab Manager Guide</span></p>
 <h3 id="s2-users">Lab users &amp; lab managers</h3>
 <span class="nav">Lab Management → Lab Users / Lab Managers</span>
 <ul>
-  <li><strong>Add</strong> — enter name, email and a temporary password. The person must choose a new password at their first sign-in.</li>
+  <li><strong>Add</strong> — enter name and email. A temporary password is made and emailed; the person must choose a new one at their first sign-in.</li>
   <li><strong>Edit</strong> — details, assigned projects, and which dashboard icons the person gets.</li>
   <li><strong>Deactivate</strong> — the person can no longer sign in; their records are kept. <strong>Delete</strong> removes the account.</li>
   <li>Adding someone whose email already has an account (for example a lab user who becomes a lab manager) links the new account to the same sign-in.</li>
 </ul>
 <div class="warn"><strong>Organization Admins</strong> are shown read-only to lab managers. Only an org admin (or the super admin) can change an org admin's account.</div>
+<h3 id="s2-import">Import lab users from Excel</h3>
+<span class="nav">Lab Management → Import lab users</span>
+<ul>
+  <li><strong>Download the template</strong>, fill in first name, last name, email and director / advisor / supervisor / manager, and upload it. <strong>Up to 50 lab users per file</strong> — split a longer list into several files.</li>
+  <li><strong>Review the list</strong>: edit any cell, remove or add a row, and tick the safety steps each person must do (Step 1 / 2 / 3) and <strong>Yearly re-safety</strong>. An unticked step is not required. A row whose email already has an account is shown in red and blocks the import until you remove or change it.</li>
+  <li><strong>Confirm</strong>, then choose to send the welcome email (sign-in email + temporary password) <strong>now</strong> or on a <strong>date and time</strong> you pick (Chicago time).</li>
+  <li>The safety steps an imported lab user completes count as approved straight away. People added one at a time still need your approval.</li>
+  <li>The <strong>history</strong> lists every import: who got the email, who has signed in and chosen their own password, and their safety progress. Scheduled emails can be sent now or moved; <span class="lbl">Resend email</span> makes a new temporary password for someone who has not signed in.</li>
+</ul>
+
 <h3 id="s2-approvals">Approval requests</h3>
 <span class="nav">Lab Management → Approval Requests</span>
 <p>Requests to <strong>delete an account</strong> appear here. Before approving, choose who takes over that person's records, so nothing they own is lost. A count of pending requests shows at the top of Lab Management.</p>
@@ -286,6 +296,7 @@ a.toc-sub-link:hover { text-decoration: underline; color: #1a3a6e; }
 <ul>
   <li>Approve each step when it is submitted. After an approval, a bar names the next step.</li>
   <li><strong>Some modules stay locked</strong> for a lab user until their safety training is approved.</li>
+  <li><strong>Yearly re-safety:</strong> every <strong>Sep 1</strong> each lab user with Yearly re-safety ticked (all lab users, unless you untick it in their Edit box) must pass Steps 1, 2 and 3 again, and ICT-Lab locks for them until they do. To excuse someone after Sep 1, untick their steps in Lab Management → Lab Users → Edit.</li>
 </ul>
 <h3 id="s3-docs">📄 Lab User Documents</h3>
 <p>Certificates the lab user uploads (and copies of their signed forms). Each shows its status; click <span class="lbl g">Approve</span> on a pending one.</p>
@@ -527,6 +538,7 @@ a.toc-sub-link:hover { text-decoration: underline; color: #1a3a6e; }
 <table>
   <tr><th>Task</th><th>Where</th></tr>
   <tr><td>Add a lab user</td><td>Lab Management → Lab Users → Add</td></tr>
+  <tr><td>Add many lab users from Excel</td><td>Lab Management → Import lab users</td></tr>
   <tr><td>Approve a certificate</td><td>Training Records → the person's card → Lab User Documents</td></tr>
   <tr><td>Approve a safety step</td><td>Training Records → the person's card → Safety</td></tr>
   <tr><td>Approve vehicle forms / confirm a vehicle</td><td>Training Records → Vehicle → Use agreement / Training records</td></tr>
