@@ -426,12 +426,17 @@ function History({ orgId, toast, onNew, openBatch, setOpenBatch }) {
   const [done, setDone] = useState({})       // userId → Set of completed step numbers
   const [busy, setBusy] = useState(null)
   const [moving, setMoving] = useState(null) // { batchId, date, time }
+  const [notSetUp, setNotSetUp] = useState(false)
 
   useEffect(() => { load() }, [orgId])
 
   async function load() {
     if (!orgId) { setBatches([]); return }
     const { data: bs, error } = await sb.from('lab_user_imports').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20)
+    // Before lab_user_import_setup.sql has run in this database
+    if (error && (error.code === 'PGRST205' || error.code === '42P01' || /schema cache|does not exist/i.test(error.message || ''))) {
+      setNotSetUp(true); setBatches([]); return
+    }
     if (error) { toast('Could not load the import history: ' + error.message); setBatches([]); return }
     setBatches(bs || [])
     const ids = (bs || []).map(b => b.id)
@@ -490,6 +495,13 @@ function History({ orgId, toast, onNew, openBatch, setOpenBatch }) {
   }
 
   if (batches === null) return <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+  if (notSetUp) return (
+    <Warn>
+      Import lab users is not set up in this database yet. An admin needs to run
+      <strong> lab_user_import_setup.sql</strong> in Supabase → SQL Editor, and deploy the
+      <strong> create-lab-users</strong> Edge Function. Then reload this page.
+    </Warn>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
