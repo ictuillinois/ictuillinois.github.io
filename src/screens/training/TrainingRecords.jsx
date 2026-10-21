@@ -1022,19 +1022,28 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     load()
   }
 
-  async function addTrainingRecord(userId, equipmentId, date, trainedBy, passed, isRetraining) {
+  // Several instruments at once (Oct 2026): a lab user who passed training on
+  // a set of equipment is recorded in one save. Ones already in their list
+  // are skipped (not for retraining, which adds a new record on purpose).
+  async function addTrainingRecords(userId, equipmentIds, date, trainedBy, passed, isRetraining) {
+    let ids = [...new Set(equipmentIds)].filter(Boolean)
+    if (!ids.length) { toast('Tick at least one equipment.'); return }
+    let skipped = 0
     if (!isRetraining) {
       const { data: existing } = await sb.from('training_equipment')
-        .select('id').eq('user_id', userId).eq('equipment_id', equipmentId)
-      if (existing && existing.length > 0) {
-        toast('This equipment is already in the training list for this lab user.')
-        return
-      }
+        .select('equipment_id').eq('user_id', userId).in('equipment_id', ids)
+      const have = new Set((existing || []).map(r => r.equipment_id))
+      skipped = ids.filter(id => have.has(id)).length
+      ids = ids.filter(id => !have.has(id))
+      if (!ids.length) { toast('All of these are already in the training list for this lab user.'); return }
     }
     const expires = date ? new Date(new Date(date).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null
-    await sb.from('training_equipment').insert({ user_id: userId, equipment_id: equipmentId, trained_date: date, trained_by: trainedBy, passed_exam: passed, expires_at: expires })
+    const { error } = await sb.from('training_equipment').insert(ids.map(equipmentId => (
+      { user_id: userId, equipment_id: equipmentId, trained_date: date, trained_by: trainedBy, passed_exam: passed, expires_at: expires })))
+    if (error) { toast('Could not add the training: ' + error.message); return }
     setAddingRecord(null)
-    load(); onChanged?.(); toast('Training record added.')
+    load(); onChanged?.()
+    toast(`${ids.length} training record${ids.length !== 1 ? 's' : ''} added${skipped ? ` · ${skipped} already in the list` : ''}.`)
   }
 
   async function togglePassed(rec) {
@@ -1405,7 +1414,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
             )
           })()}
           {addingRecord && (
-            <AddTrainingRecord userId={addingRecord.userId} equipment={labUserEquipment(equipment, 'training')} existingRecords={getRecords(addingRecord.userId)} session={session} onSave={addTrainingRecord} onClose={() => setAddingRecord(null)} defaultEquipmentId={addingRecord.equipmentId} defaultIsRetraining={addingRecord.isRetraining} />
+            <AddTrainingRecord userId={addingRecord.userId} equipment={labUserEquipment(equipment, 'training')} existingRecords={getRecords(addingRecord.userId)} session={session} onSave={addTrainingRecords} onClose={() => setAddingRecord(null)} defaultEquipmentId={addingRecord.equipmentId} defaultIsRetraining={addingRecord.isRetraining} />
           )}
         </div>
       )}
@@ -1459,21 +1468,45 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
 }
 
 function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave, onClose, defaultEquipmentId, defaultIsRetraining }) {
-  const [form, setForm] = useState({ equipmentId: defaultEquipmentId || '', date: new Date().toISOString().split('T')[0], trainedBy: session.username, passed: false, isRetraining: defaultIsRetraining || false })
+  const [form, setForm] = useState({ equipmentIds: defaultEquipmentId ? [defaultEquipmentId] : [], date: new Date().toISOString().split('T')[0], trainedBy: session.username, passed: false, isRetraining: defaultIsRetraining || false })
+  const [find, setFind] = useState('')
   const trainedEquipmentIds = new Set((existingRecords || []).filter(r => !r.is_retraining).map(r => r.equipment_id))
+  const isTaken = e => !form.isRetraining && trainedEquipmentIds.has(e.id)
+  const label = e => e.nickname || e.equipment_name
+  const q = find.trim().toLowerCase()
+  const shown = equipment.filter(e => !q || [e.nickname, e.equipment_name, e.category].some(v => v?.toLowerCase().includes(q)))
+  const free = shown.filter(e => !isTaken(e))
+  const picked = form.equipmentIds.filter(id => equipment.some(e => e.id === id && !isTaken(e)))
+  const toggle = (id, on) => setForm(f => ({ ...f, equipmentIds: on ? [...new Set([...f.equipmentIds, id])] : f.equipmentIds.filter(x => x !== id) }))
+  const allFreeOn = free.length > 0 && free.every(e => form.equipmentIds.includes(e.id))
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 400, width: '100%', border: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 440, width: '100%', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', border: '1px solid var(--border)' }}>
         <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{form.isRetraining ? '🔄 Add retraining record' : 'Add equipment training'}</div>
         {form.isRetraining && <div style={{ fontSize: 12, color: '#0369a1', background: '#e0f2fe', borderRadius: 6, padding: '6px 10px', marginBottom: 12 }}>This will be recorded as retraining.</div>}
-        <div className="field"><label>Equipment <span style={{ color: '#c84b2f' }}>*</span></label>
-          <select value={form.equipmentId} onChange={e => setForm(f => ({ ...f, equipmentId: e.target.value }))}>
-            <option value="">— Select equipment —</option>
-            {equipment.map(e => {
-              const alreadyTrained = !form.isRetraining && trainedEquipmentIds.has(e.id)
-              return <option key={e.id} value={e.id} disabled={alreadyTrained}>{e.nickname || e.equipment_name}{alreadyTrained ? ' (already added)' : ''}</option>
+        <div className="field">
+          <label>Equipment <span style={{ color: '#c84b2f' }}>*</span> <span style={{ fontWeight: 400, color: 'var(--text3)' }}>· tick one or more</span></label>
+          <input value={find} onChange={e => setFind(e.target.value)} placeholder="Search equipment…" style={{ marginBottom: 6 }} />
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
+            {free.length > 1 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid var(--border)', marginBottom: 0, cursor: 'pointer', fontWeight: 600, fontSize: 13, background: 'var(--surface2)' }}>
+                <input type="checkbox" checked={allFreeOn} style={{ width: 'auto', margin: 0 }}
+                  onChange={e => setForm(f => ({ ...f, equipmentIds: e.target.checked ? [...new Set([...f.equipmentIds, ...free.map(x => x.id)])] : f.equipmentIds.filter(id => !free.some(x => x.id === id)) }))} />
+                Select all available{q ? ' (in this search)' : ''}
+              </label>
+            )}
+            {shown.length === 0 && <div style={{ padding: 10, fontSize: 13, color: 'var(--text3)' }}>No equipment matches.</div>}
+            {shown.map(e => {
+              const taken = isTaken(e)
+              return (
+                <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', marginBottom: 0, fontSize: 13, cursor: taken ? 'default' : 'pointer', color: taken ? 'var(--text3)' : 'var(--text)' }}>
+                  <input type="checkbox" disabled={taken} checked={!taken && form.equipmentIds.includes(e.id)} onChange={ev => toggle(e.id, ev.target.checked)} style={{ width: 'auto', margin: 0 }} />
+                  <span>{label(e)}{taken ? ' (already added)' : ''}</span>
+                </label>
+              )
             })}
-          </select>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{picked.length} selected — the date, trainer and exam result below apply to all of them.</div>
         </div>
         <div className="grid-2">
           <div className="field"><label>Training Date</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
@@ -1491,7 +1524,9 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-          <button className="btn btn-primary" onClick={() => form.equipmentId && onSave(userId, form.equipmentId, form.date, form.trainedBy, form.passed, form.isRetraining)}>Save</button>
+          <button className="btn btn-primary" disabled={!picked.length} onClick={() => onSave(userId, picked, form.date, form.trainedBy, form.passed, form.isRetraining)}>
+            {picked.length > 1 ? `Save ${picked.length} trainings` : 'Save'}
+          </button>
           <button className="btn" onClick={onClose}>Cancel</button>
         </div>
       </div>
