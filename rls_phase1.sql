@@ -1667,6 +1667,31 @@ END $$;
 
 DROP FUNCTION IF EXISTS _apply_rls(text, text, text);
 
+-- ── Data API access (Oct 2026) ───────────────────────────────────────────
+-- From Oct 30 2026 Supabase no longer grants new tables in "public" to the API
+-- roles automatically; a table without grants answers "permission denied" to
+-- the app. Every table here is protected by RLS, so granting the signed-in
+-- role the four commands does not change WHO sees WHICH rows — it only lets
+-- the API reach the table. Existing grants make this a no-op today; it
+-- matters on a fresh project (a restore, a new database).
+-- Backup tables (*_backup_*) are skipped: they are locked on purpose.
+DO $$
+DECLARE t record;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '%\_backup\_%' LOOP
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO authenticated, service_role', t.tablename);
+  END LOOP;
+END $$;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+-- The signed-out sign-in page reads settings (settings_read_anon), and in
+-- LabHive guests can file a Contact Us message (support_messages_insert).
+DO $$ BEGIN
+  IF to_regclass('public.settings') IS NOT NULL THEN GRANT SELECT ON public.settings TO anon; END IF;
+  IF to_regclass('public.support_messages') IS NOT NULL
+     AND EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support_messages' AND 'anon' = ANY (roles))
+  THEN GRANT INSERT ON public.support_messages TO anon; END IF;
+END $$;
+
 -- After running, every table below should show ONLY our own policies.
 -- Any table still showing 'auth only' / 'org_access' / etc. was NOT secured
 -- (its policy failed) — check the NOTICE output for the reason.

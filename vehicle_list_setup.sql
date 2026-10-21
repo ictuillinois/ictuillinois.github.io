@@ -67,6 +67,12 @@ CREATE TRIGGER guard_training_approval_trg BEFORE INSERT OR UPDATE ON vehicle_ac
 
 NOTIFY pgrst, 'reload schema';
 
+-- Data API access (Oct 2026): from Oct 30 2026 Supabase no longer grants new
+-- tables in "public" to the API roles by itself. RLS still decides which ROWS
+-- each person sees; this only lets the app reach the table at all.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.org_vehicles TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.vehicle_access TO authenticated, service_role;
+
 -- Check: three policies across the two tables, and the guard.
 SELECT tablename, string_agg(policyname, ', ') AS policies FROM pg_policies
 WHERE schemaname = 'public' AND tablename IN ('org_vehicles', 'vehicle_access') GROUP BY 1 ORDER BY 1;

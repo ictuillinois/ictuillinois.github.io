@@ -164,6 +164,12 @@ jobs:
 
       - name: Check it matches the backup
         run: |
+          # The app reaches tables through the Data API: every public table
+          # must be granted to signed-in users (Supabase stopped doing that
+          # automatically for new tables on Oct 30 2026).
+          NOGRANT=$(psql "$T_DB" -At -c "SELECT string_agg(c.relname, ', ') FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT LIKE '%\\_backup\\_%' AND NOT has_table_privilege('authenticated', c.oid, 'SELECT')")
+          [ -z "$NOGRANT" ] || { echo "tables the app cannot reach (no grant to authenticated): $NOGRANT"; exit 1; }
+          echo "every public table is reachable by signed-in users"
           psql "$T_DB" -At -v ON_ERROR_STOP=1 -f scripts/backup/counts.sql > after.json
           node -e '
             const fs = require("fs")

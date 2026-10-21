@@ -192,6 +192,11 @@ END $$;
 
 NOTIFY pgrst, 'reload schema';
 
+-- Data API access (Oct 2026): from Oct 30 2026 Supabase no longer grants new
+-- tables in "public" to the API roles by itself. RLS still decides which ROWS
+-- each person sees; this only lets the app reach the table at all.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.change_log TO authenticated, service_role;
+
 -- Check: two watched tables (organizations, settings) and the daily job.
 SELECT event_object_table AS watched_table, count(*) AS trigger_events
 FROM information_schema.triggers WHERE trigger_name = 'log_change_trg'

@@ -93,4 +93,9 @@ ALTER TABLE vehicle_agreements ADD COLUMN IF NOT EXISTS doc_key TEXT NOT NULL DE
 CREATE INDEX IF NOT EXISTS vehicle_agreements_doc_idx ON vehicle_agreements (user_id, doc_key);
 
 NOTIFY pgrst, 'reload schema';
+-- Data API access (Oct 2026): from Oct 30 2026 Supabase no longer grants new
+-- tables in "public" to the API roles by itself. RLS still decides which ROWS
+-- each person sees; this only lets the app reach the table at all.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.vehicle_agreements TO authenticated, service_role;
+
 SELECT 'vehicle_agreements ready' AS result;

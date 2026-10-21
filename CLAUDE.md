@@ -2081,3 +2081,21 @@ notification for every active admin / lab manager (no org filter — ICT-Lab's D
 backup saved ✓" with counts, or "No backup this week ⚠" if the newest is
 older than 3 days. The body ends with the backup's GitHub run URL; the bell
 opens it on click (type `backup`). Test: Run workflow with `only_email`.
+
+## Every NEW table needs explicit GRANTs (Supabase change, Oct 30 2026)
+
+From Oct 30 2026 Supabase no longer grants new tables in "public" to the API
+roles. A table created without grants answers the app with "permission
+denied" (the request fails; most call sites never read `error`, so the
+screen just shows nothing). **Every SQL file that creates a table must also
+grant it, in the same file:**
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.<table> TO authenticated, service_role;
+-- anon ONLY when a signed-out page needs it, and only the one command it needs
+```
+RLS still decides which rows each person sees — grants only let the API reach
+the table. `rls_phase1.sql` re-grants every public table (except locked
+`*_backup_*` tables) to authenticated + service_role, plus anon SELECT on
+settings (sign-in page). Existing tables kept their grants; this matters for
+new tables and for a restore into a fresh project.

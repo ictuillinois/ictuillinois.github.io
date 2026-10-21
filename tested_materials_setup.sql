@@ -58,6 +58,11 @@ WITH CHECK (
 
 NOTIFY pgrst, 'reload schema';
 
+-- Data API access (Oct 2026): from Oct 30 2026 Supabase no longer grants new
+-- tables in "public" to the API roles by itself. RLS still decides which ROWS
+-- each person sees; this only lets the app reach the table at all.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tested_materials TO authenticated, service_role;
+
 -- Check: expect one row, rls = true, policies = 1.
 SELECT c.relname, c.relrowsecurity AS rls,
        (SELECT count(*) FROM pg_policies p WHERE p.tablename = c.relname) AS policies
