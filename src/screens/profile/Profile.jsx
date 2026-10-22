@@ -1530,6 +1530,16 @@ export function LabUsersPanel({ toast, session }) {
   const [iconLabUser, setIconLabUser] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // Cards / List, advisor filter and sort — remembered per lab manager, in
+  // this browser. With no saved choice, List once there are more than 20.
+  const pref = (k, d) => { try { return localStorage.getItem(`ictlab_labusers_${k}`) ?? d } catch { return d } }
+  const keep = (k, v) => { try { localStorage.setItem(`ictlab_labusers_${k}`, v) } catch { /* private window */ } }
+  const [view, setViewRaw] = useState(() => pref('view', null))
+  const [sortBy, setSortRaw] = useState(() => pref('sort', 'name'))
+  const [advisor, setAdvisor] = useState('')   // '' = all, '-' = no advisor
+  const setView = v => { setViewRaw(v); keep('view', v) }
+  const setSortBy = v => { setSortRaw(v); keep('sort', v) }
+  const [safetyDone, setSafetyDone] = useState({})   // user id → Set of approved step numbers
 
   useEffect(() => { load() }, [])
 
@@ -1540,13 +1550,46 @@ export function LabUsersPanel({ toast, session }) {
     const { data } = await q
     setLabUsers(data || [])
     setLoading(false)
+    // Safety progress for the Safety column (managers may read their org's)
+    const ids = (data || []).map(u => u.id)
+    if (ids.length) {
+      const { data: prog } = await sb.from('lab_safety_progress').select('user_id, step_number, completed').in('user_id', ids)
+      const d = {}
+      ;(prog || []).forEach(p => { if (p.completed) (d[p.user_id] ||= new Set()).add(p.step_number) })
+      setSafetyDone(d)
+    }
   }
 
+  const effectiveView = view || (labUsers.length > 20 ? 'list' : 'cards')
+  const advisorOf = s => sSupervisor(s).trim()
+  const advisors = [...new Set(labUsers.map(advisorOf).filter(Boolean))].sort((x, y) => x.localeCompare(y))
   const filtered = labUsers.filter(s => {
+    if (advisor === '-' ? advisorOf(s) : advisor && advisorOf(s) !== advisor) return false
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return sFirstName(s).toLowerCase().includes(q) || sLastName(s).toLowerCase().includes(q) || sEmail(s).toLowerCase().includes(q)
+  }).sort((x, y) => {
+    const byName = (sFirstName(x) + ' ' + sLastName(x)).localeCompare(sFirstName(y) + ' ' + sLastName(y))
+    if (sortBy !== 'advisor') return byName
+    const A = advisorOf(x), B = advisorOf(y)
+    return (!A) - (!B) || A.localeCompare(B) || byName
   })
+  // Sorted by advisor: one group per advisor, "No advisor" last
+  const groups = sortBy === 'advisor'
+    ? filtered.reduce((g, s) => { const k = advisorOf(s) || 'No advisor'; const last = g[g.length - 1]; if (last?.k === k) last.items.push(s); else g.push({ k, items: [s] }); return g }, [])
+    : [{ k: null, items: filtered }]
+  // First sign-in: they chose their own password (password_set_at, Oct 2026),
+  // or accepted the Terms of Service, which everyone does at first sign-in —
+  // that also covers people added before password_set_at existed.
+  const signedIn = s => !!(s.password_set_at || s.terms_accepted_version != null)
+  const safetyChip = s => {
+    const req = requiredSafetySteps(s.required_safety_steps)
+    const got = req.filter(n => safetyDone[s.id]?.has(n)).length
+    const st = { fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 99, whiteSpace: 'nowrap' }
+    if (!req.length) return <span style={{ ...st, background: 'var(--surface2)', color: 'var(--text3)' }}>None required</span>
+    if (got >= req.length) return <span style={{ ...st, background: 'var(--accent-light)', color: '#085041' }}>Done ✓</span>
+    return <span style={{ ...st, background: '#fff7e6', color: '#7a4a00' }} title="Locked out until every required step is approved">{got}/{req.length}</span>
+  }
 
   // The lab-user assignment is stored in BOTH directions and they were never
   // synced: this modal wrote users.assigned_project_ids, while the entire
@@ -1590,7 +1633,10 @@ export function LabUsersPanel({ toast, session }) {
       if (perr) { toast(perr); return }
     }
     if (!form.selectedProjectIds || form.selectedProjectIds.length === 0) { toast('Please assign at least one project.'); return }
-    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: storedSafetySteps(form.requiredSteps), annual_resafety: form.annualResafety !== false, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password, terms_accepted_version: null }
+    const payload = { name: form.firstName.trim(), last_name: form.lastName.trim() || null, email: actualEmail || null, supervisor: form.supervisor || null, year_semester: form.year_semester || null, project_group: form.project_group || null, assigned_project_ids: form.selectedProjectIds || [], nick_name: form.nickname || null, required_safety_steps: storedSafetySteps(form.requiredSteps), annual_resafety: form.annualResafety !== false, organization_id: session?.organizationId || null, role: 'lab_user', is_active: true, admin_level: 0, pin: '', must_change_password: !id && !!form.password }
+    // A new account accepts the terms at first sign-in. Editing must not wipe
+    // an acceptance (it re-prompted everyone whose details were edited).
+    if (!id) payload.terms_accepted_version = null
     if (!id && actualEmail) {
       try {
         const authUser = await createAuthUser(actualEmail, newPassword)
@@ -1619,6 +1665,17 @@ export function LabUsersPanel({ toast, session }) {
   }
 
   async function toggleActive(s) { await sb.from('users').update({ is_active: !s.is_active }).eq('id', s.id); load(); toast(s.is_active ? 'Deactivated.' : 'Activated.') }
+  const actionButtons = s => (
+    <>
+      <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} title="Set allowed dashboard icons" onClick={() => setIconLabUser(s)}>Icons</button>
+      <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditLabUser(s); setShowModal(true) }}>Edit</button>
+      <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
+      <button className="btn btn-danger" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setDeleteTarget(s)}>Delete</button>
+      {s.photo_denial_flagged && (
+        <button className="btn" style={{ fontSize: 12, padding: '4px 8px', background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e' }} title="Clear photo denial flag" onClick={() => clearPhotoFlag(s)}>✕ Flag</button>
+      )}
+    </>
+  )
   async function clearPhotoFlag(s) { await sb.from('users').update({ photo_denial_flagged: false }).eq('id', s.id); load(); toast('Photo flag cleared.') }
   async function deleteLabUser(id) {
     setDeleting(true)
@@ -1643,13 +1700,76 @@ export function LabUsersPanel({ toast, session }) {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ paddingLeft: 36, width: '100%', boxSizing: 'border-box' }} />
         {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text3)' }}>×</button>}
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: -4, marginBottom: 16 }}>
+        <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 99, overflow: 'hidden', background: 'var(--surface)' }}>
+          {[['cards', 'Cards'], ['list', 'List']].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ fontFamily: 'var(--sans)', fontSize: 13, padding: '6px 14px', border: 'none', cursor: 'pointer', background: effectiveView === v ? 'var(--accent)' : 'transparent', color: effectiveView === v ? '#fff' : 'var(--text2)' }}>{l}</button>
+          ))}
+        </div>
+        <span style={{ flex: 1 }} />
+        <label style={{ fontSize: 12, color: 'var(--text3)' }}>Advisor</label>
+        <select value={advisor} onChange={e => setAdvisor(e.target.value)} style={{ width: 'auto', fontSize: 13, padding: '6px 10px' }}>
+          <option value="">All advisors</option>
+          {advisors.map(x => <option key={x} value={x}>{x}</option>)}
+          <option value="-">No advisor</option>
+        </select>
+        <label style={{ fontSize: 12, color: 'var(--text3)' }}>Sort</label>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: 'auto', fontSize: 13, padding: '6px 10px' }}>
+          <option value="name">Name</option>
+          <option value="advisor">Advisor</option>
+        </select>
+      </div>
+      {(search || advisor) && !loading && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: -8, marginBottom: 12 }}>{filtered.length} of {labUsers.length} lab users</div>}
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">👥</div>{search ? 'No lab users match your search.' : 'No lab users yet.'}</div>
-        : (
-        /* Supply-Inventory-style card grid: photo strip on top,
-           action buttons under each user */
+        : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">👥</div>{search || advisor ? 'No lab users match.' : 'No lab users yet.'}</div>
+        : effectiveView === 'list' ? (
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr>
+                {['First name', 'Last name', 'Email', ...(sortBy === 'name' ? ['Advisor'] : []), 'Safety', 'Signed in', ''].map((h, i) => (
+                  <th key={i} style={{ textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--text2)', padding: '8px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(g => [
+                g.k && (
+                  <tr key={'g-' + g.k}>
+                    <td colSpan={7} style={{ background: 'var(--accent-light)', color: '#085041', fontWeight: 600, fontSize: 13, padding: '6px 12px', borderTop: '1px solid #9FE1CB' }}>
+                      {g.k}<span style={{ fontFamily: 'var(--mono)', color: 'var(--accent)', fontWeight: 500, marginLeft: 8 }}>{g.items.length}</span>
+                    </td>
+                  </tr>
+                ),
+                ...g.items.map(s => (
+                  <tr key={s.id} style={{ opacity: s.is_active ? 1 : 0.55 }}>
+                    <td style={{ padding: '6px 12px' }}>{s.nick_name?.trim() || sFirstName(s) || '—'}{!s.is_active && <span style={{ fontSize: 11, color: 'var(--text3)' }}> · inactive</span>}</td>
+                    <td style={{ padding: '6px 12px' }}>{sLastName(s)}</td>
+                    <td style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text2)' }}>{sEmail(s)}</td>
+                    {sortBy === 'name' && <td style={{ padding: '6px 12px', fontSize: 13, color: 'var(--text2)' }}>{advisorOf(s) || '—'}</td>}
+                    <td style={{ padding: '6px 12px' }}>{safetyChip(s)}</td>
+                    <td style={{ padding: '6px 12px', fontSize: 13, whiteSpace: 'nowrap', color: signedIn(s) ? 'var(--text)' : 'var(--text3)' }}>{signedIn(s) ? 'Yes' : 'Not yet'}</td>
+                    <td style={{ padding: '6px 12px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: 4 }}>{actionButtons(s)}</div>
+                    </td>
+                  </tr>
+                )),
+              ])}
+            </tbody>
+          </table>
+        </div>
+        ) : (
+        /* Card grid; one grid per advisor when sorted by advisor */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {groups.map(g => (
+        <div key={g.k || 'all'} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {g.k && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-light)', border: '1px solid #9FE1CB', color: '#085041', fontWeight: 600, fontSize: 13, borderRadius: 8, padding: '6px 12px' }}>
+              {g.k}<span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', marginLeft: 'auto' }}>{g.items.length}</span>
+            </div>
+          )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-          {filtered.map(s => (
+          {g.items.map(s => (
             <div key={s.id} className="manage-card" style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', overflow: 'hidden', opacity: s.is_active ? 1 : 0.55, ...(s.photo_denial_flagged ? { borderColor: '#f59e0b', background: '#fefce8' } : {}) }}>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
                 {s.photo_url
@@ -1666,16 +1786,13 @@ export function LabUsersPanel({ toast, session }) {
                 {s.project_group && !s.photo_denial_flagged && s.is_active && <span style={{ fontSize: 10, color: 'var(--text3)' }}>{s.project_group}</span>}
               </div>
               <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} title="Set allowed dashboard icons" onClick={() => setIconLabUser(s)}>Icons</button>
-                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => { setEditLabUser(s); setShowModal(true) }}>Edit</button>
-                <button className="btn" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => toggleActive(s)}>{s.is_active ? 'Deactivate' : 'Activate'}</button>
-                <button className="btn btn-danger" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setDeleteTarget(s)}>Delete</button>
-                {s.photo_denial_flagged && (
-                  <button className="btn" style={{ fontSize: 12, padding: '4px 8px', background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e' }} title="Clear photo denial flag" onClick={() => clearPhotoFlag(s)}>✕ Flag</button>
-                )}
+                {actionButtons(s)}
               </div>
             </div>
           ))}
+        </div>
+        </div>
+        ))}
         </div>
         )
       }

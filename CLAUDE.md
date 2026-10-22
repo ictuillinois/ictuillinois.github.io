@@ -2165,3 +2165,17 @@ names with no login) — the button there now opens this tab.
 - SQL: `lab_user_import_setup.sql` (ICT-Lab only; after training_privacy.sql).
   The policies are also in rls_phase1.sql + its keep array.
 - LabHive: not built yet — generic org safety steps to be decided.
+
+## Lab Users: Cards / List, advisor filter and sort (Oct 2026, both apps)
+
+`LabUsersPanel` (Profile.jsx) toolbar under the search box: **Cards / List**,
+**Advisor** (All / one / No advisor — the supervisor field), **Sort** (Name /
+Advisor; Advisor groups under a light-teal bar per advisor, No advisor last)
+in both views. View + sort are remembered per browser
+(`<app>_labusers_view` / `_sort`); with no saved choice List is the default
+past 20 lab users. List row: first name · last name · email · (advisor, when
+sorted by name) · Safety chip (Done ✓ / n of required / None required, from
+lab_safety_progress) · Signed in (`password_set_at` or a Terms acceptance) ·
+Icons / Edit / Deactivate / Delete (`actionButtons`, shared with the cards).
+Saving the Edit box no longer wipes `terms_accepted_version` (only a new
+account starts with it null) — it used to re-prompt everyone edited.
