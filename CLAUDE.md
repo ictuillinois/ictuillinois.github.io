@@ -1137,6 +1137,9 @@ back to the beaker.
   "grant everything" — it means "inherit the global app pool", which is
   normally narrower. Ticking Select all used to save `null`, so the org admin
   still saw those icons locked with every checkbox showing enabled.
+- **The icon box shows what the person actually has.** No saved per-user
+  `allowed_modules` = nothing narrowed = the whole group pool, so that is shown
+  ticked (with a note), not "0 assigned". Unticking and saving narrows them.
 - **`LabUserIconManager` is role-aware.** One person can hold several `users`
   rows (Login links every row sharing an email), each with its own pool. The
   modal offers a Lab User / Lab Manager switch and saves to the selected role's

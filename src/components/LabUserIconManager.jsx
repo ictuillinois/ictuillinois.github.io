@@ -71,6 +71,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
   // What this role already had, captured at load, so save can tell which
   // modules are genuinely new rather than re-announcing every existing one.
   const prevAllowedRef = useRef(new Set())
+  const [inherited, setInherited] = useState(false)  // no per-person narrowing saved yet
   // One person can hold several users rows — Login links every row sharing an
   // email to the same account. Each row has its OWN icon pool, so editing the
   // lab user card silently left the same person's lab manager icons untouched
@@ -132,8 +133,18 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
     if (loadErr) console.error('[LabUserIconManager] load failed:', loadErr)
     setExistingRowIds((rows || []).map(r => r.id))
     const bestRow = (rows || []).find(r => r.allowed_modules?.length) || rows?.[0] || null
-    prevAllowedRef.current = new Set(bestRow?.allowed_modules || [])
-    setAllowed(new Set(bestRow?.allowed_modules?.length ? bestRow.allowed_modules : []))
+    // Nothing saved for this person = nothing narrowed: they get every icon the
+    // admin ticked for their group (capabilityPool treats an empty per-user
+    // list as "the org pool"). So that is what is shown ticked. Showing none
+    // ticked read as "waiting for a lab manager to pick", which is not what
+    // the person actually has.
+    const saved = bestRow?.allowed_modules?.length ? bestRow.allowed_modules : null
+    // With no org pool at all, a lab user's default leaves out labManagerOnly
+    // modules (the dashboard's fallback does the same).
+    const effective = saved || mods.filter(m => pool || activeRole.role !== 'lab_user' || !m.labManagerOnly).map(m => m.key)
+    setInherited(!saved)
+    prevAllowedRef.current = new Set(effective)
+    setAllowed(new Set(effective))
   }
 
   function toggle(key) {
@@ -255,6 +266,8 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
           <div style={{ background: '#e0f2fe', borderRadius: 8, padding: '8px 14px', marginTop: 14, fontSize: 12, color: '#0369a1', lineHeight: 1.5 }}>
             ℹ️ Icons shown are within your organization's {activeRole.role === 'lab_user' ? 'lab user' : activeRole.role === 'user' ? 'lab manager' : 'admin'} pool.
             They pick from <strong>only these icons</strong>. Profile is always visible.
+            {inherited && <> Nothing has been narrowed for this person, so they get <strong>every icon ticked for their
+            group in the admin panel</strong> — untick any they should not have.</>}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 14px' }}>
             <div style={{ fontSize: 12, color: 'var(--text3)' }}><span style={{ fontWeight: 600, color: 'var(--text)' }}>{selectedCount}</span> of {totalCount} assigned</div>
