@@ -7,7 +7,7 @@ import { deleteUserRow } from '../profile/Profile'
 import { SAFETY_STEPS, requiredSafetySteps, storedSafetySteps } from '../labsafety/safetySteps'
 import { IconDownload, IconPlus, IconTrash, IconMail, IconCalendar, IconCheckCircle, IconAlert } from '../../components/Icons'
 
-// Lab Management → Import lab users (ICT-Lab, Oct 2026). Lab managers and
+// Lab Management → Import lab users (ICT-Lab, Oct 2026; LabHive Oct 22 2026). Lab managers and
 // admins only.
 //
 //   template (public/lab-users-template.xlsx) → upload → review (edit / remove / add, safety ticks) → confirm
@@ -18,19 +18,30 @@ import { IconDownload, IconPlus, IconTrash, IconMail, IconCalendar, IconCheckCir
 //
 // MAX is 50 per file and the page says so. A larger list goes in more files.
 //
-// Imported lab users approve their own safety steps (users.safety_self_approve,
-// a trigger marks a submitted step complete) — the manager made the list.
-// People added one at a time on the Lab Users tab still need approval.
+// ICT-Lab (APP.selfApprove): imported lab users approve their own safety
+// steps (users.safety_self_approve; a trigger marks a submitted step
+// complete) — the manager made the list. People added one at a time still
+// need approval. LabHive: a lab manager approves every step, imported or not.
 //
 // History reads: users.import_batch_id (who came in which import), the
 // 'welcome' rows of email_notifications_queue (sent / scheduled / failed),
 // users.password_set_at (first sign-in and own password), lab_safety_progress.
 
+// The only lines that differ between ICT-Lab and LabHive. Keep the rest of
+// this file identical in both apps.
+//   selfApprove: imported lab users' completed safety steps count as approved
+//   (ICT-Lab: lab users submit each step in the app; LabHive: a lab manager
+//   approves each step, so there is nothing to self-approve).
+const APP = { name: 'ICT-Lab', selfApprove: true }
+
 const MAX = 50
+// One tick box per safety step this app has (3 in ICT-Lab, 4 in LabHive)
+const STEP_FIELDS = SAFETY_STEPS.map(s => ({ f: 's' + s.number, n: s.number, l: 'Step ' + s.number }))
+const STEPS_WORD = SAFETY_STEPS.length === 3 ? 'three' : SAFETY_STEPS.length === 4 ? 'four' : String(SAFETY_STEPS.length)
 const TZ = 'America/Chicago'
 const okEmail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(e || '')
 let keySeq = 0
-const blankRow = () => ({ key: ++keySeq, first: '', last: '', email: '', supervisor: '', s1: true, s2: true, s3: true, yearly: true })
+const blankRow = () => ({ key: ++keySeq, first: '', last: '', email: '', supervisor: '', ...Object.fromEntries(STEP_FIELDS.map(x => [x.f, true])), yearly: true })
 
 const fmt = iso => iso ? new Date(iso).toLocaleString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 const fmtDay = iso => iso ? new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }) : ''
@@ -69,7 +80,7 @@ async function callFn(body) {
 }
 const kickSender = () => sb.functions.invoke('send-emails', { body: {} }).catch(() => {})
 
-const stepsOf = r => storedSafetySteps([r.s1 && 1, r.s2 && 2, r.s3 && 3].filter(Boolean))
+const stepsOf = r => storedSafetySteps(STEP_FIELDS.filter(x => r[x.f]).map(x => x.n))
 const fullName = u => [u.name ?? u.first, u.last_name ?? u.last].filter(Boolean).join(' ').trim() || u.email
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,7 +158,7 @@ export default function ImportLabUsers({ session, toast }) {
     if (!r.first.trim() && !r.last.trim()) return 'name missing'
     if (!okEmail(e)) return e ? 'email is not valid' : 'email missing'
     if (counts[e] > 1) return 'same email twice in this list'
-    if (existing.has(e)) return 'already has an ICT-Lab account — remove the row or change the email'
+    if (existing.has(e)) return `already has an account in ${APP.name} — remove the row or change the email`
     return null
   }
   const bad = rows.filter(problem).length
@@ -221,7 +232,7 @@ export default function ImportLabUsers({ session, toast }) {
               <div style={{ fontWeight: 700, fontSize: 15 }}>1 · Download the template and fill it in</div>
               {/* A real file on the site (public/), not one built in the
                   browser: people download it, fill it in, upload it back. */}
-              <a className="btn btn-sm" href="/lab-users-template.xlsx" download="ICT-Lab lab users template.xlsx" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              <a className="btn btn-sm" href={`${import.meta.env.BASE_URL}lab-users-template.xlsx`} download={`${APP.name} lab users template.xlsx`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
                 <IconDownload size={15} /> Download template (.xlsx)
               </a>
             </div>
@@ -268,7 +279,7 @@ export default function ImportLabUsers({ session, toast }) {
           </div>
           <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.6 }}>
             {SAFETY_STEPS.map(s => s.label).join(' · ')} · <strong>Yearly re-safety</strong> — on Sep 1 every year
-            all three steps reset and ICT-Lab locks for this person until they pass them again.
+            all {STEPS_WORD} steps reset and {APP.name} locks for this person until they pass them again.
           </div>
           {bad > 0 && <Warn>{bad} row{bad !== 1 ? 's need' : ' needs'} fixing before the list can be added.</Warn>}
           <NothingSentNote>
@@ -291,25 +302,26 @@ export default function ImportLabUsers({ session, toast }) {
 
       {(stage === 'confirm' || stage === 'creating') && (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 640 }}>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>Add {rows.length} lab user{rows.length !== 1 ? 's' : ''} to ICT-Lab?</div>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>Add {rows.length} lab user{rows.length !== 1 ? 's' : ''} to {APP.name}?</div>
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: 'var(--text2)', lineHeight: 1.8 }}>
             {(() => {
-              const all = rows.filter(r => r.s1 && r.s2 && r.s3).length
-              const none = rows.filter(r => !r.s1 && !r.s2 && !r.s3).length
+              const all = rows.filter(r => STEP_FIELDS.every(x => r[x.f])).length
+              const none = rows.filter(r => !STEP_FIELDS.some(x => r[x.f])).length
               const some = rows.length - all - none
               const yearly = rows.filter(r => r.yearly).length
               return [
-                all > 0 && <li key="a">{all} must do all three safety steps</li>,
+                all > 0 && <li key="a">{all} must do all {STEPS_WORD} safety steps</li>,
                 some > 0 && <li key="s">{some} must do some of the steps</li>,
                 none > 0 && <li key="n">{none} need no safety training</li>,
-                <li key="y">{yearly} redo all three steps every Sep 1 (yearly re-safety)</li>,
+                <li key="y">{yearly} redo all {STEPS_WORD} steps every Sep 1 (yearly re-safety)</li>,
               ]
             })()}
           </ul>
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-            Each gets an ICT-Lab account with a temporary password and chooses their own at first sign-in.
-            The safety steps they complete count as approved straight away — no lab manager approval,
-            because you made this list.
+            Each gets an {APP.name} account with a temporary password and chooses their own at first sign-in.
+            {APP.selfApprove
+              ? ' The safety steps they complete count as approved straight away — no lab manager approval, because you made this list.'
+              : ' A lab manager approves each safety step as usual.'}
           </div>
           <NothingSentNote>
             <strong>No email is sent on this page.</strong> Next you choose: send the welcome emails now, or on a
@@ -353,7 +365,7 @@ function ListTable({ rows, setRows, problem, isChecking, onRemove, emailLocked =
         <thead>
           <tr>
             <th style={th}>First name</th><th style={th}>Last name</th><th style={th}>Email</th><th style={th}>Supervisor</th>
-            {[['s1', 'Step 1'], ['s2', 'Step 2'], ['s3', 'Step 3'], ['yearly', 'Yearly re-safety']].map(([f, l]) => (
+            {[...STEP_FIELDS.map(x => [x.f, x.l]), ['yearly', 'Yearly re-safety']].map(([f, l]) => (
               <th key={f} style={{ ...th, textAlign: 'center', whiteSpace: 'nowrap' }}>
                 <label style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
                   {l}<input type="checkbox" checked={colAll(f)} onChange={e => setCol(f, e.target.checked)} style={{ width: 'auto' }} />
@@ -367,7 +379,7 @@ function ListTable({ rows, setRows, problem, isChecking, onRemove, emailLocked =
           {rows.map(r => {
             if (r.removed) return (
               <tr key={r.key} style={{ opacity: 0.55 }}>
-                <td colSpan={8} style={{ ...td, textDecoration: 'line-through' }}>{fullName(r)} · {r.email} — will be removed (account deleted) when you save</td>
+                <td colSpan={STEP_FIELDS.length + 5} style={{ ...td, textDecoration: 'line-through' }}>{fullName(r)} · {r.email} — will be removed (account deleted) when you save</td>
                 <td style={td}><button className="btn btn-sm" onClick={() => set(r.key, { removed: false })}>Undo</button></td>
               </tr>
             )
@@ -382,7 +394,7 @@ function ListTable({ rows, setRows, problem, isChecking, onRemove, emailLocked =
                   onChange={ev => set(r.key, { email: ev.target.value })}
                   style={{ ...cell, minWidth: 200, borderColor: p && p !== 'name missing' ? '#c84b2f' : undefined, ...(locked ? { background: 'var(--surface2)', color: 'var(--text3)' } : {}) }} /></td>
                 <td style={td}><input value={r.supervisor} maxLength={120} onChange={ev => set(r.key, { supervisor: ev.target.value })} style={{ ...cell, minWidth: 160 }} /></td>
-                {['s1', 's2', 's3', 'yearly'].map(f => (
+                {[...STEP_FIELDS.map(x => x.f), 'yearly'].map(f => (
                   <td key={f} style={{ ...td, textAlign: 'center' }}>
                     <input type="checkbox" checked={r[f]} onChange={ev => set(r.key, { [f]: ev.target.checked })} style={{ width: 'auto' }} />
                   </td>
@@ -395,7 +407,7 @@ function ListTable({ rows, setRows, problem, isChecking, onRemove, emailLocked =
               </tr>,
               (p || isChecking(e)) && (
                 <tr key={r.key + '-p'} style={p ? { background: '#fdf1ee' } : undefined}>
-                  <td colSpan={9} style={{ ...td, paddingTop: 0, fontSize: 12, color: p ? '#c84b2f' : 'var(--text3)' }}>
+                  <td colSpan={STEP_FIELDS.length + 6} style={{ ...td, paddingTop: 0, fontSize: 12, color: p ? '#c84b2f' : 'var(--text3)' }}>
                     {p || 'checking for an existing account…'}
                   </td>
                 </tr>
@@ -417,7 +429,7 @@ function EditImport({ batch, people, orgId, toast, onClose, onSaved }) {
     const req = requiredSafetySteps(u.required_safety_steps)
     return {
       key: u.id, id: u.id, first: u.name || '', last: u.last_name || '', email: u.email || '', supervisor: u.supervisor || '',
-      s1: req.includes(1), s2: req.includes(2), s3: req.includes(3), yearly: u.annual_resafety !== false,
+      ...Object.fromEntries(STEP_FIELDS.map(x => [x.f, req.includes(x.n)])), yearly: u.annual_resafety !== false,
       signedIn: !!(u.password_set_at || u.must_change_password === false), removed: false, orig: u,
     }
   }
@@ -446,7 +458,7 @@ function EditImport({ batch, people, orgId, toast, onClose, onSaved }) {
     if (!r.first.trim() && !r.last.trim()) return 'name missing'
     if (!okEmail(e)) return e ? 'email is not valid' : 'email missing'
     if (counts[e] > 1) return 'same email twice in this list'
-    if (changedEmail(r) && existing.has(e)) return 'already has an ICT-Lab account — use another email'
+    if (changedEmail(r) && existing.has(e)) return `already has an account in ${APP.name} — use another email`
     return null
   }
   const live = rows.filter(r => !r.removed)
@@ -574,7 +586,7 @@ function EmailStep({ created, orgId, toast, onDone }) {
     setBusy(true)
     let failed = 0
     for (const u of created.users) {
-      const err = await queueWelcomeEmail(sb, { name: u.name, toEmail: u.email, orgId, userId: u.id, password: u.password, sendAfter, required: u.required, selfApprove: true })
+      const err = await queueWelcomeEmail(sb, { name: u.name, toEmail: u.email, orgId, userId: u.id, password: u.password, sendAfter, required: u.required, selfApprove: APP.selfApprove })
       if (err) failed++
     }
     await sb.from('lab_user_imports').update({ email_send_at: sendAfter || new Date().toISOString() }).eq('id', created.batchId)
@@ -592,7 +604,7 @@ function EmailStep({ created, orgId, toast, onDone }) {
       </div>
       {created.failed.length > 0 && <Warn>Not added: {created.failed.map(f => `${f.email} (${f.error})`).join('; ')}</Warn>}
       <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-        The email has the ICT-Lab address, their sign-in email and temporary password, and what to do first.
+        The email has the {APP.name} address, their sign-in email and temporary password, and what to do first.
       </div>
       <SendChooser count={n} busy={busy} onSend={send} toast={toast}>
         <button className="btn" disabled={busy} onClick={() => {

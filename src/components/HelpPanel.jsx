@@ -149,6 +149,7 @@ const HELP_CONTENT = {
     description: 'The people in your lab: lab users, lab managers and org admins, account requests, and data export.',
     tips: [
       'Lab Users / Lab Managers: add people, edit them, set their dashboard icons, or deactivate them',
+      T('Lab Users: switch between Cards and List, filter by advisor, or sort by advisor', 'manager'),
       T('Import lab users: up to 50 per Excel file. Review the list and tick each person\'s safety steps — nothing is sent until you confirm, and Save and finish later keeps the list. Then email them now or at a set time. The history shows who got the email and who has signed in', 'manager'),
       T('Yearly re-safety: every Sep 1 lab users redo Steps 1–3 and are locked until they pass. Untick steps in Edit to excuse someone', 'manager'),
       'A new account gets a temporary password and must change it at first sign-in',

@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- lab_user_no_supply.sql — Supply Inventory is for lab managers and admins
--- only (ICT-Lab, Oct 2026). Idempotent.
+-- only (ICT-Lab + LabHive, Oct 2026 — same file in both). Idempotent.
 --
 -- The app now walls it off (neverLabUser), so these leftovers do nothing —
 -- but they make the saved settings say something that is not true. Removes
