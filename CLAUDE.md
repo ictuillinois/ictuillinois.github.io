@@ -2117,6 +2117,11 @@ names with no login) — the button there now opens this tab.
   accounts stay, and the import's **Welcome emails (N): choose when…** in the history
   sends to everyone never emailed (each gets a NEW temp password via `reset`,
   since the first was never shown). `SendChooser` is shared by both.
+- **Edit list** (history, per import) reopens the same table (`ListTable`,
+  shared with the review step): names / supervisor / steps / yearly for
+  anyone; email + remove only before first sign-in. Email goes through the
+  function's `email` action (login + users row, unsent welcome retired);
+  remove uses Profile's `deleteUserRow` (row first, then the login).
 - Review: editable rows, Step 1/2/3 + Yearly re-safety ticks (header ticks
   set a column). Invalid email, same email twice, or an email that already
   has an account (any org) → red row, Add is blocked until fixed.

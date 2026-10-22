@@ -1502,7 +1502,7 @@ function PersonAvatar({ user, size = 56 }) {
 // after, and only when no other row still uses it: one auth account owns a
 // row per role (Login links every row sharing an email), so deleting someone's
 // lab manager row must not lock them out of their lab user row.
-async function deleteUserRow(id) {
+export async function deleteUserRow(id) {
   const { data: u } = await sb.from('users').select('auth_id').eq('id', id).maybeSingle()
   await sb.from('user_screen_access').delete().eq('user_id', id)
   await sb.from('user_dashboard_prefs').delete().eq('user_id', id)

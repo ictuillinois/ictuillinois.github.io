@@ -19,6 +19,9 @@
 //   reset  { orgId, userId, password } → { ok }    new temporary password for
 //            someone who has not signed in yet; their older unsent welcome
 //            email is retired so only the new password goes out.
+//   email  { orgId, userId, email } → { ok }       correct the email (login and
+//            account) of someone who has not signed in yet (Edit list); their
+//            unsent welcome email is retired — the app sends a new one.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const MAX = 50
@@ -169,6 +172,27 @@ Deno.serve(async (req) => {
       if (error) return json({ error: error.message }, 500)
       await admin.from('email_notifications_queue')
         .update({ attempts: 99, error: 'Replaced by a newer welcome email' })
+        .eq('user_id', u.id).eq('type', 'welcome').eq('sent', false)
+      return json({ ok: true })
+    }
+
+    if (action === 'email') {
+      const email = String(body.email ?? '').trim().toLowerCase()
+      if (!okEmail(email)) return json({ error: 'Not a valid email' }, 400)
+      const { data: u } = await admin.from('users').select('id, auth_id, email, role, organization_id, password_set_at, must_change_password')
+        .eq('id', body.userId).maybeSingle()
+      if (!u || u.organization_id !== orgId || u.role !== 'lab_user') return json({ error: 'Lab user not found in this organization' }, 404)
+      if (u.password_set_at || !u.must_change_password) return json({ error: 'They have already signed in — the email can no longer be changed here' }, 409)
+      if ((u.email ?? '').toLowerCase() === email) return json({ ok: true })
+      if ((await existingEmails([email])).length) return json({ error: 'That email already has an ICT-Lab account' }, 409)
+      if (u.auth_id) {
+        const { error } = await admin.auth.admin.updateUserById(String(u.auth_id), { email, email_confirm: true })
+        if (error) return json({ error: error.message }, 500)
+      }
+      const { error: uErr } = await admin.from('users').update({ email }).eq('id', u.id)
+      if (uErr) return json({ error: uErr.message }, 500)
+      await admin.from('email_notifications_queue')
+        .update({ attempts: 99, error: 'Email address changed' })
         .eq('user_id', u.id).eq('type', 'welcome').eq('sent', false)
       return json({ ok: true })
     }

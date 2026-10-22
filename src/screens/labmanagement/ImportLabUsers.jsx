@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { generateTempPassword } from '../../lib/tempPassword'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
 import { applyDefaultIcons } from '../../lib/defaultIcons'
+import { deleteUserRow } from '../profile/Profile'
 import { SAFETY_STEPS, requiredSafetySteps, storedSafetySteps } from '../labsafety/safetySteps'
 import { IconDownload, IconPlus, IconTrash, IconMail, IconCalendar, IconCheckCircle, IconAlert } from '../../components/Icons'
 
@@ -151,9 +152,6 @@ export default function ImportLabUsers({ session, toast }) {
   }
   const bad = rows.filter(problem).length
   const stillChecking = pending.length > 0
-  const set = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
-  const colAll = f => rows.length > 0 && rows.every(r => r[f])
-  const setCol = (f, v) => setRows(rs => rs.map(r => ({ ...r, [f]: v })))
 
   // Save the unfinished list in the database (no accounts, no passwords), so
   // any lab manager or admin of the org can finish it later, from any computer.
@@ -259,54 +257,9 @@ export default function ImportLabUsers({ session, toast }) {
           {created?.failed?.length > 0 && (
             <Warn>Not added: {created.failed.map(f => `${f.email} (${f.error})`).join('; ')}</Warn>
           )}
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={th}>First name</th><th style={th}>Last name</th><th style={th}>Email</th><th style={th}>Supervisor</th>
-                  {[['s1', 'Step 1'], ['s2', 'Step 2'], ['s3', 'Step 3'], ['yearly', 'Yearly re-safety']].map(([f, l]) => (
-                    <th key={f} style={{ ...th, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <label style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                        {l}<input type="checkbox" checked={colAll(f)} onChange={e => setCol(f, e.target.checked)} style={{ width: 'auto' }} />
-                      </label>
-                    </th>
-                  ))}
-                  <th style={th} />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => {
-                  const p = problem(r)
-                  const e = r.email.trim().toLowerCase()
-                  return [
-                    <tr key={r.key} style={p ? { background: '#fdf1ee' } : undefined}>
-                      <td style={td}><input value={r.first} maxLength={60} onChange={ev => set(r.key, { first: ev.target.value })} style={cell} /></td>
-                      <td style={td}><input value={r.last} maxLength={60} onChange={ev => set(r.key, { last: ev.target.value })} style={cell} /></td>
-                      <td style={td}><input value={r.email} maxLength={120} onChange={ev => set(r.key, { email: ev.target.value })} style={{ ...cell, minWidth: 200, borderColor: p && p !== 'name missing' ? '#c84b2f' : undefined }} /></td>
-                      <td style={td}><input value={r.supervisor} maxLength={120} onChange={ev => set(r.key, { supervisor: ev.target.value })} style={{ ...cell, minWidth: 160 }} /></td>
-                      {['s1', 's2', 's3', 'yearly'].map(f => (
-                        <td key={f} style={{ ...td, textAlign: 'center' }}>
-                          <input type="checkbox" checked={r[f]} onChange={ev => set(r.key, { [f]: ev.target.checked })} style={{ width: 'auto' }} />
-                        </td>
-                      ))}
-                      <td style={td}>
-                        <button className="btn" title="Remove this row" onClick={() => setRows(rs => rs.filter(x => x.key !== r.key))} style={{ padding: '4px 8px', display: 'inline-flex' }}>
-                          <IconTrash size={14} />
-                        </button>
-                      </td>
-                    </tr>,
-                    (p || (okEmail(e) && !checked.has(e))) && (
-                      <tr key={r.key + '-p'} style={p ? { background: '#fdf1ee' } : undefined}>
-                        <td colSpan={9} style={{ ...td, paddingTop: 0, fontSize: 12, color: p ? '#c84b2f' : 'var(--text3)' }}>
-                          {p || 'checking for an existing account…'}
-                        </td>
-                      </tr>
-                    ),
-                  ]
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ListTable rows={rows} setRows={setRows} problem={problem}
+            isChecking={e => okEmail(e) && !checked.has(e)}
+            onRemove={r => setRows(rs => rs.filter(x => x.key !== r.key))} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" disabled={rows.length >= MAX} onClick={() => setRows(rs => [...rs, blankRow()])} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <IconPlus size={14} /> Add a lab user
@@ -382,6 +335,176 @@ export default function ImportLabUsers({ session, toast }) {
 const th = { textAlign: 'left', padding: '8px 6px', fontSize: 12, fontWeight: 700, color: 'var(--text2)', borderBottom: '1px solid var(--border)' }
 const td = { padding: '4px 6px', verticalAlign: 'middle' }
 const cell = { width: '100%', minWidth: 110, padding: '6px 8px', fontSize: 13, boxSizing: 'border-box' }
+
+// The list, as an editable table. Shared by the review step and by Edit list
+// on an import that was already added, so the two cannot drift apart.
+//   emailLocked(r): the email cannot change (they have signed in)
+//   canRemove(r):   false → the bin is disabled, with removeHint as its title
+//   r.removed:      Edit list marks a person for removal (with Undo) instead
+//                   of dropping the row, since saving deletes an account
+function ListTable({ rows, setRows, problem, isChecking, onRemove, emailLocked = () => false, canRemove = () => true, removeHint = '' }) {
+  const live = rows.filter(r => !r.removed)
+  const set = (key, patch) => setRows(rs => rs.map(r => r.key === key ? { ...r, ...patch } : r))
+  const colAll = f => live.length > 0 && live.every(r => r[f])
+  const setCol = (f, v) => setRows(rs => rs.map(r => r.removed ? r : { ...r, [f]: v }))
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr>
+            <th style={th}>First name</th><th style={th}>Last name</th><th style={th}>Email</th><th style={th}>Supervisor</th>
+            {[['s1', 'Step 1'], ['s2', 'Step 2'], ['s3', 'Step 3'], ['yearly', 'Yearly re-safety']].map(([f, l]) => (
+              <th key={f} style={{ ...th, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <label style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                  {l}<input type="checkbox" checked={colAll(f)} onChange={e => setCol(f, e.target.checked)} style={{ width: 'auto' }} />
+                </label>
+              </th>
+            ))}
+            <th style={th} />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            if (r.removed) return (
+              <tr key={r.key} style={{ opacity: 0.55 }}>
+                <td colSpan={8} style={{ ...td, textDecoration: 'line-through' }}>{fullName(r)} · {r.email} — will be removed (account deleted) when you save</td>
+                <td style={td}><button className="btn btn-sm" onClick={() => set(r.key, { removed: false })}>Undo</button></td>
+              </tr>
+            )
+            const p = problem(r)
+            const e = r.email.trim().toLowerCase()
+            const locked = emailLocked(r)
+            return [
+              <tr key={r.key} style={p ? { background: '#fdf1ee' } : undefined}>
+                <td style={td}><input value={r.first} maxLength={60} onChange={ev => set(r.key, { first: ev.target.value })} style={cell} /></td>
+                <td style={td}><input value={r.last} maxLength={60} onChange={ev => set(r.key, { last: ev.target.value })} style={cell} /></td>
+                <td style={td}><input value={r.email} maxLength={120} readOnly={locked} title={locked ? 'They have signed in with this email — it can no longer be changed here' : undefined}
+                  onChange={ev => set(r.key, { email: ev.target.value })}
+                  style={{ ...cell, minWidth: 200, borderColor: p && p !== 'name missing' ? '#c84b2f' : undefined, ...(locked ? { background: 'var(--surface2)', color: 'var(--text3)' } : {}) }} /></td>
+                <td style={td}><input value={r.supervisor} maxLength={120} onChange={ev => set(r.key, { supervisor: ev.target.value })} style={{ ...cell, minWidth: 160 }} /></td>
+                {['s1', 's2', 's3', 'yearly'].map(f => (
+                  <td key={f} style={{ ...td, textAlign: 'center' }}>
+                    <input type="checkbox" checked={r[f]} onChange={ev => set(r.key, { [f]: ev.target.checked })} style={{ width: 'auto' }} />
+                  </td>
+                ))}
+                <td style={td}>
+                  <button className="btn" disabled={!canRemove(r)} title={canRemove(r) ? 'Remove' : removeHint} onClick={() => onRemove(r)} style={{ padding: '4px 8px', display: 'inline-flex' }}>
+                    <IconTrash size={14} />
+                  </button>
+                </td>
+              </tr>,
+              (p || isChecking(e)) && (
+                <tr key={r.key + '-p'} style={p ? { background: '#fdf1ee' } : undefined}>
+                  <td colSpan={9} style={{ ...td, paddingTop: 0, fontSize: 12, color: p ? '#c84b2f' : 'var(--text3)' }}>
+                    {p || 'checking for an existing account…'}
+                  </td>
+                </tr>
+              ),
+            ]
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Edit list: the people of an import that was already added. Names,
+// supervisor, safety steps and yearly re-safety for anyone; the email and
+// removal only for someone who has not signed in yet (removal deletes the
+// account; after sign-in, deactivate them on Lab Users instead).
+function EditImport({ batch, people, orgId, toast, onClose, onSaved }) {
+  const toRow = u => {
+    const req = requiredSafetySteps(u.required_safety_steps)
+    return {
+      key: u.id, id: u.id, first: u.name || '', last: u.last_name || '', email: u.email || '', supervisor: u.supervisor || '',
+      s1: req.includes(1), s2: req.includes(2), s3: req.includes(3), yearly: u.annual_resafety !== false,
+      signedIn: !!(u.password_set_at || u.must_change_password === false), removed: false, orig: u,
+    }
+  }
+  const [rows, setRows] = useState(() => people.map(toRow))
+  const [existing, setExisting] = useState(new Set())
+  const [checked, setChecked] = useState(new Set())
+  const [saving, setSaving] = useState(false)
+
+  const changedEmail = r => r.email.trim().toLowerCase() !== (r.orig.email || '').toLowerCase()
+  const pending = useMemo(() => [...new Set(rows.filter(r => !r.removed && changedEmail(r)).map(r => r.email.trim().toLowerCase()).filter(okEmail))].filter(e => !checked.has(e)), [rows, checked])
+  useEffect(() => {
+    if (!pending.length) return
+    const t = setTimeout(async () => {
+      const { data, error } = await callFn({ action: 'check', orgId, emails: pending })
+      if (error) { toast('Could not check for existing accounts: ' + error); return }
+      setExisting(s => new Set([...s, ...(data?.existing || [])]))
+      setChecked(s => new Set([...s, ...pending]))
+    }, 500)
+    return () => clearTimeout(t)
+  }, [pending.join(','), orgId])
+
+  const counts = {}
+  rows.filter(r => !r.removed).forEach(r => { const e = r.email.trim().toLowerCase(); if (e) counts[e] = (counts[e] || 0) + 1 })
+  const problem = r => {
+    const e = r.email.trim().toLowerCase()
+    if (!r.first.trim() && !r.last.trim()) return 'name missing'
+    if (!okEmail(e)) return e ? 'email is not valid' : 'email missing'
+    if (counts[e] > 1) return 'same email twice in this list'
+    if (changedEmail(r) && existing.has(e)) return 'already has an ICT-Lab account — use another email'
+    return null
+  }
+  const live = rows.filter(r => !r.removed)
+  const bad = live.filter(problem).length
+  const changes = rows.filter(r => r.removed || r.first !== (r.orig.name || '') || r.last !== (r.orig.last_name || '') || r.supervisor !== (r.orig.supervisor || '')
+    || changedEmail(r) || JSON.stringify(stepsOf(r)) !== JSON.stringify(stepsOf(toRow(r.orig))) || r.yearly !== (r.orig.annual_resafety !== false))
+
+  async function save() {
+    setSaving(true)
+    const errors = []
+    let removed = 0
+    for (const r of changes) {
+      const who = fullName(r)
+      if (r.removed) {
+        const err = await deleteUserRow(r.id)
+        if (err) errors.push(`${who}: ${err}`); else removed++
+        continue
+      }
+      const { data, error } = await sb.from('users').update({
+        name: r.first.trim() || null, last_name: r.last.trim() || null, supervisor: r.supervisor.trim() || null,
+        required_safety_steps: stepsOf(r), annual_resafety: r.yearly,
+      }).eq('id', r.id).select('id')
+      if (error || !data?.length) { errors.push(`${who}: ${error?.message || 'not saved'}`); continue }
+      if (changedEmail(r)) {
+        const { error: e2 } = await callFn({ action: 'email', orgId, userId: r.id, email: r.email.trim().toLowerCase() })
+        if (e2) errors.push(`${who}: email not changed — ${e2}`)
+      }
+    }
+    if (removed) await sb.from('lab_user_imports').update({ user_count: Math.max(0, (batch.user_count || people.length) - removed) }).eq('id', batch.id)
+    setSaving(false)
+    if (errors.length) toast(`Saved, except: ${errors.join('; ')}`)
+    else toast(`${changes.length} change${changes.length !== 1 ? 's' : ''} saved.`)
+    onSaved()
+  }
+
+  return (
+    <div style={{ padding: '12px 16px 16px', background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+        Change anything in this list — the ticks in the header set the whole column. The email can change, and a person
+        can be removed, only until they sign in. Changing someone's email retires their unsent welcome email; send them a
+        new one afterwards. To add more people, start a <strong>New import</strong>.
+      </div>
+      <ListTable rows={rows} setRows={setRows} problem={problem}
+        isChecking={e => okEmail(e) && pending.includes(e)}
+        emailLocked={r => r.signedIn}
+        canRemove={r => !r.signedIn}
+        removeHint="They have signed in — deactivate them on Lab Users instead"
+        onRemove={r => setRows(rs => rs.map(x => x.key === r.key ? { ...x, removed: true } : x))} />
+      {bad > 0 && <Warn>{bad} row{bad !== 1 ? 's need' : ' needs'} fixing before you can save.</Warn>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn btn-primary" disabled={saving || bad > 0 || pending.length > 0 || !changes.length} onClick={save}>
+          {saving ? 'Saving…' : changes.length ? `Save changes (${changes.length})` : 'No changes'}
+        </button>
+        <button className="btn" disabled={saving} onClick={onClose}>{changes.length ? 'Discard changes' : 'Close'}</button>
+      </div>
+    </div>
+  )
+}
 
 function Warn({ children }) {
   return (
@@ -499,6 +622,7 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
   const [notSetUp, setNotSetUp] = useState(false)
   const [sending, setSending] = useState(null)  // batch id whose send chooser is open
   const [rowSending, setRowSending] = useState(null)  // user id whose send chooser is open
+  const [editing, setEditing] = useState(null)        // batch id open in Edit list
   const [progress, setProgress] = useState('')
 
   useEffect(() => { load() }, [orgId])
@@ -661,6 +785,9 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                 </button>
               )}
               <span className="badge" style={{ background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border)' }}>{inN} of {us.length} signed in</span>
+              {us.length > 0 && editing !== b.id && (
+                <button className="btn btn-sm" onClick={e => { e.stopPropagation(); setEditing(b.id); setOpenBatch(b.id) }}>Edit list</button>
+              )}
               {scheduled && (
                 <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
                   <button className="btn btn-sm" disabled={busy === b.id} onClick={() => reschedule(b.id, new Date().toISOString())}>Send now</button>
@@ -692,7 +819,11 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                 <button className="btn btn-sm" onClick={() => setMoving(null)}>Cancel</button>
               </div>
             )}
-            {open && (
+            {editing === b.id && (
+              <EditImport batch={b} people={us} orgId={orgId} toast={toast}
+                onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />
+            )}
+            {open && editing !== b.id && (
               <div style={{ overflowX: 'auto', background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead><tr><th style={th}>Lab user</th><th style={th}>Email</th><th style={th}>Welcome email</th><th style={th}>First sign-in &amp; own password</th><th style={th}>Safety</th><th style={th} /></tr></thead>
