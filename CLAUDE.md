@@ -2114,7 +2114,7 @@ names with no login) — the button there now opens this tab.
   history for every manager of the org; Continue reopens the review, a
   successful import deletes the draft. The review and confirm pages both say
   nothing is sent yet. The email step has Save and finish later too: the
-  accounts stay, and the import's **Send welcome emails (N)** in the history
+  accounts stay, and the import's **Welcome emails (N): choose when…** in the history
   sends to everyone never emailed (each gets a NEW temp password via `reset`,
   since the first was never shown). `SendChooser` is shared by both.
 - Review: editable rows, Step 1/2/3 + Yearly re-safety ticks (header ticks

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react'
 import { sb } from '../../lib/supabase'
 import { generateTempPassword } from '../../lib/tempPassword'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
@@ -498,6 +498,7 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
   const [moving, setMoving] = useState(null) // { batchId, date, time }
   const [notSetUp, setNotSetUp] = useState(false)
   const [sending, setSending] = useState(null)  // batch id whose send chooser is open
+  const [rowSending, setRowSending] = useState(null)  // user id whose send chooser is open
   const [progress, setProgress] = useState('')
 
   useEffect(() => { load() }, [orgId])
@@ -542,15 +543,16 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
   }
   const signedIn = u => u.password_set_at || u.must_change_password === false
 
-  async function resend(u) {
+  async function resend(u, sendAfter = null) {
     setBusy(u.id)
     const password = generateTempPassword()
     const { error } = await callFn({ action: 'reset', orgId, userId: u.id, password })
     if (error) { toast(error); setBusy(null); return }
-    const err = await queueWelcomeEmail(sb, { name: fullName(u), toEmail: u.email, orgId, userId: u.id, password, required: u.required_safety_steps, selfApprove: !!u.safety_self_approve })
+    const err = await queueWelcomeEmail(sb, { name: fullName(u), toEmail: u.email, orgId, userId: u.id, password, sendAfter, required: u.required_safety_steps, selfApprove: !!u.safety_self_approve })
     if (err) toast('Could not queue the email: ' + err.message)
-    else { kickSender(); toast(`New welcome email (with a new temporary password) sent to ${u.email}.`) }
-    setBusy(null); load()
+    else if (sendAfter) toast(`Welcome email to ${u.email} scheduled for ${fmt(sendAfter)} (Chicago time).`)
+    else { kickSender(); toast(`Welcome email (with a new temporary password) sent to ${u.email}.`) }
+    setBusy(null); setRowSending(null); load()
   }
 
   // Welcome emails for everyone in an import who was never emailed (the
@@ -650,12 +652,12 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtDay(b.created_at)}, {new Date(b.created_at).getFullYear()} · {us.length} lab user{us.length !== 1 ? 's' : ''}</div>
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>by {b.created_by_name || 'a lab manager'}</div>
               </div>
-              <span className="badge" style={scheduled ? { background: '#fff7e6', color: '#7a4a00' } : { background: 'var(--accent-light)', color: '#085041' }}>
+              <span className="badge" style={scheduled || !b.email_send_at ? { background: '#fff7e6', color: '#7a4a00' } : { background: 'var(--accent-light)', color: '#085041' }}>
                 {scheduled ? `Email scheduled ${fmt(b.email_send_at)}` : b.email_send_at ? `Email sent ${fmt(b.email_send_at)} · ${sentN}/${us.length}` : 'Email not sent'}
               </span>
               {neverEmailed.length > 0 && sending !== b.id && (
                 <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); setSending(b.id) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <IconMail size={14} /> Send welcome emails ({neverEmailed.length})
+                  <IconMail size={14} /> Welcome emails ({neverEmailed.length}): choose when…
                 </button>
               )}
               <span className="badge" style={{ background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border)' }}>{inN} of {us.length} signed in</span>
@@ -669,7 +671,8 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
             {sending === b.id && (
               <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-                  {neverEmailed.length} lab user{neverEmailed.length !== 1 ? 's have' : ' has'} not been emailed yet. Each email carries a new temporary password.
+                  {neverEmailed.length} lab user{neverEmailed.length !== 1 ? 's have' : ' has'} not been emailed yet. Nothing is sent until you
+                  click the button below. Each email carries a new temporary password.
                 </div>
                 <SendChooser count={neverEmailed.length} busy={busy === b.id} progress={progress} toast={toast} onSend={iso => sendBatch(b, neverEmailed, iso)}>
                   <button className="btn" disabled={busy === b.id} onClick={() => setSending(null)}>Not now</button>
@@ -699,7 +702,8 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                       const req = requiredSafetySteps(u.required_safety_steps)
                       const got = req.filter(n => done[u.id]?.has(n)).length
                       return (
-                        <tr key={u.id}>
+                        <Fragment key={u.id}>
+                        <tr>
                           <td style={td2}>{fullName(u)}{!u.is_active && <span style={{ fontSize: 11, color: 'var(--text3)' }}> · inactive</span>}</td>
                           <td style={td2}>{u.email}</td>
                           <td style={{ ...td2, color: ms.tone === 'ok' ? '#085041' : ms.tone === 'bad' ? '#c84b2f' : 'var(--text2)' }}>{ms.label}</td>
@@ -712,20 +716,34 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                               : `${got}/${req.length}`}
                           </td>
                           <td style={td2}>
-                            {!signedIn(u) && u.is_active && (ms.resend || ms.tone === 'ok') && (
-                              <button className="btn btn-sm" disabled={busy === u.id} onClick={() => resend(u)}>
-                                {busy === u.id ? 'Sending…' : ms.label === 'Not sent' ? 'Send email' : 'Resend email'}
+                            {!signedIn(u) && u.is_active && (ms.resend || ms.tone === 'ok') && rowSending !== u.id && (
+                              <button className="btn btn-sm" disabled={busy === u.id} onClick={() => setRowSending(u.id)}>
+                                {ms.label === 'Not sent' ? 'Email…' : 'Resend…'}
                               </button>
                             )}
                           </td>
                         </tr>
+                        {rowSending === u.id && (
+                          <tr>
+                            <td colSpan={6} style={{ ...td2, background: 'var(--surface2)' }}>
+                              <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 8 }}>
+                                Welcome email to <strong>{u.email}</strong>{ms.label === 'Not sent' ? '' : ' again'} — nothing is sent until you click the button below.
+                                It carries a new temporary password{ms.label === 'Not sent' ? '' : '; the older email stops working'}.
+                              </div>
+                              <SendChooser count={1} busy={busy === u.id} toast={toast} onSend={iso => resend(u, iso)}>
+                                <button className="btn" disabled={busy === u.id} onClick={() => setRowSending(null)}>Not now</button>
+                              </SendChooser>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       )
                     })}
                     {us.length === 0 && <tr><td colSpan={6} style={{ ...td2, color: 'var(--text3)' }}>Everyone from this import has since been deleted.</td></tr>}
                   </tbody>
                 </table>
                 <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 12px' }}>
-                  Resend makes a new temporary password, so only the newest email works.
+                  Email… and Resend… open the same choice (now, or a date and time) before anything is sent. Each makes a new temporary password, so only the newest email works.
                 </div>
               </div>
             )}
