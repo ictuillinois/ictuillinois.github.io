@@ -409,19 +409,45 @@ function LimitNote() {
 }
 
 // ── Email now, or at a date and time ─────────────────────────────────────
-function EmailStep({ created, orgId, toast, onDone }) {
+// Used right after the accounts are made, and again from the history for an
+// import whose emails were never sent ("Save and finish later").
+function SendChooser({ count, busy, progress, onSend, toast, children }) {
   const [mode, setMode] = useState('now')
   const [when, setWhen] = useState(tomorrowNine)
+  function go() {
+    if (mode === 'now') { onSend(null); return }
+    if (!when.date || !when.time) { toast('Pick a date and a time.'); return }
+    const iso = chicagoToIso(when.date, when.time)
+    if (new Date(iso) <= new Date()) { toast('That time has already passed — pick a later one.'); return }
+    onSend(iso)
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <label style={radio}><input type="radio" checked={mode === 'now'} onChange={() => setMode('now')} style={{ width: 'auto' }} /> Yes, send now</label>
+      <label style={radio}><input type="radio" checked={mode === 'later'} onChange={() => setMode('later')} style={{ width: 'auto' }} /> No — send it later, on a date and time I choose</label>
+      {mode === 'later' && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', paddingLeft: 24 }}>
+          <div className="field" style={{ margin: 0 }}><label>Date</label><input type="date" value={when.date} onChange={e => setWhen(w => ({ ...w, date: e.target.value }))} /></div>
+          <div className="field" style={{ margin: 0 }}><label>Time</label><input type="time" value={when.time} onChange={e => setWhen(w => ({ ...w, time: e.target.value }))} /></div>
+          <span style={{ fontSize: 12, color: 'var(--text3)', paddingBottom: 8 }}>Chicago time</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn btn-primary" disabled={busy} onClick={go} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {mode === 'now' ? <IconMail size={16} /> : <IconCalendar size={16} />}
+          {busy ? (progress || 'Queuing…') : mode === 'now' ? `Send ${count} email${count !== 1 ? 's' : ''} now` : 'Schedule the emails'}
+        </button>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function EmailStep({ created, orgId, toast, onDone }) {
   const [busy, setBusy] = useState(false)
   const n = created.users.length
 
-  async function send() {
-    let sendAfter = null
-    if (mode === 'later') {
-      if (!when.date || !when.time) { toast('Pick a date and a time.'); return }
-      sendAfter = chicagoToIso(when.date, when.time)
-      if (new Date(sendAfter) <= new Date()) { toast('That time has already passed — pick a later one.'); return }
-    }
+  async function send(sendAfter) {
     setBusy(true)
     let failed = 0
     for (const u of created.users) {
@@ -445,23 +471,15 @@ function EmailStep({ created, orgId, toast, onDone }) {
       <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
         The email has the ICT-Lab address, their sign-in email and temporary password, and what to do first.
       </div>
-      <label style={radio}><input type="radio" checked={mode === 'now'} onChange={() => setMode('now')} style={{ width: 'auto' }} /> Yes, send now</label>
-      <label style={radio}><input type="radio" checked={mode === 'later'} onChange={() => setMode('later')} style={{ width: 'auto' }} /> No — send it later, on a date and time I choose</label>
-      {mode === 'later' && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', paddingLeft: 24 }}>
-          <div className="field" style={{ margin: 0 }}><label>Date</label><input type="date" value={when.date} onChange={e => setWhen(w => ({ ...w, date: e.target.value }))} /></div>
-          <div className="field" style={{ margin: 0 }}><label>Time</label><input type="time" value={when.time} onChange={e => setWhen(w => ({ ...w, time: e.target.value }))} /></div>
-          <span style={{ fontSize: 12, color: 'var(--text3)', paddingBottom: 8 }}>Chicago time</span>
-        </div>
-      )}
+      <SendChooser count={n} busy={busy} onSend={send} toast={toast}>
+        <button className="btn" disabled={busy} onClick={() => {
+          toast(`${n} lab user${n !== 1 ? 's' : ''} added — no email sent yet. Send it any time from this import in the history.`)
+          onDone(created.batchId)
+        }}>Save and finish later</button>
+      </SendChooser>
       <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-        Leaving this page now is safe: the accounts exist, and the history has a “Send email” button for each person.
-      </div>
-      <div>
-        <button className="btn btn-primary" disabled={busy} onClick={send} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          {mode === 'now' ? <IconMail size={16} /> : <IconCalendar size={16} />}
-          {busy ? 'Queuing…' : mode === 'now' ? `Send ${n} email${n !== 1 ? 's' : ''} now` : 'Schedule the emails'}
-        </button>
+        Save and finish later: the accounts stay, nobody is emailed, and this import's
+        “Send welcome emails” button in the history picks up from here.
       </div>
     </div>
   )
@@ -479,6 +497,8 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
   const [busy, setBusy] = useState(null)
   const [moving, setMoving] = useState(null) // { batchId, date, time }
   const [notSetUp, setNotSetUp] = useState(false)
+  const [sending, setSending] = useState(null)  // batch id whose send chooser is open
+  const [progress, setProgress] = useState('')
 
   useEffect(() => { load() }, [orgId])
 
@@ -531,6 +551,31 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
     if (err) toast('Could not queue the email: ' + err.message)
     else { kickSender(); toast(`New welcome email (with a new temporary password) sent to ${u.email}.`) }
     setBusy(null); load()
+  }
+
+  // Welcome emails for everyone in an import who was never emailed (the
+  // manager chose "Save and finish later"). Their first temporary password
+  // was never shown to anyone, so each gets a new one with the email.
+  async function sendBatch(b, people, sendAfter) {
+    setBusy(b.id)
+    let ok = 0, failed = 0
+    for (let i = 0; i < people.length; i++) {
+      const u = people[i]
+      setProgress(`Preparing ${i + 1} of ${people.length}…`)
+      const password = generateTempPassword()
+      const { error } = await callFn({ action: 'reset', orgId, userId: u.id, password })
+      if (error) { failed++; continue }
+      const err = await queueWelcomeEmail(sb, { name: fullName(u), toEmail: u.email, orgId, userId: u.id, password, sendAfter, required: u.required_safety_steps, selfApprove: !!u.safety_self_approve })
+      if (err) failed++; else ok++
+    }
+    if (ok) {
+      await sb.from('lab_user_imports').update({ email_send_at: sendAfter || new Date().toISOString() }).eq('id', b.id)
+      if (!sendAfter) kickSender()
+    }
+    setBusy(null); setProgress(''); setSending(null)
+    toast((sendAfter ? `${ok} email${ok !== 1 ? 's' : ''} scheduled for ${fmt(sendAfter)} (Chicago time).` : `${ok} welcome email${ok !== 1 ? 's' : ''} on their way.`)
+      + (failed ? ` ${failed} could not be prepared — use Send email on their rows.` : ''))
+    load()
   }
 
   // Move every unsent welcome email of this import — to now, or a new time
@@ -597,6 +642,7 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
         const sentN = states.filter(s => s.tone === 'ok').length
         const inN = us.filter(signedIn).length
         const open = openBatch === b.id
+        const neverEmailed = us.filter(u => !mail[u.id] && !signedIn(u) && u.is_active)
         return (
           <div key={b.id} style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)' }}>
             <div onClick={() => setOpenBatch(open ? null : b.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', cursor: 'pointer' }}>
@@ -607,6 +653,11 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
               <span className="badge" style={scheduled ? { background: '#fff7e6', color: '#7a4a00' } : { background: 'var(--accent-light)', color: '#085041' }}>
                 {scheduled ? `Email scheduled ${fmt(b.email_send_at)}` : b.email_send_at ? `Email sent ${fmt(b.email_send_at)} · ${sentN}/${us.length}` : 'Email not sent'}
               </span>
+              {neverEmailed.length > 0 && sending !== b.id && (
+                <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); setSending(b.id) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <IconMail size={14} /> Send welcome emails ({neverEmailed.length})
+                </button>
+              )}
               <span className="badge" style={{ background: 'var(--surface)', color: 'var(--text2)', border: '1px solid var(--border)' }}>{inN} of {us.length} signed in</span>
               {scheduled && (
                 <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
@@ -615,6 +666,16 @@ function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
                 </div>
               )}
             </div>
+            {sending === b.id && (
+              <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13, color: 'var(--text2)' }}>
+                  {neverEmailed.length} lab user{neverEmailed.length !== 1 ? 's have' : ' has'} not been emailed yet. Each email carries a new temporary password.
+                </div>
+                <SendChooser count={neverEmailed.length} busy={busy === b.id} progress={progress} toast={toast} onSend={iso => sendBatch(b, neverEmailed, iso)}>
+                  <button className="btn" disabled={busy === b.id} onClick={() => setSending(null)}>Not now</button>
+                </SendChooser>
+              </div>
+            )}
             {moving?.batchId === b.id && (
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', padding: '0 16px 12px' }}>
                 <div className="field" style={{ margin: 0 }}><label>Date</label><input type="date" value={moving.date} onChange={e => setMoving(m => ({ ...m, date: e.target.value }))} /></div>

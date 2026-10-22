@@ -2113,7 +2113,10 @@ names with no login) — the button there now opens this tab.
   `status = 'draft'` + `draft_rows` (no passwords), shown at the top of the
   history for every manager of the org; Continue reopens the review, a
   successful import deletes the draft. The review and confirm pages both say
-  nothing is sent yet.
+  nothing is sent yet. The email step has Save and finish later too: the
+  accounts stay, and the import's **Send welcome emails (N)** in the history
+  sends to everyone never emailed (each gets a NEW temp password via `reset`,
+  since the first was never shown). `SendChooser` is shared by both.
 - Review: editable rows, Step 1/2/3 + Yearly re-safety ticks (header ticks
   set a column). Invalid email, same email twice, or an email that already
   has an account (any org) → red row, Add is blocked until fixed.
