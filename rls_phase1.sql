@@ -183,11 +183,18 @@ $b$);
 -- STEP 4: organizations
 -- ────────────────────────────────────────────────────────────────
 
-SELECT _apply_rls('organizations', 'orgs_policy', $b$
-FOR ALL TO authenticated
-USING    (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
-WITH CHECK (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
+-- Members read; only admins / lab managers of the org change it; only the
+-- super admin creates or deletes (Oct 2026, org_settings_managers_only.sql).
+-- It was FOR ALL to every member, so a lab user could rewrite the org's
+-- settings through the API. The change rules come after my_managed_org_ids()
+-- is defined — a policy naming a missing function fails, and _apply_rls then
+-- turns RLS OFF for the table.
+DROP POLICY IF EXISTS orgs_policy ON public.organizations;
+SELECT _apply_rls('organizations', 'orgs_select', $b$
+FOR SELECT TO authenticated
+USING (is_super_admin() OR id IN (SELECT oid FROM my_org_ids() AS oid))
 $b$);
+
 
 
 -- Per-role icon pools (layer 2 of the icon hierarchy). These never existed on
@@ -801,6 +808,20 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT organization_id FROM users
   WHERE auth_id::text = auth.uid()::text AND is_active AND role IN ('admin', 'user') AND organization_id IS NOT NULL
 $$;
+
+-- organizations: who may CHANGE an org's settings (needs my_managed_org_ids)
+SELECT _apply_rls('organizations', 'orgs_update', $b$
+FOR UPDATE TO authenticated
+USING      (is_super_admin() OR id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+WITH CHECK (is_super_admin() OR id IN (SELECT oid FROM my_managed_org_ids() AS oid))
+$b$);
+SELECT _apply_rls('organizations', 'orgs_insert', $b$
+FOR INSERT TO authenticated WITH CHECK (is_super_admin())
+$b$);
+SELECT _apply_rls('organizations', 'orgs_delete', $b$
+FOR DELETE TO authenticated USING (is_super_admin())
+$b$);
+
 
 -- Lab users read only their OWN locker; lab managers / admins read and write
 -- the organization's. (They used to read every locker, with names.) Same as
@@ -1662,6 +1683,7 @@ DECLARE
     'solo_workspace_invites_policy','solo_workspace_members_policy','solo_transfer_policy',
     'team_workspace_invites_policy','team_workspace_members_policy',
     'sds_documents_policy',
+    'orgs_select','orgs_update','orgs_insert','orgs_delete',
     'legacy_lockdown_policy'
   ];
 BEGIN

@@ -1804,7 +1804,10 @@ export function LabUsersPanel({ toast, session }) {
 }
 
 // ── Supervisor list (org-managed, JSONB array on organizations.supervisors) ──
-function SupervisorPicker({ session, value, onChange, manageable = false }) {
+function SupervisorPicker({ session, value, onChange, manageable: wantManage = false }) {
+  // Only org admins and lab managers edit the list; everyone else picks from
+  // it. The database enforces the same (organizations: orgs_update policy).
+  const manageable = wantManage && (session?.role === 'admin' || session?.role === 'user')
   const [supervisors, setSupervisors] = useState([])
   const [showManager, setShowManager] = useState(false)
 
@@ -1839,7 +1842,9 @@ function SupervisorManager({ session, supervisors, onChanged }) {
 
   async function save(next) {
     setSaving(true)
-    const { error } = await sb.from('organizations').update({ supervisors: next }).eq('id', session.organizationId)
+    // .select(): an update the policy refuses changes 0 rows and is not an error
+    const { data: changed, error: e0 } = await sb.from('organizations').update({ supervisors: next }).eq('id', session.organizationId).select('id')
+    const error = e0 || (changed?.length ? null : { message: 'only admins and lab managers can change the supervisor list' })
     setSaving(false)
     if (error) { toast('Could not save: ' + error.message); return }
     onChanged()

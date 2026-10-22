@@ -2179,3 +2179,16 @@ lab_safety_progress) · Signed in (`password_set_at` or a Terms acceptance) ·
 Icons / Edit / Deactivate / Delete (`actionButtons`, shared with the cards).
 Saving the Edit box no longer wipes `terms_accepted_version` (only a new
 account starts with it null) — it used to re-prompt everyone edited.
+
+## Organization settings: members read, managers change (Oct 2026)
+
+`org_settings_managers_only.sql` (same file in both folders; run in BOTH; the
+rules are also in rls_phase1.sql). `organizations` was FOR ALL to every member,
+so any lab user could rewrite the supervisor list, icon pools, material types,
+contact or logo through the API. Now SELECT = members (`orgs_select`), UPDATE =
+admins / lab managers of that org + super admin (`orgs_update`, via
+`my_managed_org_ids()`), INSERT / DELETE = super admin. In rls_phase1.sql the
+change policies sit AFTER `my_managed_org_ids()` is defined — earlier, the
+CREATE POLICY fails and `_apply_rls` turns RLS off for the table.
+`SupervisorPicker` shows "+ Manage" to admins / lab managers only, and the
+list save `.select()`s so a refused write says so.
