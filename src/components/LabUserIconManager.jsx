@@ -116,7 +116,7 @@ export default function LabUserIconManager({ labUser, orgId, onClose }) {
       pool = orgPoolForRole(activeRole.role, data)
     }
     const mods = pool
-      ? ALL_MODULES_META.filter(m => pool.includes(m.key) || pinned.includes(m.key))
+      ? ALL_MODULES_META.filter(m => (pool.includes(m.key) && !(activeRole.role === 'lab_user' && m.neverLabUser)) || pinned.includes(m.key))
       : ALL_MODULES_META.filter(m => activeRole.role === 'lab_user'
           ? (!m.neverLabUser && !m.adminOnly && !m.soloLocked)
           : (!m.adminOnly && !m.soloLocked))

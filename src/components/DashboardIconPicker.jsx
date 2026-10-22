@@ -12,7 +12,9 @@ export const ALL_MODULES_META = [
   { key: 'equipment',     screen: 'equipment',     label: 'Equipment & Maintenance', sub: 'Lab equipment inventory tracking',   icon: '🔧', bg: '#fef3c7', color: '#92400e', roles: ['team'], labManagerOnly: true },
   { key: 'equipmenthub',  screen: 'equipmenthub',  label: 'Equipment SOP',     sub: 'SOPs, videos & standards',           icon: '📚', bg: '#E1F5EE', color: '#085041', roles: ['team'], labManagerOnly: true },
   { key: 'remessages',    screen: 'remessages',    label: 'Lab Messages',      sub: 'Internal chat between lab managers & admin', icon: '💬', bg: '#e0f7fa', color: '#0891b2', roles: ['team'], labManagerOnly: true },
-  { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], labManagerOnly: true },
+  // neverLabUser: Supply Inventory is for lab managers and admins only — no
+  // pool, per-user assignment or saved pick can give it to a lab user (Oct 2026).
+  { key: 'supply',        screen: 'home',          label: 'Supply Inventory',  sub: 'Weekly inspection & export',         icon: '📦', bg: '#E1F5EE', color: '#1D9E75', roles: ['team'], labManagerOnly: true, neverLabUser: true },
   // ── All users ──────────────────────────────────────────────────────────
   { key: 'projects',  screen: 'projects',  label: 'Project & Material', sub: 'Material inventory & workspace',  icon: '🧪', bg: '#EEEDFE', color: '#534AB7', roles: ['team'] },
   { key: 'booking',   screen: 'booking',   label: 'Booking Equipment', sub: 'Reserve lab equipment',           icon: '📅', bg: '#e0f2fe', color: '#0369a1', roles: ['team'] },

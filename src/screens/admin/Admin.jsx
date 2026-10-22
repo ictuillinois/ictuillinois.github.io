@@ -533,6 +533,13 @@ function OrgIconPoolsPanel({ orgId }) {
           Choose which icons each group sees. Greyed-out icons with a 🔒 are not part of your organization's plan —
           contact us to enable them. Drag cards to set the default display order.
         </div>
+        <div style={{ fontSize: 13, color: '#085041', background: 'var(--accent-light)', border: '1px solid #9FE1CB', borderRadius: 8, padding: '8px 12px', lineHeight: 1.6, marginTop: 10 }}>
+          <strong>Ticked = available by default.</strong> Every ticked icon in a list is what each lab manager (left)
+          or lab user (right) gets, and can show on their dashboard. A new lab user starts with the ticked lab user
+          icons. A lab manager can narrow one lab user's icons further in Lab Management → Icons, but never beyond
+          what is ticked here. Supply Inventory and Lab Management are for lab managers and admins only, so they are
+          not offered for lab users.
+        </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="card">

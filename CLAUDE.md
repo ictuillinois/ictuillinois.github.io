@@ -1125,9 +1125,14 @@ back to the beaker.
   the dashboard card, the sidebar entry, the icon picker's available list,
   Profile's icon panel, and the per-lab-user icon manager. Changing only the
   admin panel makes the checkbox a lie — it saves, and the icon never appears.
-- **`neverLabUser`** is the wall. Only `labmanagement` carries it: it is the
-  console for managing users, so granting it to a lab user is a privilege
-  escalation rather than a feature toggle.
+- **`neverLabUser`** is the wall. `labmanagement` carries it (the console for
+  managing users — granting it is a privilege escalation) and, since Oct 2026,
+  `supply` (Supply Inventory is lab managers + admins only). The wall holds in
+  the org pool editor, LabUserIconManager (even with a pool set), dashboard,
+  sidebar, picker, Profile icons, the phone bottom bar, and App.jsx
+  (`LAB_USER_BLOCKED_SCREENS` sends a lab user on home / inspection / results /
+  history / labmanagement back to the dashboard). Leftover saved data:
+  `lab_user_no_supply.sql`.
 - **The org grant saves an explicit list, never `null`.** `null` does not mean
   "grant everything" — it means "inherit the global app pool", which is
   normally narrower. Ticking Select all used to save `null`, so the org admin

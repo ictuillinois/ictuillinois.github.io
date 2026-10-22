@@ -194,6 +194,8 @@ const INTERNAL = new Set([
   'training', 'remessages', 'labmanagement', 'pm', 'equipment', 'equipmenthub', 'equipmentscan',
 ])
 
+const LAB_USER_BLOCKED_SCREENS = new Set(['home', 'inspection', 'results', 'history', 'labmanagement'])
+
 export default function App() {
   const { session, screen, refreshCache, setScreen, setSidebarSubTab, setActiveModules, setSession, clearSession, setScanEquipmentId } = useAppStore()
   const [loading, setLoading] = useState(true)
@@ -378,6 +380,9 @@ export default function App() {
       return
     }
     if (!INTERNAL.has(screen)) setScreen('dashboard')
+    // Lab-manager-only screens (Supply Inventory, Lab Management): the icons are
+    // hidden from lab users, and this stops ?screen=home or a stale link too.
+    if (session?.role === 'lab_user' && LAB_USER_BLOCKED_SCREENS.has(screen)) setScreen('dashboard')
     if ((session?.role === 'user' || session?.role === 'admin') && userAccess && !INTERNAL.has(screen)) {
       if (!userAccess.has(screen)) setScreen('dashboard')
     }
