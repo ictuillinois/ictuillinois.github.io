@@ -2109,6 +2109,11 @@ names with no login) — the button there now opens this tab.
 
 - Template is a real file: `public/lab-users-template.xlsx` (download →
   fill → upload). **Max 50 per file**, said on the page; more = more files.
+- **Save and finish later:** the unfinished list is a `lab_user_imports` row with
+  `status = 'draft'` + `draft_rows` (no passwords), shown at the top of the
+  history for every manager of the org; Continue reopens the review, a
+  successful import deletes the draft. The review and confirm pages both say
+  nothing is sent yet.
 - Review: editable rows, Step 1/2/3 + Yearly re-safety ticks (header ticks
   set a column). Invalid email, same email twice, or an email that already
   has an account (any org) → red row, Add is blocked until fixed.

@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS lab_user_imports (
   user_count       integer NOT NULL DEFAULT 0,
   email_send_at    timestamptz      -- null = sent at creation
 );
+-- "Save and finish later": an unfinished list is a row with status 'draft'
+-- and its rows in draft_rows (names + emails + ticks; never passwords).
+ALTER TABLE lab_user_imports ADD COLUMN IF NOT EXISTS status     text NOT NULL DEFAULT 'done';
+ALTER TABLE lab_user_imports ADD COLUMN IF NOT EXISTS draft_rows jsonb;
+ALTER TABLE lab_user_imports ADD COLUMN IF NOT EXISTS updated_at timestamptz;
 ALTER TABLE lab_user_imports ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lab_user_imports_policy ON lab_user_imports;
 CREATE POLICY lab_user_imports_policy ON lab_user_imports FOR ALL TO authenticated
@@ -165,6 +170,8 @@ SELECT 'users.' || column_name AS item FROM information_schema.columns
 UNION ALL SELECT 'email_notifications_queue.send_after' FROM information_schema.columns
  WHERE table_schema = 'public' AND table_name = 'email_notifications_queue' AND column_name = 'send_after'
 UNION ALL SELECT 'table lab_user_imports' WHERE to_regclass('public.lab_user_imports') IS NOT NULL
+UNION ALL SELECT 'lab_user_imports.' || column_name FROM information_schema.columns
+ WHERE table_schema = 'public' AND table_name = 'lab_user_imports' AND column_name IN ('status', 'draft_rows', 'updated_at')
 UNION ALL SELECT 'trigger ' || tgname FROM pg_trigger WHERE tgname IN ('zz_safety_self_approve', 'guard_user_admin_fields')
 UNION ALL SELECT 'cron ' || jobname || ' ' || schedule FROM cron.job WHERE jobname = 'annual-safety-reset'
 ORDER BY 1;

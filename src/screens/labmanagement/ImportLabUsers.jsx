@@ -83,6 +83,8 @@ export default function ImportLabUsers({ session, toast }) {
   const [checked, setChecked] = useState(new Set())     // emails the server has looked at
   const [created, setCreated] = useState(null)          // { batchId, users: [{ id, email, name, password, required }] , failed }
   const [openBatch, setOpenBatch] = useState(null)
+  const [draftId, setDraftId] = useState(null)      // lab_user_imports row with status 'draft'
+  const [savingDraft, setSavingDraft] = useState(false)
   const fileRef = useRef(null)
 
   // ── Ask the server which emails already have an account ─────────────────
@@ -153,6 +155,32 @@ export default function ImportLabUsers({ session, toast }) {
   const colAll = f => rows.length > 0 && rows.every(r => r[f])
   const setCol = (f, v) => setRows(rs => rs.map(r => ({ ...r, [f]: v })))
 
+  // Save the unfinished list in the database (no accounts, no passwords), so
+  // any lab manager or admin of the org can finish it later, from any computer.
+  async function saveDraft() {
+    setSavingDraft(true)
+    const row = {
+      organization_id: orgId, status: 'draft', user_count: rows.length,
+      draft_rows: rows.map(({ key, ...r }) => r), updated_at: new Date().toISOString(),
+      created_by: session?.userId || null, created_by_name: session?.username || 'Lab manager',
+    }
+    const { data, error } = draftId
+      ? await sb.from('lab_user_imports').update(row).eq('id', draftId).select('id')
+      : await sb.from('lab_user_imports').insert(row).select('id')
+    setSavingDraft(false)
+    if (error || !data?.length) { toast('Could not save the list: ' + (error?.message || 'nothing was saved')); return }
+    setDraftId(data[0].id)
+    toast(`List saved (${rows.length} lab users) — nobody was added and no email was sent. Continue any time from Import lab users.`)
+    setStage('history')
+  }
+
+  function continueDraft(d) {
+    setRows((d.draft_rows || []).map(r => ({ ...blankRow(), ...r })))
+    setExisting(new Set()); setChecked(new Set()); setCreated(null); setFileNote('')
+    setDraftId(d.id)
+    setStage('review')
+  }
+
   async function create() {
     setStage('creating')
     const withPw = rows.map(r => ({ ...r, password: generateTempPassword() }))
@@ -172,6 +200,7 @@ export default function ImportLabUsers({ session, toast }) {
     const byEmail = Object.fromEntries(withPw.map(r => [r.email.trim().toLowerCase(), r]))
     const users = (data.created || []).map(c => ({ id: c.id, email: c.email, name: fullName(byEmail[c.email]), password: byEmail[c.email].password, required: stepsOf(byEmail[c.email]) }))
     for (const u of users) await applyDefaultIcons(u.id, orgId, 'lab_user')
+    if (draftId && users.length) { await sb.from('lab_user_imports').delete().eq('id', draftId); setDraftId(null) }
     setCreated({ batchId: data.batchId, users, failed: data.failed || [] })
     setStage(users.length ? 'email' : 'review')
     if (!users.length) toast('No lab users were added — see the reasons in the list.')
@@ -182,8 +211,8 @@ export default function ImportLabUsers({ session, toast }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {stage === 'history' && (
-        <History orgId={orgId} toast={toast} openBatch={openBatch} setOpenBatch={setOpenBatch}
-          onNew={() => { setRows([]); setExisting(new Set()); setChecked(new Set()); setCreated(null); setFileNote(''); setStage('upload') }} />
+        <History orgId={orgId} toast={toast} openBatch={openBatch} setOpenBatch={setOpenBatch} onContinue={continueDraft}
+          onNew={() => { setRows([]); setExisting(new Set()); setChecked(new Set()); setCreated(null); setFileNote(''); setDraftId(null); setStage('upload') }} />
       )}
 
       {stage === 'upload' && (
@@ -289,11 +318,20 @@ export default function ImportLabUsers({ session, toast }) {
             all three steps reset and ICT-Lab locks for this person until they pass them again.
           </div>
           {bad > 0 && <Warn>{bad} row{bad !== 1 ? 's need' : ' needs'} fixing before the list can be added.</Warn>}
+          <NothingSentNote>
+            <strong>Nothing is sent yet.</strong> “Add {rows.length} lab user{rows.length !== 1 ? 's' : ''}” opens a confirm page —
+            accounts are made only when you confirm there, and after that you choose when the welcome
+            email goes out (now, or a date and time). Not finished? <strong>Save and finish later</strong> keeps
+            this list for you and the other lab managers.
+          </NothingSentNote>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" disabled={!rows.length || bad > 0 || stillChecking} onClick={() => setStage('confirm')}>
               {stillChecking ? 'Checking emails…' : `Add ${rows.length} lab user${rows.length !== 1 ? 's' : ''}`}
             </button>
-            <button className="btn" onClick={() => setStage('upload')}>Start over</button>
+            <button className="btn" disabled={!rows.length || savingDraft} onClick={saveDraft}>
+              {savingDraft ? 'Saving…' : draftId ? 'Save changes and finish later' : 'Save and finish later'}
+            </button>
+            <button className="btn" onClick={() => setStage(draftId ? 'history' : 'upload')}>{draftId ? 'Back to history' : 'Start over'}</button>
           </div>
         </div>
       )}
@@ -318,8 +356,12 @@ export default function ImportLabUsers({ session, toast }) {
           <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
             Each gets an ICT-Lab account with a temporary password and chooses their own at first sign-in.
             The safety steps they complete count as approved straight away — no lab manager approval,
-            because you made this list. The welcome email is next.
+            because you made this list.
           </div>
+          <NothingSentNote>
+            <strong>No email is sent on this page.</strong> Next you choose: send the welcome emails now, or on a
+            date and time you pick.
+          </NothingSentNote>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" disabled={stage === 'creating'} onClick={create}>
               {stage === 'creating' ? `Adding ${rows.length}…` : 'Yes, add them'}
@@ -345,6 +387,14 @@ function Warn({ children }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: '#7a4a00', background: '#fff7e6', border: '1px solid #f1d49b', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
       <IconAlert size={16} style={{ marginTop: 2 }} /><div>{children}</div>
+    </div>
+  )
+}
+
+function NothingSentNote({ children }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, color: 'var(--text2)', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
+      <IconMail size={16} style={{ marginTop: 2, color: 'var(--text3)' }} /><div>{children}</div>
     </div>
   )
 }
@@ -419,8 +469,10 @@ function EmailStep({ created, orgId, toast, onDone }) {
 const radio = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }
 
 // ── History: every import, newest first ─────────────────────────────────
-function History({ orgId, toast, onNew, openBatch, setOpenBatch }) {
+function History({ orgId, toast, onNew, onContinue, openBatch, setOpenBatch }) {
   const [batches, setBatches] = useState(null)
+  const [drafts, setDrafts] = useState([])
+  const [dropping, setDropping] = useState(null)   // draft id awaiting "Delete?" confirmation
   const [people, setPeople] = useState({})   // batchId → users rows
   const [mail, setMail] = useState({})       // userId → latest welcome row
   const [done, setDone] = useState({})       // userId → Set of completed step numbers
@@ -438,8 +490,11 @@ function History({ orgId, toast, onNew, openBatch, setOpenBatch }) {
       setNotSetUp(true); setBatches([]); return
     }
     if (error) { toast('Could not load the import history: ' + error.message); setBatches([]); return }
-    setBatches(bs || [])
-    const ids = (bs || []).map(b => b.id)
+    // Saved, unfinished lists sit in the same table with status 'draft'
+    setDrafts((bs || []).filter(b => b.status === 'draft'))
+    const done = (bs || []).filter(b => b.status !== 'draft')
+    setBatches(done)
+    const ids = done.map(b => b.id)
     if (!ids.length) return
     const { data: us } = await sb.from('users').select('*').in('import_batch_id', ids).order('name')
     const byBatch = {}
@@ -510,7 +565,31 @@ function History({ orgId, toast, onNew, openBatch, setOpenBatch }) {
         <button className="btn btn-primary btn-sm" onClick={onNew} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlus size={14} /> New import</button>
       </div>
       <LimitNote />
-      {batches.length === 0 && <div className="empty-state">No imports yet. Start one with “New import”.</div>}
+      {drafts.map(d => (
+        <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', border: '1px dashed #f1d49b', background: '#fff7e6', borderRadius: 12 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#7a4a00' }}>Saved list, not added yet · {d.user_count} lab user{d.user_count !== 1 ? 's' : ''}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>saved {fmt(d.updated_at || d.created_at)} by {d.created_by_name || 'a lab manager'} · no accounts made, no email sent</div>
+          </div>
+          {dropping === d.id ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 13 }}>Delete this list?</span>
+              <button className="btn btn-danger btn-sm" onClick={async () => {
+                const { data, error } = await sb.from('lab_user_imports').delete().eq('id', d.id).select('id')
+                if (error || !data?.length) toast('Could not delete it: ' + (error?.message || 'nothing was deleted'))
+                setDropping(null); load()
+              }}>Delete</button>
+              <button className="btn btn-sm" onClick={() => setDropping(null)}>Keep</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => onContinue(d)}>Continue</button>
+              <button className="btn btn-sm" title="Delete this saved list" onClick={() => setDropping(d.id)} style={{ display: 'inline-flex' }}><IconTrash size={14} /></button>
+            </div>
+          )}
+        </div>
+      ))}
+      {batches.length === 0 && drafts.length === 0 && <div className="empty-state">No imports yet. Start one with “New import”.</div>}
       {batches.map((b, idx) => {
         const us = people[b.id] || []
         const states = us.map(mailState)
