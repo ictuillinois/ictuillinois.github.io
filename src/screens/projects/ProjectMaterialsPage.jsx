@@ -245,7 +245,7 @@ export default function ProjectMaterialsPage() {
   const reductionTotal = materials.length - roots.length
 
   const info = (
-        <aside className="pmt-info" aria-label="Project info" style={sidebarSlot ? { border: 'none', borderRadius: 0, position: 'static', background: 'transparent', overflowY: 'auto', flex: 1, minHeight: 0 } : undefined}>
+        <aside className={'pmt-info' + (sidebarSlot ? ' in-sidebar' : '')} aria-label="Project info">
           {project.project_id && <div className="pmt-pid">{project.project_id}</div>}
           <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.3 }}>{project.name}</div>
           {project.status && (
@@ -266,7 +266,7 @@ export default function ProjectMaterialsPage() {
             {subs.length > 0 && <div><b>{subs.length}</b><span>sub project{subs.length !== 1 ? 's' : ''}</span></div>}
           </div>
           {!readOnly && (
-            <button className="filter-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifySelf: 'start' }} onClick={() => setShowAdd(true)}>
+            <button className="filter-btn pmt-add" onClick={() => setShowAdd(true)}>
               <IconPlus size={15} />Add material to this project
             </button>
           )}

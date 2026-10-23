@@ -548,6 +548,20 @@ main > * { animation: screen-fade 0.16s ease-out; }
    vertical line runs unbroken between them. */
 .pmt-page { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
 .pmt-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: grid; gap: 12px; position: sticky; top: 12px; }
+/* align-content: start — in the sidebar the card is stretched to the
+   sidebar's height, and a grid shares that height out between its rows: the
+   status badge and the add button grew into tall ovals with text spilling out. */
+.pmt-info { align-content: start; justify-items: start; }
+.pmt-info > * { max-width: 100%; }
+.pmt-info .pmt-dl, .pmt-info .pmt-totals { justify-self: stretch; }
+.pmt-add { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans); }
+/* In the sidebar (~200px): no card chrome, one total per line, and the add
+   button across the width on one line. */
+.pmt-info.in-sidebar { border: none; border-radius: 0; position: static; background: transparent; overflow-y: auto; flex: 1; min-height: 0; padding: 14px 12px; }
+.pmt-info.in-sidebar .pmt-totals { grid-template-columns: 1fr; gap: 6px; }
+.pmt-info.in-sidebar .pmt-totals div { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; }
+.pmt-info.in-sidebar .pmt-totals b { display: inline; font-size: 16px; }
+.pmt-info.in-sidebar .pmt-add { justify-self: stretch; justify-content: center; border-radius: 10px; padding: 8px 10px; white-space: nowrap; font-size: 12px; }
 .pmt-pid { font-family: var(--mono); font-size: 12px; color: var(--text3); }
 .pmt-dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; }
 .pmt-dl dt { color: var(--text3); }
