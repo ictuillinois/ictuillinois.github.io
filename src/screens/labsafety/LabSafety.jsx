@@ -2017,7 +2017,7 @@ function StepContentArea({ step, user, isManager, stepRow, onCertGenerated }) {
 
 function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGenerated, saving }) {
   const { setScreen, setSidebarSubTab } = useAppStore()
-  const [activeStep, setActiveStep] = useState(1)
+  const [pickedStep, setActiveStep] = useState(null)
   const userProg = progress[user?.id] || {}
   // Only the steps this user owes count toward "all done" — and only those are
   // listed. A part-time user assigned two of three must not be told they are
@@ -2025,6 +2025,12 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
   const required = requiredSafetySteps(user?.required_safety_steps)
   const mySteps = STEPS.filter(s => required.includes(s.number))
   const allApproved = mySteps.every(s => userProg[s.number]?.completed)
+  // The step on screen is always one this person owes: the one they picked,
+  // else their first unfinished step, else their first. It started at Step 1
+  // for everyone, so someone excused from Step 1 opened on a blank page.
+  const activeStep = mySteps.some(s => s.number === pickedStep)
+    ? pickedStep
+    : (mySteps.find(s => !userProg[s.number]?.completed) || mySteps[0])?.number
 
   if (!user) return null
 
@@ -2150,8 +2156,11 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
           Note the `.completed` check: progress here is an object per step, not
           a boolean, so a truthy test would light this up for every step. */}
       {!allApproved && (() => {
-        const cur  = STEPS.find(x => x.number === activeStep)
-        const next = STEPS.find(x => x.number === activeStep + 1)
+        // "Next" is the next step THIS person owes. It was step number + 1,
+        // so someone required to do Steps 1 and 3 was sent to Step 2 — not on
+        // their page — and saw nothing at all (Alisha, Oct 23 2026).
+        const cur  = mySteps.find(x => x.number === activeStep)
+        const next = mySteps.find(x => x.number > activeStep)
         if (!cur || !next || !userProg[cur.number]?.completed) return null
         return (
           <div style={{ borderTop: '1px solid #9FE1CB', padding: '14px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>

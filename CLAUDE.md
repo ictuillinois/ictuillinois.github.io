@@ -2253,3 +2253,13 @@ dependency array is evaluated on every render, so a name declared further
 down is in its temporal dead zone. The build does not catch it. Put an effect
 below every piece of state it lists (functions it CALLS may sit below — the
 effect body runs after render).
+
+## Safety steps: "next" and the opening step follow the REQUIRED steps (Oct 23 2026)
+
+`StepPanel` (LabSafety.jsx; LabHive SafetyTab.jsx) opened on Step 1 for
+everyone, and the "✓ Step N approved — Next:" bar used step number + 1. A lab
+user required to do Steps 1 and 3 (Alisha) finished Step 1, pressed "Go to
+Step 2 →" — a step not on her page — and saw nothing under the tabs, which
+read as "the Step 3 video is missing". Now the step on screen is always one
+the person owes (picked, else first unfinished, else first), and "next" is
+the next REQUIRED step.
