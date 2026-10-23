@@ -926,13 +926,15 @@ export default function EquipmentHub() {
     </div>
   ) : (
     <div>
+      {/* Name + tabs stay pinned while a long SOP scrolls under them */}
+      <div className="sticky-tools" style={{ marginBottom: 20 }}>
       <div style={{ marginBottom: 16 }}>
         {/* Equipment SOP leads with the NICKNAME, the full name small under it.
             Equipment & Maintenance keeps its own order. (Oct 2026) */}
         <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
         {selected.nickname && selected.nickname !== selected.equipment_name && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
       </div>
-      <ScrollTabs style={{ borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+      <ScrollTabs style={{ borderBottom: '1px solid var(--border)' }} bg="var(--bg)">
         {[
           { key: 'info', label: '📋 Equipment' },
           { key: 'standards', label: '📑 Standards' },
@@ -944,6 +946,7 @@ export default function EquipmentHub() {
           </button>
         ))}
       </ScrollTabs>
+      </div>
       {subTab === 'info' && <EquipmentInfo equipment={selected} session={session} />}
       {subTab === 'standards' && <StandardsTab equipment={selected} session={session} />}
       {subTab === 'access' && canEdit(session) && <TemporaryAccessPanel equipment={selected} session={session} />}

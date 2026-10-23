@@ -596,6 +596,8 @@ function EquipmentList({ session }) {
       {sidebarSlot && createPortal(filterPanel, sidebarSlot)}
       {mobile && <div style={{ marginBottom: 16 }}>{filterPanel}</div>}
 
+      {/* Buttons + counts stay pinned while the list scrolls */}
+      <div className="sticky-tools" style={{ marginBottom: 12 }}>
       {canEdit(session) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <button className="btn btn-sm btn-primary" onClick={() => { setEditItem(null); setShowModal(true) }}>+ Add equipment</button>
@@ -607,6 +609,15 @@ function EquipmentList({ session }) {
           }} />
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 16, padding: '10px 0', marginBottom: 0, fontSize: 13, color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
+        <span><strong style={{ color: 'var(--text)' }}>{filtered.length}</strong> items shown</span>
+        <span><strong style={{ color: 'var(--text)' }}>{items.length}</strong> total</span>
+        {items.filter(i => i.out_of_service).length > 0 && (
+          <span style={{ color: 'var(--accent2)' }}>⛔ <strong>{items.filter(i => i.out_of_service).length}</strong> out of service</span>
+        )}
+      </div>
+      </div>
 
       {importPreview && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
@@ -621,13 +632,6 @@ function EquipmentList({ session }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 16, padding: '10px 0', marginBottom: 12, fontSize: 13, color: 'var(--text2)', borderBottom: '1px solid var(--border)' }}>
-        <span><strong style={{ color: 'var(--text)' }}>{filtered.length}</strong> items shown</span>
-        <span><strong style={{ color: 'var(--text)' }}>{items.length}</strong> total</span>
-        {items.filter(i => i.out_of_service).length > 0 && (
-          <span style={{ color: 'var(--accent2)' }}>⛔ <strong>{items.filter(i => i.out_of_service).length}</strong> out of service</span>
-        )}
-      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
