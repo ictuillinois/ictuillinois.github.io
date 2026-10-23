@@ -2263,3 +2263,10 @@ Step 2 →" — a step not on her page — and saw nothing under the tabs, which
 read as "the Step 3 video is missing". Now the step on screen is always one
 the person owes (picked, else first unfinished, else first), and "next" is
 the next REQUIRED step.
+- Same rule for the messages: the all-done banner counts the person's own
+  steps ("All 2 steps approved"), and only someone who owed **Step 2** (the
+  step with certificate uploads) is told about certificates / sent to
+  Documents; anyone else gets "Your safety training is complete" + Go to the
+  home page. The Training Records green tip (ModuleTip) swaps "Upload your
+  training certificates" for a Safety-tab pointer for lab users excused from
+  Step 2 (it reads their own users row).

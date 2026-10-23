@@ -2180,24 +2180,37 @@ function StepPanel({ user, progress, isLabManager, onApprove, onRevoke, onCertGe
         )
       })()}
 
-      {allApproved && (
+      {allApproved && (() => {
+        // Only Step 2 produces certificates (its forms and DRS uploads). For
+        // someone excused from it, "your certificates are in Documents" points
+        // at an empty tab — and the count is the steps THEY owed, not all.
+        const n = mySteps.length
+        const hasCerts = mySteps.some(s => s.number === 2)
+        const who = user.nick_name?.trim() || user.name
+        return (
         <div style={{ borderTop: '1px solid #9FE1CB', padding: '16px 24px', background: '#E1F5EE', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>{`🎉 All ${STEPS.length} steps approved!`}</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#085041' }}>{n === 1 ? '🎉 Safety step approved!' : `🎉 All ${n} steps approved!`}</div>
             <div style={{ fontSize: 12, color: '#085041', marginTop: 2 }}>
-              {isLabManager
-                ? `${user.nick_name?.trim() || user.name}'s certificates have been saved to their Documents tab in Training Records.`
-                : 'Your certificates have been saved to your Documents tab in Training Records.'}
+              {hasCerts
+                ? (isLabManager ? `${who}'s certificates have been saved to their Documents tab in Training Records.` : 'Your certificates have been saved to your Documents tab in Training Records.')
+                : (isLabManager ? `${who} has completed every safety step required of them.` : 'Your safety training is complete — the website is open to you.')}
             </div>
           </div>
-          {!isLabManager && (
+          {!isLabManager && (hasCerts ? (
             <button onClick={() => { setSidebarSubTab('fresh'); setScreen('training') }}
               style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               View Your Certificates →
             </button>
-          )}
+          ) : (
+            <button onClick={() => setScreen('dashboard')}
+              style={{ padding: '10px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Go to the home page →
+            </button>
+          ))}
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

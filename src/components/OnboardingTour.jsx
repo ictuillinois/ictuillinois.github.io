@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { requiredSafetySteps } from '../screens/labsafety/safetySteps'
+import { sb } from '../lib/supabase'
 import { TOURS, startTour } from '../lib/tours'
 import HelpPanel from './HelpPanel'
 import { useAppStore } from '../store/useAppStore'
@@ -103,7 +105,18 @@ const SCREEN_TIPS = {
 // ── ModuleTip banner ───────────────────────────────────────────────────────
 
 export function ModuleTip({ screen, userId }) {
-  const tip = SCREEN_TIPS[screen]
+  const baseTip = SCREEN_TIPS[screen]
+  // Training Records tells lab users to "upload your training certificates".
+  // Certificates come from safety Step 2; a lab user excused from it has
+  // nothing to upload, so they get a tip that matches their page.
+  const role = useAppStore(st => st.session?.role)
+  const [noCertStep, setNoCertStep] = useState(false)
+  useEffect(() => {
+    if (screen !== 'training' || role !== 'lab_user' || !userId) return
+    sb.from('users').select('*').eq('id', userId).maybeSingle()
+      .then(({ data }) => setNoCertStep(!!data && !requiredSafetySteps(data.required_safety_steps).includes(2)), () => {})
+  }, [screen, role, userId])
+  const tip = noCertStep && baseTip ? { ...baseTip, body: 'Your training records: the safety steps required of you, equipment training, vehicle forms and building alarm.\n\nStart with the Safety tab — it lists only your steps, and nothing needs uploading for them.' } : baseTip
   const key = `ictlab_tip_${userId}_${screen}`
   const [visible, setVisible] = useState(() => !!tip && localStorage.getItem(key) !== 'seen')
 
