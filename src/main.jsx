@@ -71,6 +71,25 @@ try {
   }
 } catch {}
 
+// A page whose stylesheet failed to load renders as bare black-on-white text.
+// It happens right after a deploy: the host may hand out the previous
+// index.html for a few minutes (GitHub Pages caches it for 10), and that page
+// asks for the previous stylesheet, which the deploy deleted. The script
+// recovery above does not catch it, so check the result directly: no --accent
+// token means no stylesheet. Reload once from a fresh copy; the timestamp
+// guard stops a loop if the host keeps serving the stale page.
+window.addEventListener('load', () => {
+  try {
+    if (getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()) return
+    const last = Number(sessionStorage.getItem('ictlab_css_reload_at') || 0)
+    if (Date.now() - last < 60_000) return
+    sessionStorage.setItem('ictlab_css_reload_at', String(Date.now()))
+    const url = new URL(window.location.href)
+    url.searchParams.set('_v', 'css' + Date.now().toString(36))
+    window.location.replace(url.toString())
+  } catch {}
+})
+
 // Mounted here rather than inside App so it survives App's early returns
 // (login page, maintenance mode, the /admin route) — a stale tab should be
 // told about a new build no matter which of those it is sitting on.
