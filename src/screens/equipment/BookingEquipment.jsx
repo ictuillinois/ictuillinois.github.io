@@ -2266,21 +2266,6 @@ function BookingCalendar({ session }) {
   useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, calView, filterLabUser])
   useEffect(() => { loadBookings() }, [])
 
-  // Auto-select and open booking modal when arriving from a QR scan
-  useEffect(() => {
-    if (scanEquipmentId && equipment.length > 0) {
-      // A QR scan must not skip the locks the equipment list applies
-      if (session?.role === 'lab_user' && vehicleApproved === null && isVehicle(equipment.find(e => e.id === scanEquipmentId))) return
-      if (isLocked(scanEquipmentId)) {
-        toast(isVehicleLocked(scanEquipmentId) ? VEHICLE_HINT : 'You need training on this equipment before booking it — see Training Records → Equipment.')
-        clearScanEquipmentId()
-        return
-      }
-      setSelectedEq([scanEquipmentId])
-      setShowBookingModal(true)
-      clearScanEquipmentId()
-    }
-  }, [scanEquipmentId, equipment, vehicleApproved, trainedEquipmentIds])
   // Open waive/review modal when arriving from notification bell
   useEffect(() => {
     if (!pendingBookingNotif) return
@@ -2306,6 +2291,25 @@ function BookingCalendar({ session }) {
   // ICT vehicles: a lab user books them once a lab manager has confirmed one of
   // their vehicle requests (Training Records → Vehicle). null = not loaded.
   const [vehicleApproved, setVehicleApproved] = useState(null)
+
+  // Below the state it reads: its dependency list is evaluated on every render,
+  // and naming vehicleApproved above its useState threw "Cannot access before
+  // initialization" — the whole Booking page failed (Oct 23 2026).
+  // Auto-select and open booking modal when arriving from a QR scan
+  useEffect(() => {
+    if (scanEquipmentId && equipment.length > 0) {
+      // A QR scan must not skip the locks the equipment list applies
+      if (session?.role === 'lab_user' && vehicleApproved === null && isVehicle(equipment.find(e => e.id === scanEquipmentId))) return
+      if (isLocked(scanEquipmentId)) {
+        toast(isVehicleLocked(scanEquipmentId) ? VEHICLE_HINT : 'You need training on this equipment before booking it — see Training Records → Equipment.')
+        clearScanEquipmentId()
+        return
+      }
+      setSelectedEq([scanEquipmentId])
+      setShowBookingModal(true)
+      clearScanEquipmentId()
+    }
+  }, [scanEquipmentId, equipment, vehicleApproved, trainedEquipmentIds])
   const [activeBlock, setActiveBlock] = useState(null)
   const [photoRequired, setPhotoRequired] = useState(false)
   const [orgName, setOrgName] = useState('')
