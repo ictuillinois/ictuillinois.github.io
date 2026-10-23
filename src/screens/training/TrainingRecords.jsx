@@ -6,6 +6,7 @@ import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './Training
 import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
+import { requiredSafetySteps } from '../labsafety/safetySteps'
 import { forLabUsers, labUserEquipment } from '../../lib/equipmentAccess'
 import VehicleAgreement from './VehicleAgreement'
 import { AvatarDisplay } from '../../components/Avatars'
@@ -2172,6 +2173,20 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
   const [statuses, setStatuses] = useState(null)       // userId -> { fresh|golf|equipment|alarm|locker|safety: ok|pend|none }
   const [freshCounts, setFreshCounts] = useState({})   // userId -> { approved, total } for card badges
   const [search, setSearch] = useState('')
+  // Cards / List, advisor filter and sort — remembered per lab manager in
+  // this browser (separately from Lab Users). List is the default past 20.
+  const pref = (k, d) => { try { return localStorage.getItem(`ictlab_training_${k}`) ?? d } catch { return d } }
+  const keep = (k, v) => { try { localStorage.setItem(`ictlab_training_${k}`, v) } catch { /* private window */ } }
+  const [view, setViewRaw] = useState(() => pref('view', null))
+  const [sortBy, setSortRaw] = useState(() => pref('sort', 'name'))
+  const [advisor, setAdvisor] = useState('')   // '' = all, '-' = no advisor
+  const setView = v => { setViewRaw(v); keep('view', v) }
+  const setSortBy = v => { setSortRaw(v); keep('sort', v) }
+  // Cards: how many fit per row, so the opened panel lands right after the
+  // clicked card's row
+  const gridRef = useRef(null)
+  const panelRef = useRef(null)
+  const [cols, setCols] = useState(4)
 
   const editable = canEdit(session)
   const ownUser = labUsers.find(u => session.userId === u.id || session.username === u.name)
@@ -2212,9 +2227,15 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
       get(uid).locker = (lockers.data || []).some(r => r.user_id === uid) ? 'ok'
         : (lockerReqs.data || []).some(r => r.user_id === uid) ? 'pend' : 'none'
     })
-    const safetyCount = {}
-    ;(safetyRes.data || []).forEach(r => { if (r.completed) safetyCount[r.user_id] = (safetyCount[r.user_id] || 0) + 1 })
-    ids.forEach(uid => { const n = safetyCount[uid] || 0; get(uid).safety = n === 0 ? 'none' : n >= 4 ? 'ok' : 'pend' })
+    // Complete = every step THIS person owes. It counted to 4, a leftover from
+    // the old four-step layout, so a three-step ICT-Lab lab user never showed ✓.
+    const safetyDone = {}
+    ;(safetyRes.data || []).forEach(r => { if (r.completed) (safetyDone[r.user_id] ||= new Set()).add(r.step_number) })
+    ids.forEach(uid => {
+      const req = requiredSafetySteps(labUsers.find(x => x.id === uid)?.required_safety_steps)
+      const n = req.filter(st => safetyDone[uid]?.has(st)).length
+      get(uid).safety = req.length === 0 || n === req.length ? 'ok' : n === 0 ? 'none' : 'pend'
+    })
     setStatuses(map)
     const fc = {}
     ids.forEach(uid => {
@@ -2230,9 +2251,33 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
     none: <span style={{ color: 'var(--text3)' }}>—</span>,
   }
 
-  const searchFiltered = search.trim()
-    ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase()))
-    : labUsers
+  const advisorOf = u => (u.supervisor || '').trim()
+  const advisors = [...new Set(labUsers.map(advisorOf).filter(Boolean))].sort((x, y) => x.localeCompare(y))
+  const effectiveView = editable ? (view || (labUsers.length > 20 ? 'list' : 'cards')) : 'cards'
+  const searchFiltered = labUsers.filter(u => {
+    if (advisor === '-' ? advisorOf(u) : advisor && advisorOf(u) !== advisor) return false
+    return !search.trim() || fullName(u).toLowerCase().includes(search.toLowerCase())
+  }).sort((x, y) => {
+    const byName = fullName(x).localeCompare(fullName(y))
+    if (sortBy !== 'advisor') return byName
+    const A = advisorOf(x), B = advisorOf(y)
+    return (!A) - (!B) || A.localeCompare(B) || byName
+  })
+  const groups = sortBy === 'advisor'
+    ? searchFiltered.reduce((g, u) => { const k = advisorOf(u) || 'No advisor'; const last = g[g.length - 1]; if (last?.k === k) last.items.push(u); else g.push({ k, items: [u] }); return g }, [])
+    : [{ k: null, items: searchFiltered }]
+
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setCols(Math.max(1, Math.floor((e.contentRect.width + 12) / (176 + 12)))))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [effectiveView, labUsers.length])
+  // Bring the opened panel into view (it opens under the person clicked)
+  useEffect(() => {
+    if (selectedUserId) setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
+  }, [selectedUserId])
 
   function renderTabContent(mode) {
     const su = mode === 'user'
@@ -2261,41 +2306,177 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
     }
   }
 
+  // The training details, drawn right under the person who was clicked
+  const renderPanel = (inGrid = false) => selectedUser && (
+      <div ref={panelRef} style={{ border: '2px solid var(--accent)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)', textAlign: 'left', scrollMarginTop: 80, ...(inGrid ? { gridColumn: '1 / -1' } : {}) }}>
+        {/* Header: identity + view toggle */}
+        <div style={{ padding: '12px 16px', background: 'var(--row-a-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <UserAvatar user={selectedUser} size={40} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{fullName(selectedUser)}</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Training profile{advisorOf(selectedUser) ? ` · Supervisor: ${advisorOf(selectedUser)}` : ''}</div>
+            </div>
+          </div>
+          {editable && (
+            <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+              {[['user', 'This user'], ['all', 'All users']].map(([m, label]) => (
+                <button key={m} onClick={() => setViewMode(m)}
+                  style={{ border: 'none', padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)', background: viewMode === m ? 'var(--accent)' : 'var(--surface)', color: viewMode === m ? '#fff' : 'var(--text2)' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Inner tab bar with status dots */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', overflowX: 'auto' }}>
+          {HUB_TABS.map(t => (
+            <button key={t.key} onClick={() => setSubTab(t.key)}
+              style={{ padding: '10px 14px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: subTab === t.key ? 600 : 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {DOT[statuses?.[selectedUser.id]?.[t.key] || 'none']} {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Content */}
+        <div style={{ padding: 16 }}>
+          {renderTabContent(viewMode === 'all' && editable ? 'all' : 'user')}
+        </div>
+      </div>
+  )
+  const toggle = u => setSelectedUserId(u.id === effSelectedId ? null : u.id)
+  const card = u => {
+    const fc = freshCounts[u.id] || { approved: 0, total: 0 }
+    const pct = fc.total ? Math.round(fc.approved / fc.total * 100) : 0
+    const selected = u.id === effSelectedId
+    return (
+      <div key={u.id} className="manage-card" onClick={() => toggle(u)}
+        style={{ width: 176, padding: '16px 12px 14px', cursor: 'pointer', ...(selected ? { borderColor: 'var(--accent)', background: 'var(--accent-light)', boxShadow: '0 6px 18px rgba(29,158,117,0.18)' } : {}) }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><UserAvatar user={u} size={56} /></div>
+        <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName(u)}</div>
+        {advisorOf(u) && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{advisorOf(u)}</div>}
+        <div style={{ marginTop: 8 }}><CompletionBadge approved={fc.approved} total={fc.total} /></div>
+        {fc.total > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#16a34a' : '#d97706', borderRadius: 99 }} />
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>{pct}%</span>
+          </div>
+        )}
+      </div>
+    )
+  }
+  // Advisor bars are LIGHT BLUE on purpose: teal marks the person who is open, and
+  // a teal bar read as another opened row.
+  const groupBar = g => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...{ background: '#e0f2fe', color: '#075985', border: '1px solid #bae6fd' }, fontWeight: 600, fontSize: 13, borderRadius: 8, padding: '6px 12px' }}>
+      {g.k}<span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: '#0369a1', marginLeft: 'auto' }}>{g.items.length}</span>
+    </div>
+  )
+  const openShown = selectedUser && searchFiltered.some(u => u.id === selectedUser.id)
+  const listCols = 6 + (sortBy === 'name' ? 1 : 0)
+
   return (
     <div>
       {editable && (
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
-          style={{ marginBottom: 14, maxWidth: 240, fontSize: 13, padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
+            style={{ maxWidth: 240, fontSize: 13, padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
+          <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 99, overflow: 'hidden', background: 'var(--surface)' }}>
+            {[['cards', 'Cards'], ['list', 'List']].map(([v, l]) => (
+              <button key={v} onClick={() => setView(v)} style={{ fontFamily: 'var(--sans)', fontSize: 13, padding: '6px 14px', border: 'none', cursor: 'pointer', background: effectiveView === v ? 'var(--accent)' : 'transparent', color: effectiveView === v ? '#fff' : 'var(--text2)' }}>{l}</button>
+            ))}
+          </div>
+          <span style={{ flex: 1 }} />
+          <label style={{ fontSize: 12, color: 'var(--text3)' }}>Advisor</label>
+          <select value={advisor} onChange={e => setAdvisor(e.target.value)} style={{ width: 'auto', fontSize: 13, padding: '6px 10px' }}>
+            <option value="">All advisors</option>
+            {advisors.map(x => <option key={x} value={x}>{x}</option>)}
+            <option value="-">No advisor</option>
+          </select>
+          <label style={{ fontSize: 12, color: 'var(--text3)' }}>Sort</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: 'auto', fontSize: 13, padding: '6px 10px' }}>
+            <option value="name">Name</option>
+            <option value="advisor">Advisor</option>
+          </select>
+        </div>
       )}
 
-      {/* ── Avatar card grid ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 }}>
-        {searchFiltered.map(u => {
-          const fc = freshCounts[u.id] || { approved: 0, total: 0 }
-          const pct = fc.total ? Math.round(fc.approved / fc.total * 100) : 0
-          const selected = u.id === effSelectedId
-          return (
-            <div key={u.id} className="manage-card" onClick={() => setSelectedUserId(selected ? null : u.id)}
-              style={{ width: 176, flexShrink: 0, padding: '16px 12px 14px', cursor: 'pointer', ...(selected ? { borderColor: 'var(--accent)', background: 'var(--accent-light)', boxShadow: '0 6px 18px rgba(29,158,117,0.18)' } : {}) }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><UserAvatar user={u} size={56} /></div>
-              <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName(u)}</div>
-              {u.degree && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.degree}</div>}
-              <div style={{ marginTop: 8 }}><CompletionBadge approved={fc.approved} total={fc.total} /></div>
-              {fc.total > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#16a34a' : '#d97706', borderRadius: 99 }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{pct}%</span>
+      {effectiveView === 'list' ? (
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', marginBottom: 20 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr>
+                {['First name', 'Last name', ...(sortBy === 'name' ? ['Advisor'] : []), 'Documents', 'Safety', 'Training', ''].map((t, i) => (
+                  <th key={i} style={{ textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--text2)', padding: '8px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{t}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(g => [
+                g.k && (
+                  <tr key={'g-' + g.k}>
+                    <td colSpan={listCols} style={{ ...{ background: '#e0f2fe', color: '#075985', border: '1px solid #bae6fd' }, borderLeft: 'none', borderRight: 'none', fontWeight: 600, fontSize: 13, padding: '6px 12px' }}>
+                      {g.k}<span style={{ fontFamily: 'var(--mono)', color: '#0369a1', fontWeight: 500, marginLeft: 8 }}>{g.items.length}</span>
+                    </td>
+                  </tr>
+                ),
+                ...g.items.map(u => {
+                  const fc = freshCounts[u.id] || { approved: 0, total: 0 }
+                  const st = statuses?.[u.id] || {}
+                  const open = u.id === effSelectedId
+                  const cell = { padding: '8px 12px', whiteSpace: 'nowrap', ...(open ? { background: 'var(--accent-light)', fontWeight: 600 } : {}) }
+                  return [
+                    <tr key={u.id} onClick={() => toggle(u)} style={{ cursor: 'pointer' }}>
+                      <td style={cell}><span style={{ color: 'var(--text3)', fontSize: 12, marginRight: 6 }}>{open ? '▾' : '▸'}</span>{u.nick_name?.trim() || u.name || '—'}</td>
+                      <td style={cell}>{u.last_name || ''}</td>
+                      {sortBy === 'name' && <td style={{ ...cell, fontSize: 13, color: 'var(--text2)' }}>{advisorOf(u) || '—'}</td>}
+                      <td style={cell}><CompletionBadge approved={fc.approved} total={fc.total} /></td>
+                      <td style={cell}>{DOT[st.safety || 'none']}</td>
+                      <td style={{ ...cell, fontSize: 12, color: 'var(--text2)' }}>
+                        <span style={{ display: 'inline-flex', gap: 10 }}>
+                          {HUB_TABS.filter(t => !['safety', 'fresh'].includes(t.key)).map(t => <span key={t.key}>{DOT[st[t.key] || 'none']} {t.label}</span>)}
+                        </span>
+                      </td>
+                      <td style={cell} />
+                    </tr>,
+                    open && (
+                      <tr key={u.id + '-panel'}>
+                        <td colSpan={listCols} style={{ padding: '2px 8px 10px', background: 'var(--accent-light)' }}>{renderPanel()}</td>
+                      </tr>
+                    ),
+                  ]
+                }),
+              ])}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div ref={gridRef} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+          {groups.map(g => {
+            const at = selectedUser ? g.items.findIndex(u => u.id === selectedUser.id) : -1
+            const rowEnd = at < 0 ? -1 : Math.min(g.items.length - 1, Math.floor(at / cols) * cols + cols - 1)
+            return (
+              <div key={g.k || 'all'} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {g.k && groupBar(g)}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 176px)', justifyContent: 'center', gap: 12 }}>
+                  {g.items.map((u, i) => (
+                    <React.Fragment key={u.id}>
+                      {card(u)}
+                      {i === rowEnd && renderPanel(true)}
+                    </React.Fragment>
+                  ))}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
-      {/* ── Detail panel ── */}
-      {!selectedUser ? (
+      {/* Nobody open: hint, or the whole locker view; someone open but
+          hidden by the search / filter: their panel here */}
+      {selectedUser && !openShown ? renderPanel() : !selectedUser && (
         // Locker with nobody picked: the whole locker view, so a waiting
         // request (and its bell notification) leads somewhere actionable.
         editable && subTab === 'locker' ? (
@@ -2305,42 +2486,6 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
             Select a lab user above to view their training profile.
           </div>
         )
-      ) : (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)', maxWidth: 900, margin: '0 auto' }}>
-          {/* Header: identity + view toggle */}
-          <div style={{ padding: '12px 16px', background: 'var(--row-a-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-              <UserAvatar user={selectedUser} size={40} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{fullName(selectedUser)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)' }}>Training profile{selectedUser.degree ? ` · Supervisor: ${selectedUser.degree}` : ''}</div>
-              </div>
-            </div>
-            {editable && (
-              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                {[['user', 'This user'], ['all', 'All users']].map(([m, label]) => (
-                  <button key={m} onClick={() => setViewMode(m)}
-                    style={{ border: 'none', padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)', background: viewMode === m ? 'var(--accent)' : 'var(--surface)', color: viewMode === m ? '#fff' : 'var(--text2)' }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Inner tab bar with status dots */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface)', overflowX: 'auto' }}>
-            {HUB_TABS.map(t => (
-              <button key={t.key} onClick={() => setSubTab(t.key)}
-                style={{ padding: '10px 14px', border: 'none', background: 'transparent', fontFamily: 'var(--sans)', fontSize: 13, fontWeight: subTab === t.key ? 600 : 500, cursor: 'pointer', color: subTab === t.key ? 'var(--accent)' : 'var(--text2)', borderBottom: `2px solid ${subTab === t.key ? 'var(--accent)' : 'transparent'}`, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                {DOT[statuses?.[selectedUser.id]?.[t.key] || 'none']} {t.label}
-              </button>
-            ))}
-          </div>
-          {/* Content */}
-          <div style={{ padding: 16 }}>
-            {renderTabContent(viewMode === 'all' && editable ? 'all' : 'user')}
-          </div>
-        </div>
       )}
     </div>
   )

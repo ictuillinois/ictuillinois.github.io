@@ -1736,8 +1736,8 @@ export function LabUsersPanel({ toast, session }) {
               {groups.map(g => [
                 g.k && (
                   <tr key={'g-' + g.k}>
-                    <td colSpan={7} style={{ background: 'var(--accent-light)', color: '#085041', fontWeight: 600, fontSize: 13, padding: '6px 12px', borderTop: '1px solid #9FE1CB' }}>
-                      {g.k}<span style={{ fontFamily: 'var(--mono)', color: 'var(--accent)', fontWeight: 500, marginLeft: 8 }}>{g.items.length}</span>
+                    <td colSpan={7} style={{ background: '#e0f2fe', color: '#075985', fontWeight: 600, fontSize: 13, padding: '6px 12px', borderTop: '1px solid #bae6fd' }}>
+                      {g.k}<span style={{ fontFamily: 'var(--mono)', color: '#0369a1', fontWeight: 500, marginLeft: 8 }}>{g.items.length}</span>
                     </td>
                   </tr>
                 ),
@@ -1764,8 +1764,8 @@ export function LabUsersPanel({ toast, session }) {
         {groups.map(g => (
         <div key={g.k || 'all'} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {g.k && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-light)', border: '1px solid #9FE1CB', color: '#085041', fontWeight: 600, fontSize: 13, borderRadius: 8, padding: '6px 12px' }}>
-              {g.k}<span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', marginLeft: 'auto' }}>{g.items.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#e0f2fe', border: '1px solid #bae6fd', color: '#075985', fontWeight: 600, fontSize: 13, borderRadius: 8, padding: '6px 12px' }}>
+              {g.k}<span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: '#0369a1', marginLeft: 'auto' }}>{g.items.length}</span>
             </div>
           )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
