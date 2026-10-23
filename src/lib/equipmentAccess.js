@@ -94,5 +94,16 @@ export function labUserEquipment(list, area) {
 // training unticked. A Lab only item keeps its training rules for the
 // managers who book it.
 export function requiresTraining(eq) {
+  // A vehicle's "training" is the vehicle approval (see isVehicle), not an
+  // equipment training record — and no 3-month retraining either.
+  if (isVehicle(eq)) return false
   return eq?.lab_user_access === false || !(eq?.lab_user_hidden_areas || []).includes('training')
+}
+
+// Equipment in a vehicles category (ICT-vehicles). A lab user may book one
+// only after a lab manager confirmed at least one vehicle request for them
+// (Training Records → Vehicle), which itself needs their vehicle forms
+// approved. ICT-Lab, Oct 2026.
+export function isVehicle(eq) {
+  return /vehicle/i.test(eq?.category || '')
 }

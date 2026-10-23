@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
+import { notifyVehicleManagers, notifyVehicleUser } from '../../lib/vehicleNotify'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
 // Lazy: pdf.js is large, and only a lab user reading the manual needs it
 const PdfSteps = lazy(() => import('../../components/PdfSteps'))
@@ -152,6 +153,8 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     if (!error && on) ({ error } = await sb.from('vehicle_access').insert({ user_id: myId, vehicle_id: v.id, organization_id: orgId }))
     setVehBusy(null)
     if (error) { toast('Could not save your choice: ' + error.message); return }
+    if (on) notifyVehicleManagers(orgId, { type: 'vehicle_request', title: `${session?.username || 'A lab user'} requested a vehicle: ${v.name}`,
+      body: 'Review their vehicle forms in Training Records → Vehicle, then confirm or decline the request.' })
     loadVehicles()
   }
 
@@ -166,6 +169,9 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     setVehBusy(null)
     if (error || !data?.length) { toast('Could not save: ' + (error?.message || 'not allowed')); return }
     toast(status === 'confirmed' ? 'Vehicle confirmed.' : status === 'declined' ? 'Request declined.' : 'Reopened.')
+    if (status !== 'requested') notifyVehicleUser(a.user_id, { type: 'vehicle_decision',
+      title: status === 'confirmed' ? `Vehicle approved: ${vehicleName(a.vehicle_id)}` : `Vehicle request declined: ${vehicleName(a.vehicle_id)}`,
+      body: status === 'confirmed' ? 'You can now book ICT vehicles in Booking Equipment.' : 'Ask a lab manager if you need this vehicle.' })
     loadVehicles(); onChanged?.()
   }
 
@@ -225,6 +231,8 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     // signed form sits with every other certificate rather than only inside
     // this tab. Not approved yet — the manager's decision sets that.
     const filed = await archiveToDocuments(myId, url, false, doc.name)
+    notifyVehicleManagers(orgId, { type: 'vehicle_form', title: `${session?.username || 'A lab user'} uploaded a vehicle form: ${doc.name}`,
+      body: 'Review and approve it in Training Records → Vehicle.' })
 
     setUploading(null)
     setFiles(f => ({ ...f, [doc.key]: null }))
@@ -292,6 +300,9 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
     // see the same form sitting unapproved under Documents.
     if (row.file_url) await archiveToDocuments(row.user_id, row.file_url, status === 'approved', docByKey(row.doc_key)?.name || row.doc_key)
     toast(status === 'approved' ? 'Access approved.' : 'Request denied.')
+    notifyVehicleUser(row.user_id, { type: 'vehicle_decision',
+      title: status === 'approved' ? `Vehicle form approved: ${docByKey(row.doc_key)?.name || 'form'}` : `Vehicle form not approved: ${docByKey(row.doc_key)?.name || 'form'}`,
+      body: status === 'approved' ? 'A lab manager approved your vehicle form.' : 'A lab manager could not approve this form — open the Vehicle tab to submit it again.' })
     load(); onChanged?.()
   }
 

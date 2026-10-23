@@ -2210,3 +2210,25 @@ dot · Vehicle / Equipment / Alarm / Locker dots.
 - Advisor = `users.supervisor` (the panel header used to print `degree`).
 - Safety dot = every step that person owes (`requiredSafetySteps`); it counted
   to a fixed 4, so a 3-step ICT-Lab lab user never showed ✓.
+
+## Vehicles in booking + vehicle notifications + full usage (Oct 2026, ICT-Lab)
+
+- `isVehicle(eq)` (lib/equipmentAccess.js): category matches /vehicle/i
+  (ICT-vehicles). For a lab user, a vehicle is bookable only with at least one
+  CONFIRMED `vehicle_access` row (confirming already requires their forms
+  approved + manual read). Any confirmed vehicle unlocks every ICT vehicle
+  (user's choice, Oct 23). Vehicles need no equipment training and get no
+  3-month retraining (`requiresTraining` returns false). Badge: VEHICLE
+  APPROVAL REQUIRED. The lock also holds for Select all (it used to tick
+  untrained equipment too) and for a QR-scan arrival.
+- `lib/vehicleNotify.js`: managers are told on a vehicle request and on every
+  uploaded vehicle form (pref `training_submitted`); the lab user on each
+  decision (pref `training_approved`). Types `vehicle_request` /
+  `vehicle_form` / `vehicle_decision`; the bell opens Training Records →
+  Vehicle (sub-tab `golf`).
+- ICT vehicle list names should equal the booking vehicles' names (nickname
+  or equipment name), so the two lists read as one.
+- History & Usage: the usage summary stopped at the 6 busiest instruments, so
+  a lightly used one had no usage record on the page. "Show all N" lists every
+  one; hours under 10 show one decimal (an hour-long booking read "1h", 20
+  minutes read "0h").

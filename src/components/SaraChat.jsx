@@ -51,7 +51,7 @@ const FAQ = [
   {
     id: 'booking',
     q: 'How does equipment booking work?',
-    a: 'Open Booking Equipment, select the instrument on the left, and drag on the calendar to pick your time. Give a purpose (project, thesis or other) and send it — a Research Engineer approves it and you are notified. You can then add it to Google Calendar or Outlook.\n\nYou can cancel a booking until it starts and edit it until it ends; once it is over it is locked. Equipment that needs training, or retraining after 3 months unused, asks for it first. Scanning an equipment QR code takes you straight to its booking.',
+    a: 'Open Booking Equipment, select the instrument on the left, and drag on the calendar to pick your time. Give a purpose (project, thesis or other) and send it — a Research Engineer approves it and you are notified. You can then add it to Google Calendar or Outlook.\n\nYou can cancel a booking until it starts and edit it until it ends; once it is over it is locked. Equipment that needs training, or retraining after 3 months unused, asks for it first. Scanning an equipment QR code takes you straight to its booking. ICT vehicles can be booked once a lab manager has approved your vehicle request: submit your vehicle forms and tick the vehicle you need in Training Records → Vehicle → Forms.',
     keywords: ['book', 'booking', 'reserve', 'calendar', 'schedule', 'reservation', 'equipment booking', 'request', 'approve', 'cancel', 'reschedule', 'edit booking'],
     followups: ['qr', 'training', 'contact'],
   },

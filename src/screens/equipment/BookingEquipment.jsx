@@ -5,7 +5,7 @@ import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { forLabUsers, requiresTraining } from '../../lib/equipmentAccess'
+import { forLabUsers, requiresTraining, isVehicle } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
@@ -2269,11 +2269,18 @@ function BookingCalendar({ session }) {
   // Auto-select and open booking modal when arriving from a QR scan
   useEffect(() => {
     if (scanEquipmentId && equipment.length > 0) {
+      // A QR scan must not skip the locks the equipment list applies
+      if (session?.role === 'lab_user' && vehicleApproved === null && isVehicle(equipment.find(e => e.id === scanEquipmentId))) return
+      if (isLocked(scanEquipmentId)) {
+        toast(isVehicleLocked(scanEquipmentId) ? VEHICLE_HINT : 'You need training on this equipment before booking it — see Training Records → Equipment.')
+        clearScanEquipmentId()
+        return
+      }
       setSelectedEq([scanEquipmentId])
       setShowBookingModal(true)
       clearScanEquipmentId()
     }
-  }, [scanEquipmentId, equipment])
+  }, [scanEquipmentId, equipment, vehicleApproved, trainedEquipmentIds])
   // Open waive/review modal when arriving from notification bell
   useEffect(() => {
     if (!pendingBookingNotif) return
@@ -2296,6 +2303,9 @@ function BookingCalendar({ session }) {
 
   const [retrainingBlocked, setRetrainingBlocked] = useState([])
   const [trainedEquipmentIds, setTrainedEquipmentIds] = useState(null) // null=loading, Set=trained eq IDs for lab users
+  // ICT vehicles: a lab user books them once a lab manager has confirmed one of
+  // their vehicle requests (Training Records → Vehicle). null = not loaded.
+  const [vehicleApproved, setVehicleApproved] = useState(null)
   const [activeBlock, setActiveBlock] = useState(null)
   const [photoRequired, setPhotoRequired] = useState(false)
   const [orgName, setOrgName] = useState('')
@@ -2331,6 +2341,9 @@ function BookingCalendar({ session }) {
       const { data: trained } = await sb.from('training_equipment')
         .select('equipment_id').eq('user_id', session.userId).eq('passed_exam', true)
       setTrainedEquipmentIds(new Set((trained || []).map(t => t.equipment_id)))
+      const { data: va, error: vaErr } = await sb.from('vehicle_access')
+        .select('id').eq('user_id', session.userId).eq('status', 'confirmed').limit(1)
+      setVehicleApproved(!vaErr && !!va?.length)
     }
     // Load org users for manager labUser-filter dropdown
     if (canEdit(session) && session?.organizationId) {
@@ -2579,7 +2592,16 @@ function BookingCalendar({ session }) {
   // until the retraining is approved.
   function isRetrainLocked(id) { return session?.role === 'lab_user' && retrainingBlocked.includes(id) }
 
+  // A vehicle, for a lab user with no confirmed vehicle request
+  function isVehicleLocked(id) {
+    return session?.role === 'lab_user' && vehicleApproved === false && isVehicle(equipment.find(e => e.id === id))
+  }
+  const VEHICLE_HINT = 'Vehicles need approval first — submit your vehicle forms and request a vehicle in Training Records → Vehicle → Forms. A lab manager approves it.'
+  // Anything a lab user may not select: untrained, retraining due, or a vehicle without approval
+  const isLocked = id => isUntrained(id) || isRetrainLocked(id) || isVehicleLocked(id)
+
   function toggleEquipment(id) {
+    if (isVehicleLocked(id)) { toast(VEHICLE_HINT); return }
     if (isUntrained(id)) {
       toast('Complete equipment training first — see Training Records → Equipment Exam.')
       return
@@ -2975,7 +2997,9 @@ function BookingCalendar({ session }) {
 
       {/* ── Equipment selector panel — portaled to sidebar on desktop ── */}
       {(() => {
-        const allIds = filteredEq.map(e => e.id)
+        // Select all takes only what this person may book — it used to tick
+        // untrained equipment too, skipping the training lock.
+        const allIds = filteredEq.filter(e => !isLocked(e.id)).map(e => e.id)
         const allSelected = allIds.length > 0 && allIds.every(id => selectedEq.includes(id))
         const someSelected = !allSelected && allIds.some(id => selectedEq.includes(id))
         const selectorPanel = (
@@ -3020,7 +3044,8 @@ function BookingCalendar({ session }) {
               {loading ? <div style={{ padding: 16, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
                 : filteredEq.map(e => {
                     const retrainEq = isRetrainLocked(e.id)
-                    const isUntrainedEq = isUntrained(e.id) || retrainEq
+                    const vehicleEq = isVehicleLocked(e.id)
+                    const isUntrainedEq = isUntrained(e.id) || retrainEq || vehicleEq
                     const tourMark = e.id === firstUntrainedId ? 'untrained' : e.id === firstRetrainId ? 'retrain' : undefined
                     return (
                   <div key={e.id} data-tour={tourMark} onClick={() => toggleEquipment(e.id)}
@@ -3034,7 +3059,8 @@ function BookingCalendar({ session }) {
                       <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: isUntrainedEq ? 'var(--text3)' : retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {e.nickname || e.equipment_name}
                         {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: retrainEq ? '#f3f4f6' : '#fcebeb', color: retrainEq ? '#6b7280' : '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
-                        {isUntrainedEq && !retrainEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
+                        {vehicleEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>VEHICLE APPROVAL REQUIRED</span>}
+                        {isUntrainedEq && !retrainEq && !vehicleEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
                       </div>
                       {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
                     </div>
@@ -3342,6 +3368,9 @@ function BookingHistory({ session }) {
   const [timeFrom, setTimeFrom] = useState('')
   const [timeTo, setTimeTo] = useState('')
   const [orgUsers, setOrgUsers] = useState([])
+  // The summary used to stop at the 6 busiest instruments, so anything booked
+  // less (a saw used for an hour) had no usage record anywhere on the page.
+  const [allUsage, setAllUsage] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -3442,12 +3471,20 @@ function BookingHistory({ session }) {
       {/* Usage summary */}
       {Object.keys(usageStats).length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>📊 Usage Summary</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>📊 Usage Summary</div>
+            <span style={{ fontSize: 12, color: 'var(--text3)' }}>confirmed bookings in the filter below · {Object.keys(usageStats).length} equipment</span>
+            {Object.keys(usageStats).length > 6 && (
+              <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setAllUsage(v => !v)}>
+                {allUsage ? 'Show the top 6' : `Show all ${Object.keys(usageStats).length}`}
+              </button>
+            )}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-            {Object.entries(usageStats).sort((a,b) => b[1].hours - a[1].hours).slice(0, 6).map(([name, stats]) => (
+            {Object.entries(usageStats).sort((a,b) => b[1].hours - a[1].hours).slice(0, allUsage ? undefined : 6).map(([name, stats]) => (
               <div key={name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-                <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--accent)' }}>{Math.round(stats.hours)}h</div>
+                <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--accent)' }}>{stats.hours < 10 ? Math.round(stats.hours * 10) / 10 : Math.round(stats.hours)}h</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)' }}>{stats.count} booking{stats.count !== 1 ? 's' : ''}</div>
               </div>
             ))}

@@ -91,6 +91,9 @@ export default function NotificationBell() {
       // backup's GitHub run page — public, counts only — so open that.
       const url = (n.body || '').match(/https:\/\/github\.com\/\S+/)?.[0]
       if (url) window.open(url, '_blank', 'noopener')
+    } else if (['vehicle_request', 'vehicle_form', 'vehicle_decision'].includes(n.type)) {
+      setScreen('training')
+      setSidebarSubTab('golf')
     } else if (['locker_request', 'locker_assigned', 'locker_declined'].includes(n.type)) {
       setScreen('training')
       setSidebarSubTab('locker')
@@ -137,7 +140,7 @@ export default function NotificationBell() {
               const title = n._src === 'booking' ? n.message : n.title
               const icon = n._src === 'booking'
                 ? (BOOKING_ICONS[n.type] || '📅')
-                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', backup: '💾', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️', training_submitted: '🎓', training_approved: '✅', safety_step_submitted: '🦺', safety_skip_request: '⚠️' }[n.type] || '🔔')
+                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', backup: '💾', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️', vehicle_request: '🚗', vehicle_form: '🚗', vehicle_decision: '🚗', training_submitted: '🎓', training_approved: '✅', safety_step_submitted: '🦺', safety_skip_request: '⚠️' }[n.type] || '🔔')
               return (
                 <div key={`${n._src}_${n.id}`} onClick={() => handleClick(n)}
                   style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}

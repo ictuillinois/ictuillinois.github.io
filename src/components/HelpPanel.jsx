@@ -99,6 +99,8 @@ const HELP_CONTENT = {
       'Cancel a booking any time before it starts. Edit it until it ends; a finished booking is locked',
       T('Admins can still correct a finished booking', 'admin'),
       'Equipment that needs training, or retraining after 3 months unused, asks for it before you can book',
+      'ICT vehicles: a lab manager must approve your vehicle request (Training Records → Vehicle → Forms) before you can book one',
+      T('History & Usage: Show all lists every instrument\'s booked hours, not just the six busiest', 'manager'),
       'Some equipment asks for a photo of the area before and after use',
       'History & Usage: past bookings, exportable as CSV',
       T('Book on behalf of a lab user from the booking form, or use "View lab user" to see one person\'s bookings', 'manager'),
