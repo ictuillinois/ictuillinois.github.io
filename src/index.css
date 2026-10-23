@@ -546,6 +546,14 @@ main > * { animation: screen-fade 0.16s ease-out; }
    the folder vertically centred on its own subtree, so every connector meets
    it at 50% of its branch. Sibling spacing is padding, not gap, so the
    vertical line runs unbroken between them. */
+/* A screen's top boxes (count, buttons, search, filters) stay in view while
+   the list scrolls under them (Oct 2026). Sticky only sticks inside its own
+   parent, so the wrapper must sit in the block that also holds the list —
+   never inside a box with overflow set, which would become its scroller.
+   Tables keep their headers unpinned: each sits in an overflow-x box. */
+.sticky-tools { position: sticky; top: 0; z-index: 30; background: var(--bg); padding-top: 8px; padding-bottom: 2px; }
+.sticky-tools.on-card { background: var(--surface); padding-top: 16px; }
+
 .pmt-page { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
 .pmt-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: grid; gap: 12px; position: sticky; top: 12px; }
 /* align-content: start — in the sidebar the card is stretched to the

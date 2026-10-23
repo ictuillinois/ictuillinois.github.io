@@ -1686,6 +1686,7 @@ export function LabUsersPanel({ toast, session }) {
 
   return (
     <div>
+      <div className="sticky-tools">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labUsers.length} lab user{labUsers.length !== 1 ? 's' : ''}</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1720,6 +1721,7 @@ export function LabUsersPanel({ toast, session }) {
         </select>
       </div>
       {(search || advisor) && !loading && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: -8, marginBottom: 12 }}>{filtered.length} of {labUsers.length} lab users</div>}
+      </div>
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">👥</div>{search || advisor ? 'No lab users match.' : 'No lab users yet.'}</div>
         : effectiveView === 'list' ? (
@@ -2429,7 +2431,7 @@ function LabManagerLabUserIconManager() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', marginBottom: 16 }}>
+      <div className="sticky-tools" style={{ position: 'sticky', marginBottom: 16 }}>
         <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text3)', pointerEvents: 'none' }}>🔍</span>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ paddingLeft: 36, width: '100%', boxSizing: 'border-box' }} />
         {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text3)' }}>×</button>}

@@ -3497,7 +3497,7 @@ function BookingHistory({ session }) {
       )}
 
       {/* Filters */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 16 }}>
+      <div className="sticky-tools on-card" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 16 }}>
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, color: 'var(--text2)' }}>🔍 Filter & Export</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search user or equipment…" style={{ flex: 1, minWidth: 160 }} />

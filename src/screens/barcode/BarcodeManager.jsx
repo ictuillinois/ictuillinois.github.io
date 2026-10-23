@@ -631,7 +631,7 @@ function MaterialLabelsTab({ session, typeLabels }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="sticky-tools" style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center', paddingBottom: 8 }}>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, barcode or project…" style={{ flex: 1, minWidth: 200 }} />
         {[['all', 'All'], ['project', 'In a project'], ['standalone', 'No project']].map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)}

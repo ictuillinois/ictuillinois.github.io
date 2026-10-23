@@ -2232,3 +2232,24 @@ dot · Vehicle / Equipment / Alarm / Locker dots.
   a lightly used one had no usage record on the page. "Show all N" lists every
   one; hours under 10 show one decimal (an hour-long booking read "1h", 20
   minutes read "0h").
+
+## Pinned toolbars on list screens (Oct 2026, both apps)
+
+`.sticky-tools` (index.css) keeps a screen's top boxes in view while its list
+scrolls: Lab Users (count + buttons + search + Cards/List/Advisor/Sort), the
+per-lab-user icon list's search, the Training Records hub toolbar, Booking →
+History filter card (`on-card`), the Projects workspace pills + add buttons,
+Admin users list, QR Labels records. A sticky box sticks only inside its own
+parent, and any ancestor with `overflow` set becomes its scroller — keep the
+wrapper in the block that holds the list, directly under `<main>`'s plain
+divs. Table header rows are NOT pinned: each table sits in an overflow-x box.
+
+## Never name state in a hook's dependency list above its useState (Oct 2026)
+
+`useEffect(..., [vehicleApproved])` placed ABOVE
+`const [vehicleApproved] = useState()` crashed the whole Booking page in
+production ("Cannot access 'vehicleApproved' before initialization"). The
+dependency array is evaluated on every render, so a name declared further
+down is in its temporal dead zone. The build does not catch it. Put an effect
+below every piece of state it lists (functions it CALLS may sit below — the
+effect body runs after render).

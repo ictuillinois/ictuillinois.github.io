@@ -2396,6 +2396,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
 
   return (
     <div>
+      <div className="sticky-tools" style={{ marginBottom: 4 }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {['projects', 'materials', 'tested', 'search'].map(m => (
           <button key={m} className={'filter-btn' + (viewMode === m ? ' active' : '')} style={pillIcon}
@@ -2448,6 +2449,7 @@ function MaterialInventoryTab({ session, isSolo, onProjectCreated }) {
           )}
         </div>
       )}
+      </div>
 
       {isSolo && sharedWorkspaces.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '10px 14px', background: '#EEEDFE', borderRadius: 10, border: '1px solid #CECBF6', flexWrap: 'wrap' }}>

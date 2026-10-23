@@ -1850,7 +1850,7 @@ export default function Admin() {
       {/* ── USERS / LAB_USERS (org admin only) ── */}
       {!isSuperAdmin && (tab === 'users' || tab === 'labusers') && (
         <div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="sticky-tools" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', paddingBottom: 8 }}>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email…" style={{ flex: 1, minWidth: 180 }} />
             <button className="btn btn-primary btn-sm" onClick={() => setUserModal('add')}>
               + Add {tab === 'labusers' ? 'lab user' : 'lab manager'}

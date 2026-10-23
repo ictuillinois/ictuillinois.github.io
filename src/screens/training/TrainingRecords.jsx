@@ -2380,7 +2380,7 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
   return (
     <div>
       {editable && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div className="sticky-tools" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 8 }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
             style={{ maxWidth: 240, fontSize: 13, padding: '8px 12px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', width: '100%' }} />
           <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 99, overflow: 'hidden', background: 'var(--surface)' }}>
