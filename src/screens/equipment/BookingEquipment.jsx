@@ -732,7 +732,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
     <div className='booking-week-scroll' data-hour-px={2 * SLOT_H} style={{ userSelect: 'none', overflowY: 'auto', overflowX: 'auto', maxHeight: 'calc(100vh - 240px)' }}>
 
       {/* Sticky header row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, 1fr)', minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
         <div style={{ height: 40, position: 'sticky', left: 0, zIndex: 21, background: 'var(--surface)' }} />
         {days.map((day, i) => (
           <div key={i} style={{ height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11, borderLeft: '1px solid var(--border)', background: sameDay(day, today) ? 'var(--accent-light)' : 'var(--surface)' }}>
@@ -743,12 +743,13 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
       </div>
 
       {/* Grid body */}
-      <div style={{ display: 'grid', gridTemplateColumns: '44px repeat(7, 1fr)', minWidth: 500, position: 'relative' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', minWidth: 500, position: 'relative' }}>
         {/* Time labels column — sticky left on horizontal scroll */}
         <div style={{ position: 'sticky', left: 0, zIndex: 10, background: 'var(--surface)', height: TOTAL_H }}>
           {HOURS.map(h => (
-            <div key={h} style={{ position: 'absolute', top: h * 2 * SLOT_H, right: 4, fontSize: 9, color: 'var(--text3)', fontFamily: 'var(--mono)', lineHeight: 1 }}>
-              {h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`}
+            // Readable at a glance: they were 9px in the faintest grey (Oct 2026)
+            <div key={h} style={{ position: 'absolute', top: h * 2 * SLOT_H, right: 6, fontSize: 12, fontWeight: 600, color: 'var(--text2)', fontFamily: 'var(--sans)', lineHeight: 1, whiteSpace: 'nowrap', transform: h === 0 ? 'none' : 'translateY(-50%)' }}>
+              {h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`}
             </div>
           ))}
         </div>
