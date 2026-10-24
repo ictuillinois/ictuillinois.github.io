@@ -365,6 +365,8 @@ function EquipmentList({ session }) {
   const [filterCat, setFilterCat] = useState('')
   const [filterLoc, setFilterLoc] = useState('')
   const [filterCond, setFilterCond] = useState('')
+  // Lab user access: '' all · 'labusers' · 'labonly' · 'waiting' (the button beside Edit)
+  const [filterAccess, setFilterAccess] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -543,13 +545,18 @@ function EquipmentList({ session }) {
     XLSX.writeFile(wb, `ICT_Equipment_${new Date().toLocaleDateString('en-CA')}.xlsx`)
   }
 
+  // Same three states as the button beside Edit (lib/equipmentAccess.js)
+  const accessOf = i => i.lab_user_access === false ? 'labonly' : i.lab_user_decided ? 'labusers' : 'waiting'
+  const accessCount = k => items.filter(i => accessOf(i) === k).length
+
   const filtered = items.filter(i => {
     const q = search.toLowerCase()
     const matchSearch = !q || [i.equipment_name, i.nickname, i.manufacturer, i.serial_number, i.model_number].some(f => f?.toLowerCase().includes(q))
     const matchCat = !filterCat || i.category === filterCat
     const matchLoc = !filterLoc || i.location === filterLoc
     const matchCond = !filterCond || i.condition === filterCond
-    return matchSearch && matchCat && matchLoc && matchCond
+    const matchAccess = !filterAccess || accessOf(i) === filterAccess
+    return matchSearch && matchCat && matchLoc && matchCond && matchAccess
   })
 
   const grouped = {}
@@ -588,6 +595,14 @@ function EquipmentList({ session }) {
         <option value="">All conditions</option>
         {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
+      {!isSolo && (
+        <select value={filterAccess} onChange={e => setFilterAccess(e.target.value)} title="Lab user access" style={{ width: '100%', fontSize: 12 }}>
+          <option value="">All lab user access</option>
+          <option value="labusers">Lab users ({accessCount('labusers')})</option>
+          <option value="labonly">Lab only ({accessCount('labonly')})</option>
+          <option value="waiting">Waiting for decision ({accessCount('waiting')})</option>
+        </select>
+      )}
     </div>
   )
 
