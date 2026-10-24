@@ -206,8 +206,8 @@ function EquipmentInfo({ equipment, session }) {
               ? <img src={details.photo_url} crossOrigin="anonymous" style={{ width: 140, height: 140, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', flexShrink: 0 }} onError={e => { e.currentTarget.src = ''; e.currentTarget.style.display = 'none' }} />
               : <div style={{ width: 140, height: 140, borderRadius: 10, border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: 'var(--text3)', flexShrink: 0 }}>📷</div>}
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>{equipment.nickname || equipment.equipment_name}</div>
-              {equipment.nickname && equipment.nickname !== equipment.equipment_name && <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 8 }}>{equipment.equipment_name}</div>}
+              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>{equipment.equipment_name || equipment.nickname}</div>
+              {equipment.nickname && equipment.nickname !== equipment.equipment_name && <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 8 }}>{equipment.nickname}</div>}
               <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 4 }}>📍 {equipment.location || '—'} · {equipment.category || '—'}</div>
               {details?.website_url && <a href={details.website_url} target="_blank" rel="noopener" style={{ fontSize: 13, color: 'var(--accent)', textDecoration: 'none', display: 'block', marginBottom: 4 }}>🌐 Manufacturer website</a>}
               {details?.notes && <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 8 }}>{details.notes}</div>}
@@ -366,7 +366,7 @@ function EquipmentInfo({ equipment, session }) {
         <div className="card" style={{ textAlign: 'center', padding: 32, background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', border: '2px solid var(--accent)' }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>📝</div>
           <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Ready to take the exam?</div>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Once you have watched the training videos and reviewed the SOP,<br />start the exam for <strong>{equipment.nickname || equipment.equipment_name}</strong>.</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Once you have watched the training videos and reviewed the SOP,<br />start the exam for <strong>{equipment.equipment_name || equipment.nickname}</strong>.</div>
           <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={() => { localStorage.setItem('examEquipment', equipment.id); useAppStore.getState().setScreen('training') }}>Start Exam →</button>
         </div>
       )}
@@ -906,8 +906,8 @@ export default function EquipmentHub() {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--text3)', marginTop: 2, flexShrink: 0 }}>#{idx + 1}</span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: selected?.id === e.id ? 600 : 500, fontSize: 13, color: selected?.id === e.id ? 'var(--accent)' : 'var(--text)' }}>{e.nickname || e.equipment_name}</div>
-                    {e.nickname && e.nickname !== e.equipment_name && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{e.equipment_name}</div>}
+                    <div style={{ fontWeight: selected?.id === e.id ? 600 : 500, fontSize: 13, color: selected?.id === e.id ? 'var(--accent)' : 'var(--text)' }}>{e.equipment_name || e.nickname}</div>
+                    {e.nickname && e.nickname !== e.equipment_name && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{e.nickname}</div>}
                     {e.location && <div style={{ fontSize: 11, color: 'var(--text3)' }}>{e.location}</div>}
                   </div>
                 </div>
@@ -929,10 +929,10 @@ export default function EquipmentHub() {
       {/* Name + tabs stay pinned while a long SOP scrolls under them */}
       <div className="sticky-tools" style={{ marginBottom: 20 }}>
       <div style={{ marginBottom: 16 }}>
-        {/* Equipment SOP leads with the NICKNAME, the full name small under it.
-            Equipment & Maintenance keeps its own order. (Oct 2026) */}
-        <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.nickname || selected.equipment_name}</div>
-        {selected.nickname && selected.nickname !== selected.equipment_name && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.equipment_name}</div>}
+        {/* The EQUIPMENT NAME leads everywhere, the nickname small under it
+            (Oct 23 2026 — it was nickname-first here for a week). */}
+        <div style={{ fontWeight: 700, fontSize: 20 }}>{selected.equipment_name || selected.nickname}</div>
+        {selected.nickname && selected.nickname !== selected.equipment_name && <div style={{ fontSize: 13, color: 'var(--text3)' }}>{selected.nickname}</div>}
       </div>
       <ScrollTabs style={{ borderBottom: '1px solid var(--border)' }} bg="var(--bg)">
         {[

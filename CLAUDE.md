@@ -2270,3 +2270,14 @@ the next REQUIRED step.
   home page. The Training Records green tip (ModuleTip) swaps "Upload your
   training certificates" for a Safety-tab pointer for lab users excused from
   Step 2 (it reads their own users row).
+
+## The EQUIPMENT NAME is the reference everywhere (Oct 23 2026, both apps)
+
+Every screen shows `equipment_name` first and the nickname second — small
+under it, after it in brackets ("Aggregate Washer (Washer)"), or beside the
+location in the booking list. That covers Equipment & Maintenance, Equipment
+SOP (it was nickname-first there for a week), Booking (list, modals, history,
+CSV, notifications, calendar links), Training Records and Training Schedule,
+and Export Data. Lists sort by `equipment_name`. Write new code as
+`eq.equipment_name || eq.nickname`, never the other way round. Search still
+matches both.

@@ -299,7 +299,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
       const { data: newBooking } = await sb.from('equipment_bookings').insert(payload).select('id').single()
       toast(requiresApproval ? 'Booking submitted — pending approval.' : 'Booking confirmed ✓')
       if (!requiresApproval && session.userId && newBooking?.id) {
-        const eqName = equipmentList.find(e => e.id === form.equipment_id)?.nickname || 'equipment'
+        const eqName = equipmentList.find(e => e.id === form.equipment_id)?.equipment_name || 'equipment'
         const when = fmtDateTime(form.start_time)
         const tasks = [
           sendBookingEmail(
@@ -343,7 +343,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
         <div className="field"><label>Equipment <span style={{ color: '#c84b2f' }}>*</span></label>
           <select value={form.equipment_id} onChange={e => setForm(f => ({ ...f, equipment_id: e.target.value }))}>
             <option value="">— Select equipment —</option>
-            {equipmentList.map(e => <option key={e.id} value={e.id}>{e.nickname || e.equipment_name}</option>)}
+            {equipmentList.map(e => <option key={e.id} value={e.id}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}</option>)}
           </select>
         </div>
 
@@ -1687,7 +1687,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
   const isOwn = booking.user_id === session.userId || booking.user_name === session.username
   // context for the "Add to calendar" links
   const calCtx = {
-    eqName: eq?.nickname || eq?.equipment_name,
+    eqName: eq?.equipment_name || eq?.nickname,
     orgName: orgName || '',
     location: eq?.location || '',
     bookedBy: booking.booked_on_behalf_of || booking.user_name,
@@ -1698,7 +1698,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 28, maxWidth: 440, width: '100%', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{eq?.nickname || eq?.equipment_name || 'Equipment'}</div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{eq?.equipment_name || eq?.nickname || 'Equipment'}</div>
             <span style={{ background: statusBg[booking.status], color: statusColor[booking.status], borderRadius: 99, padding: '4px 12px', fontSize: 12, fontWeight: 600 }}>{booking.status}</span>
           </div>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
@@ -1768,7 +1768,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
           </div>
         )}
 
-        {photoRequired && <CleanlinessSection booking={booking} session={session} eqName={eq?.nickname || eq?.equipment_name} onUpdated={onUpdated} />}
+        {photoRequired && <CleanlinessSection booking={booking} session={session} eqName={eq?.equipment_name || eq?.nickname} onUpdated={onUpdated} />}
       </div>
     </div>
   )
@@ -1780,7 +1780,7 @@ function BookingDetail({ booking, equipment, session, onEdit, onDelete, onDeny, 
 function CalendarPromptModal({ booking, equipment, orgName, onClose }) {
   const eq = equipment
   const calCtx = {
-    eqName: eq?.nickname || eq?.equipment_name,
+    eqName: eq?.equipment_name || eq?.nickname,
     orgName: orgName || '',
     location: eq?.location || '',
     bookedBy: booking.booked_on_behalf_of || booking.user_name,
@@ -1841,9 +1841,9 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
     if (!responsible) { toast('Tick the box to confirm you are responsible for these bookings.'); return }
     for (const e of equipmentList) {
       const t = times[e.id]
-      if (!t.start || !t.end) { toast(`Set time for: ${e.nickname || e.equipment_name}`); return }
-      if (new Date(t.start) < new Date()) { toast(`Cannot book a past time for: ${e.nickname || e.equipment_name}`); return }
-      if (new Date(t.start) >= new Date(t.end)) { toast(`End must be after start for: ${e.nickname || e.equipment_name}`); return }
+      if (!t.start || !t.end) { toast(`Set time for: ${e.equipment_name || e.nickname}`); return }
+      if (new Date(t.start) < new Date()) { toast(`Cannot book a past time for: ${e.equipment_name || e.nickname}`); return }
+      if (new Date(t.start) >= new Date(t.end)) { toast(`End must be after start for: ${e.equipment_name || e.nickname}`); return }
     }
     setSaving(true)
     const title = purposes.join(', ')
@@ -1885,7 +1885,7 @@ function MultiBookingModal({ equipmentList, defaultSlot, session, onSave, onClos
             return (
               <div key={e.id} style={{ background: 'var(--surface2)', border: `1.5px solid ${isEditing ? 'var(--accent)' : hasTime ? 'var(--border)' : '#f0c070'}`, borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isEditing ? 10 : 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{e.nickname || e.equipment_name}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{e.equipment_name || e.nickname}</span>
                   {!isEditing && (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: hasTime ? 'var(--text2)' : '#a0762a' }}>
@@ -2324,7 +2324,7 @@ function BookingCalendar({ session }) {
 
   async function loadEquipment() {
     const isSolo = session?.loginMode === 'solo'
-    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('nickname')
+    let q = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).eq('login_mode', isSolo ? 'solo' : 'team').order('category').order('equipment_name')
     if (isSolo) q = q.eq('solo_owner_id', session?.userId || '00000000-0000-0000-0000-000000000000')
     else q = q.eq('organization_id', session?.organizationId || '00000000-0000-0000-0000-000000000000')
     q = forLabUsers(q, session, 'booking')
@@ -2388,7 +2388,7 @@ function BookingCalendar({ session }) {
       if (!pendingEq.has(eqId)) {
         const eq = eqList.find(e => e.id === eqId)
         if (!eq) continue
-        const msg = `Retraining required: you haven't used ${eq.nickname || eq.equipment_name} in over 3 months.`
+        const msg = `Retraining required: you haven't used ${eq.equipment_name || eq.nickname} in over 3 months.`
         try {
           await sb.from('booking_notifications').insert({
             booking_id: null, user_id: session.userId,
@@ -2435,7 +2435,7 @@ function BookingCalendar({ session }) {
     let didInsert = false
     for (const b of (started || [])) {
       const eq = eqList.find(e => e.id === b.equipment_id)
-      const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+      const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
       try {
         await sb.from('booking_notifications').insert({
           booking_id: b.id, user_id: session.userId,
@@ -2459,7 +2459,7 @@ function BookingCalendar({ session }) {
       const nextDay8am = new Date(endTime)
       nextDay8am.setDate(nextDay8am.getDate() + 1); nextDay8am.setHours(8, 0, 0, 0)
       const eq = eqList.find(e => e.id === b.equipment_id)
-      const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+      const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
       const count = b.after_photo_reminder_count || 0
       const lastReminded = b.after_photo_last_reminded_at ? new Date(b.after_photo_last_reminded_at) : null
 
@@ -2629,14 +2629,14 @@ function BookingCalendar({ session }) {
       }
       const blockedEq = selectedEq.filter(id => id === activeBlock.equipment_id)
       if (blockedEq.length > 0) {
-        const eqName = equipment.find(e => e.id === activeBlock.equipment_id)?.nickname || 'this equipment'
+        const eqName = equipment.find(e => e.id === activeBlock.equipment_id)?.equipment_name || 'this equipment'
         alert(`🚫 Booking blocked\n\nYou are currently blocked from booking ${eqName} until ${unblockDate}.\n\nReason: ${activeBlock.reason || 'Missing after photo'}`)
         return
       }
     }
     const blockedSelected = selectedEq.filter(id => retrainingBlocked.includes(id))
     if (blockedSelected.length > 0) {
-      const names = blockedSelected.map(id => equipment.find(e => e.id === id)?.nickname || 'equipment').join(', ')
+      const names = blockedSelected.map(id => equipment.find(e => e.id === id)?.equipment_name || 'equipment').join(', ')
       alert(`⚠️ Retraining required\n\n${names} requires retraining before booking. Please go to the Training Records tab and submit a retraining request.`)
       return
     }
@@ -2772,7 +2772,7 @@ function BookingCalendar({ session }) {
     await sb.from('booking_notifications').update({ read: true })
       .eq('booking_id', booking.id)
       .in('type', ['before_photo_reminder', 'after_photo_reminder', 'after_photo_last_warning'])
-    const eqName = equipment.find(e => e.id === booking.equipment_id)?.nickname || 'equipment'
+    const eqName = equipment.find(e => e.id === booking.equipment_id)?.equipment_name || 'equipment'
     const when = fmtDateTime(booking.start_time)
     const denyMsg = `Your booking for ${eqName} on ${when} was denied.${reason ? ` Reason: ${reason}` : ''}`
     await sb.from('booking_notifications').insert({ booking_id: booking.id, user_id: booking.user_id, type: 'denied', message: denyMsg })
@@ -2788,7 +2788,7 @@ function BookingCalendar({ session }) {
 
   async function handleApprove(booking) {
     await sb.from('equipment_bookings').update({ status: 'confirmed', updated_at: new Date().toISOString() }).eq('id', booking.id)
-    const eqName = equipment.find(e => e.id === booking.equipment_id)?.nickname || 'equipment'
+    const eqName = equipment.find(e => e.id === booking.equipment_id)?.equipment_name || 'equipment'
     const when = fmtDateTime(booking.start_time)
     await sb.from('booking_notifications').insert({ booking_id: booking.id, user_id: booking.user_id, type: 'approved', message: `Your booking for ${eqName} on ${when} was approved.` })
     await sendBookingEmail(
@@ -2810,7 +2810,7 @@ function BookingCalendar({ session }) {
     await sb.from('booking_notifications').update({ read: true })
       .eq('booking_id', booking.id)
       .in('type', ['before_photo_reminder', 'after_photo_reminder', 'after_photo_last_warning'])
-    const eqName = equipment.find(e => e.id === booking.equipment_id)?.nickname || 'equipment'
+    const eqName = equipment.find(e => e.id === booking.equipment_id)?.equipment_name || 'equipment'
     const when = fmtDateTime(booking.start_time)
     await sendBookingEmail(
       booking.user_id,
@@ -3061,12 +3061,14 @@ function BookingCalendar({ session }) {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: selectedEq.includes(e.id) ? 600 : 500, color: isUntrainedEq ? 'var(--text3)' : retrainingBlocked.includes(e.id) ? '#a32d2d' : selectedEq.includes(e.id) ? 'var(--accent)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {e.nickname || e.equipment_name}
+                        {e.equipment_name || e.nickname}
                         {retrainingBlocked.includes(e.id) && <span style={{ marginLeft: 4, fontSize: 9, background: retrainEq ? '#f3f4f6' : '#fcebeb', color: retrainEq ? '#6b7280' : '#a32d2d', borderRadius: 3, padding: '1px 4px' }}>RETRAIN</span>}
                         {vehicleEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>VEHICLE APPROVAL REQUIRED</span>}
                         {isUntrainedEq && !retrainEq && !vehicleEq && <span style={{ marginLeft: 4, fontSize: 9, background: '#f3f4f6', color: '#6b7280', borderRadius: 3, padding: '1px 4px' }}>TRAINING REQUIRED</span>}
                       </div>
-                      {e.location && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{e.location}</div>}
+                      {(e.location || (e.nickname && e.nickname !== e.equipment_name)) && (
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{[e.nickname !== e.equipment_name && e.nickname, e.location].filter(Boolean).join(' · ')}</div>
+                      )}
                     </div>
                   </div>
                     )
@@ -3175,7 +3177,7 @@ function BookingCalendar({ session }) {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 8 }}>
                         {multiDraftIdx < selectedEq.length
-                          ? `Drag on calendar to set time for: ${equipment.find(e => e.id === selectedEq[multiDraftIdx])?.nickname || equipment.find(e => e.id === selectedEq[multiDraftIdx])?.equipment_name} (${multiDraftIdx + 1} of ${selectedEq.length})`
+                          ? `Drag on calendar to set time for: ${equipment.find(e => e.id === selectedEq[multiDraftIdx])?.equipment_name || equipment.find(e => e.id === selectedEq[multiDraftIdx])?.nickname} (${multiDraftIdx + 1} of ${selectedEq.length})`
                           : `All ${selectedEq.length} times set — fill in details below and confirm`}
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
@@ -3188,7 +3190,7 @@ function BookingCalendar({ session }) {
                               background: slot ? '#E1F5EE' : isCurrent ? '#534AB7' : 'rgba(83,74,183,0.12)',
                               color: slot ? '#0f6e56' : isCurrent ? '#fff' : '#534AB7',
                               border: `1px solid ${slot ? '#0f6e56' : isCurrent ? '#534AB7' : '#C5C2F5'}` }}>
-                              {slot ? '✓' : isCurrent ? '→' : '○'} {eq?.nickname || eq?.equipment_name}
+                              {slot ? '✓' : isCurrent ? '→' : '○'} {eq?.equipment_name || eq?.nickname}
                               {slot && <span style={{ fontWeight: 400, marginLeft: 4 }}>{fmtTime(slot.start)}</span>}
                             </div>
                           )
@@ -3301,7 +3303,7 @@ function BookingCalendar({ session }) {
       {(isMobile || window.innerWidth < 1050) && bookingDraft && !showBookingModal && !editBooking && (
         <BookingDraftBar
           draft={bookingDraft}
-          equipmentName={selectedEq.length === 1 ? (equipment.find(e => e.id === selectedEq[0])?.nickname || equipment.find(e => e.id === selectedEq[0])?.equipment_name) : selectedEq.length > 1 ? `${selectedEq.length} equipment` : null}
+          equipmentName={selectedEq.length === 1 ? (equipment.find(e => e.id === selectedEq[0])?.equipment_name || equipment.find(e => e.id === selectedEq[0])?.nickname) : selectedEq.length > 1 ? `${selectedEq.length} equipment` : null}
           onBook={() => { setShowBookingModal(true) }}
           onDismiss={() => { setBookingDraft(null); setShowBookingModal(false) }}
         />
@@ -3382,7 +3384,7 @@ function BookingHistory({ session }) {
     setLoading(true)
     const isSolo = session?.loginMode === 'solo'
     const orgId = !isSolo && session?.userId ? session?.organizationId : null
-    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, category').eq('is_active', true).order('nickname')
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, category').eq('is_active', true).order('equipment_name')
     if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     const { data: eq } = await eqQ
     const orgEqIds = (eq || []).map(e => e.id)
@@ -3449,7 +3451,7 @@ function BookingHistory({ session }) {
 
   function exportFiltered() {
     if (filtered.length === 0) { toast('No records to export.'); return }
-    const eqName = filterEq ? (equipment.find(e => e.id === filterEq)?.nickname || 'equipment') : 'all'
+    const eqName = filterEq ? (equipment.find(e => e.id === filterEq)?.equipment_name || 'equipment') : 'all'
     const dateStr = dateFrom || new Date().toISOString().split('T')[0]
     exportCSV(filtered, `bookings_${eqName}_${dateStr}.csv`)
     toast(`Exported ${filtered.length} records.`)
@@ -3464,7 +3466,7 @@ function BookingHistory({ session }) {
   const usageStats = {}
   filtered.filter(b => b.status === 'confirmed').forEach(b => {
     const eq = equipment.find(e => e.id === b.equipment_id)
-    const name = eq?.nickname || eq?.equipment_name || 'Unknown'
+    const name = eq?.equipment_name || eq?.nickname || 'Unknown'
     if (!usageStats[name]) usageStats[name] = { count: 0, hours: 0 }
     usageStats[name].count++
     usageStats[name].hours += (new Date(b.end_time) - new Date(b.start_time)) / 3600000
@@ -3507,7 +3509,7 @@ function BookingHistory({ session }) {
           </select>
           <select value={filterEq} onChange={e => setFilterEq(e.target.value)} style={{ width: 'auto' }}>
             <option value="">All equipment</option>
-            {equipment.map(e => <option key={e.id} value={e.id}>{e.nickname || e.equipment_name}</option>)}
+            {equipment.map(e => <option key={e.id} value={e.id}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}</option>)}
           </select>
           {canEdit(session) && orgUsers.length > 0 && (
             <select value={filterUser} onChange={e => setFilterUser(e.target.value)} style={{ width: 'auto' }}>
@@ -3572,7 +3574,7 @@ function BookingHistory({ session }) {
                   return (
                     <tr key={b.id}>
                       <td style={{ fontWeight: 500 }}>
-                        {eq?.nickname || eq?.equipment_name || '—'}
+                        {eq?.equipment_name || eq?.nickname || '—'}
                         {b.is_retraining && <span style={{ marginLeft: 6, fontSize: 10, background: '#e0f2fe', color: '#0369a1', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>Retraining</span>}
                       </td>
                       {canEdit(session) && <td style={{ color: 'var(--text2)' }}>{b.booked_on_behalf_of || b.user_name}</td>}
@@ -3612,7 +3614,7 @@ function BookingSettings({ session }) {
     setLoading(true)
     const isSolo = session?.loginMode === 'solo'
     const orgId = !isSolo && session?.userId ? session?.organizationId : null
-    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('nickname')
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('equipment_name')
     if (orgId) eqQ = eqQ.eq('organization_id', orgId)
     const [{ data: eq }, { data: s }] = await Promise.all([
       eqQ,
@@ -3709,7 +3711,7 @@ function BookingSettings({ session }) {
                     const requiresApproval = s?.requires_approval || false
                     return (
                       <tr key={e.id}>
-                        <td style={{ fontWeight: 500 }}>{e.nickname || e.equipment_name}</td>
+                        <td style={{ fontWeight: 500 }}>{e.equipment_name || e.nickname}</td>
                         <td>
                           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0 }}>
                             <input type="checkbox" checked={bookable} onChange={() => toggleBookable(e.id)} style={{ width: 'auto' }} />
@@ -3759,7 +3761,7 @@ function BookingSettings({ session }) {
                       )}
                     </div>
                     <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.nickname || e.equipment_name}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.equipment_name || e.nickname}</div>
                       <input
                         type="file" accept="image/*"
                         ref={el => refFileRefs.current[e.id] = el}
@@ -3810,7 +3812,7 @@ function EquipmentNotesTab({ session }) {
     setLoading(true)
     let q = sb.from('equipment_inventory')
       .select('id, equipment_name, nickname, category, special_note')
-      .eq('is_active', true).eq('login_mode', 'team').order('category').order('nickname')
+      .eq('is_active', true).eq('login_mode', 'team').order('category').order('equipment_name')
     if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
     const { data } = await q
     const eq = data || []
@@ -3859,7 +3861,7 @@ function EquipmentNotesTab({ session }) {
           <option value="">— Choose equipment —</option>
           {equipment.map(e => (
             <option key={e.id} value={e.id}>
-              {e.nickname || e.equipment_name}{e.category ? ` · ${e.category}` : ''}{saved[e.id] ? ' ⚠️' : ''}
+              {e.equipment_name || e.nickname}{e.category ? ` · ${e.category}` : ''}{saved[e.id] ? ' ⚠️' : ''}
             </option>
           ))}
         </select>
@@ -3868,10 +3870,10 @@ function EquipmentNotesTab({ session }) {
       {selected && (
         <div style={{ background: 'var(--surface)', border: `1px solid ${hasNote ? '#fed7aa' : 'var(--border)'}`, borderLeft: hasNote ? '3px solid #f97316' : '3px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '16px 18px' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
-            {selected.nickname || selected.equipment_name}
+            {selected.equipment_name || selected.nickname}
             {hasNote && <span style={{ marginLeft: 8, fontSize: 10, background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa', borderRadius: 99, padding: '2px 8px', fontWeight: 700 }}>⚠️ Note active</span>}
           </div>
-          {selected.nickname && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{selected.equipment_name}{selected.category ? ` · ${selected.category}` : ''}</div>}
+          {selected.nickname && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{selected.nickname !== selected.equipment_name ? selected.nickname : ''}{selected.category ? ` · ${selected.category}` : ''}</div>}
           {!selected.nickname && selected.category && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>{selected.category}</div>}
           <textarea
             value={currentNote}

@@ -67,7 +67,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
 
   async function approveDirectly(req) {
     setSaving(true)
-    const eqName = req.equipment_name || equipment.find(e => e.id === req.equipment_id)?.nickname || 'equipment'
+    const eqName = req.equipment_name || equipment.find(e => e.id === req.equipment_id)?.equipment_name || 'equipment'
     const { error } = await sb.from('training_equipment').insert({
       user_id: req.user_id, equipment_id: req.equipment_id,
       trained_date: new Date().toISOString().split('T')[0],
@@ -131,7 +131,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
   async function confirmSchedule(sched) {
     await sb.from('training_schedule').update({ status: 'confirmed', confirmed_date: sched.counter_date || sched.proposed_date, updated_at: new Date().toISOString() }).eq('id', sched.id)
     const eq = equipment.find(e => e.id === sched.equipment_id)
-    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
     const when = fmtDT(sched.counter_date || sched.proposed_date)
     const msg = `Training confirmed for ${eqName} on ${when}. Please review the SOP and training videos before your session.`
     await sb.from('booking_notifications').insert({ booking_id: null, user_id: sched.user_id, type: 'training_confirmed', message: msg, read: false })
@@ -163,7 +163,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{req.user_name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                      {eq?.nickname || req.equipment_name}{req.requested_at ? ` · Requested ${new Date(req.requested_at).toLocaleDateString()}` : ''}
+                      {eq?.equipment_name || req.equipment_name}{req.requested_at ? ` · Requested ${new Date(req.requested_at).toLocaleDateString()}` : ''}
                       {req.notes && <span> · "{req.notes}"</span>}
                     </div>
                   </div>
@@ -232,7 +232,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   return (
                     <tr key={req.id}>
                       <td style={{ fontWeight: 500 }}>{req.user_name}</td>
-                      <td>{eq?.nickname || req.equipment_name}</td>
+                      <td>{eq?.equipment_name || req.equipment_name}</td>
                       <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(req.requested_at).toLocaleDateString()}</td>
                       <td><span style={{ background: req.status === 'approved' ? '#E1F5EE' : '#fcebeb', color: req.status === 'approved' ? '#085041' : '#a32d2d', borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{req.status}</span></td>
                       <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{sched ? fmtDT(sched.confirmed_date || sched.proposed_date) : '—'}</td>
@@ -301,7 +301,7 @@ export function UserTrainingSchedule({ session }) {
       .eq('id', sched.id)
     if (updateErr) { toast('Could not accept: ' + updateErr.message); return }
     const eq = equipment.find(e => e.id === sched.equipment_id)
-    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
     const orgId = session?.organizationId
     // Notify managers
     if (orgId) {
@@ -334,7 +334,7 @@ export function UserTrainingSchedule({ session }) {
     await sb.from('training_schedule').update({ status: 'countered', counter_date: new Date(date).toISOString(), updated_at: new Date().toISOString() }).eq('id', sched.id)
     // Notify managers of the counter-proposal
     const eq = equipment.find(e => e.id === sched.equipment_id)
-    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
     const orgId = session?.organizationId
     if (orgId) {
       sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
@@ -367,7 +367,7 @@ export function UserTrainingSchedule({ session }) {
           <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: '#92400e', marginBottom: 4 }}>
-                ⏳ Training requested: {eq?.nickname || req.equipment_name}
+                ⏳ Training requested: {eq?.equipment_name || req.equipment_name}
               </div>
               <div style={{ fontSize: 13, color: '#92400e' }}>
                 {req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}awaiting a training date from your lab manager.
@@ -390,7 +390,7 @@ export function UserTrainingSchedule({ session }) {
         return (
           <div key={sched.id} style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12 }}>
             <div style={{ fontWeight: 600, fontSize: 14, color: '#0369a1', marginBottom: 8 }}>
-              📅 Training scheduled: {eq?.nickname || eq?.equipment_name}
+              📅 Training scheduled: {eq?.equipment_name || eq?.nickname}
             </div>
             <div style={{ fontSize: 13, marginBottom: 12 }}>
               <strong>{sched.proposed_by}</strong> proposed: <strong>{fmtDT(sched.proposed_date)}</strong>
@@ -422,7 +422,7 @@ export function UserTrainingSchedule({ session }) {
           <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12, position: 'relative' }}>
             <button onClick={() => dismissConfirmed(sched.id)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#085041', opacity: 0.5, lineHeight: 1, padding: 4 }} title="Dismiss">✕</button>
             <div style={{ fontWeight: 600, fontSize: 14, color: '#085041', marginBottom: 4, paddingRight: 24 }}>
-              ✓ Training confirmed: {eq?.nickname || eq?.equipment_name}
+              ✓ Training confirmed: {eq?.equipment_name || eq?.nickname}
             </div>
             <div style={{ fontSize: 13, color: '#085041' }}>
               {fmtDT(sched.confirmed_date)} — Please review the SOP and training videos before your session.
@@ -590,7 +590,7 @@ export function ExamTab({ session }) {
 
   async function loadEquipment() {
     setLoading(true)
-    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('nickname')
+    let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true).order('equipment_name')
     if (session?.organizationId) eqQ = eqQ.eq('organization_id', session.organizationId)
     eqQ = forLabUsers(eqQ, session, 'exam')
     const { data: eq } = await eqQ
@@ -669,7 +669,7 @@ export function ExamTab({ session }) {
     if (passed) {
       const orgId = session?.organizationId
       const eq = equipment.find(e => e.id === selectedEq)
-      const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+      const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
       if (orgId) {
         const checklist = `Video watched: ${progress?.watched_video ? 'Yes' : 'No'} · SOP downloaded: ${progress?.downloaded_sop ? 'Yes' : 'No'} · Exam: Passed (${score}/${questions.length})`
         sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
@@ -699,7 +699,7 @@ export function ExamTab({ session }) {
         <label>Select Equipment</label>
         <select value={selectedEq || ''} onChange={e => { setSelectedEq(e.target.value); setExamMode(false); setSubmitted(null); setAnswers({}) }}>
           <option value="">— Select —</option>
-          {equipment.map(e => <option key={e.id} value={e.id}>{e.nickname || e.equipment_name}</option>)}
+          {equipment.map(e => <option key={e.id} value={e.id}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}</option>)}
         </select>
       </div>
 
@@ -824,7 +824,7 @@ export function ExamTab({ session }) {
                   ) : (
                   <>
                   <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
-                    Confirm you have reviewed all training materials for <strong>{equipment.find(e => e.id === selectedEq)?.nickname || equipment.find(e => e.id === selectedEq)?.equipment_name}</strong>.
+                    Confirm you have reviewed all training materials for <strong>{equipment.find(e => e.id === selectedEq)?.equipment_name || equipment.find(e => e.id === selectedEq)?.nickname}</strong>.
                   </div>
 
                   {/* Checklist items */}
@@ -888,7 +888,7 @@ export function ExamTab({ session }) {
               {/* Exam questions */}
               {examMode && !submitted && (
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>📝 Exam — {equipment.find(e => e.id === selectedEq)?.nickname}</div>
+                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>📝 Exam — {equipment.find(e => e.id === selectedEq)?.equipment_name}</div>
                   {questions.map((q, i) => (
                     <div key={q.id} className="card" style={{ marginBottom: 12 }}>
                       <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 12 }}>Q{i+1}: {q.question}</div>

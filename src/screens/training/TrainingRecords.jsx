@@ -836,7 +836,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
 
   async function load() {
     setLoading(true)
-    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).order('nickname')
+    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).order('equipment_name')
     if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('login_mode', 'solo')
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
     equipQuery = forLabUsers(equipQuery, session, 'training')
@@ -997,7 +997,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     const { error } = await sb.from('retraining_requests').insert({
       user_id: userId, user_name: userName,
       equipment_id: equipmentId,
-      equipment_name: eq?.nickname || eq?.equipment_name,
+      equipment_name: eq?.equipment_name || eq?.nickname,
       status: 'pending',
       requested_at: new Date().toISOString(),
       organization_id: session?.organizationId || null,
@@ -1014,7 +1014,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
             sb.from('notifications').insert(managers.map(m => ({
               user_id: m.id, type: 'training_request',
               title: `${userName} requested equipment training`,
-              body: `${eq?.nickname || eq?.equipment_name || 'Equipment'} — review in Training Records → Equipment.`,
+              body: `${eq?.equipment_name || eq?.nickname || 'Equipment'} — review in Training Records → Equipment.`,
               read: false,
             }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           }
@@ -1060,7 +1060,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
 
   async function approveTraining({ userId, username, equipmentId, scheduleId, requestId }) {
     const eq = equipment.find(e => e.id === equipmentId)
-    const eqName = eq?.nickname || eq?.equipment_name || 'equipment'
+    const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
     const { error } = await sb.from('training_equipment').insert({
       user_id: userId, equipment_id: equipmentId,
       trained_by: session.username || session.name || 'Lab Manager',
@@ -1144,7 +1144,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
           )}
           {(() => {
             const filtered = searchHistory.trim()
-              ? equipment.filter(e => (e.nickname || e.equipment_name || '').toLowerCase().includes(searchHistory.toLowerCase()) || (e.equipment_name || '').toLowerCase().includes(searchHistory.toLowerCase()))
+              ? equipment.filter(e => (e.equipment_name || e.nickname || '').toLowerCase().includes(searchHistory.toLowerCase()) || (e.equipment_name || '').toLowerCase().includes(searchHistory.toLowerCase()))
               : equipment
             return filtered.length === 0 ? (
               <div className="empty-state" style={{ padding: 32 }}><div className="empty-icon">🔧</div>{searchHistory.trim() ? `No equipment matches "${searchHistory}".` : 'No equipment yet.'}</div>
@@ -1156,7 +1156,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                     {filtered.map((e, i) => (
                       <tr key={e.id}>
                         <td style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{i + 1}</td>
-                        <td style={{ fontWeight: 500 }}>{e.nickname || e.equipment_name}<br/><span style={{fontSize:11,color:'var(--text3)'}}>{e.nickname ? e.equipment_name : ''}</span></td>
+                        <td style={{ fontWeight: 500 }}>{e.equipment_name || e.nickname}<br/><span style={{fontSize:11,color:'var(--text3)'}}>{e.nickname && e.nickname !== e.equipment_name ? e.nickname : ''}</span></td>
                         <td style={{ fontSize: 13, color: 'var(--text2)' }}>{e.category || e.location || '—'}</td>
                         <td style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{new Date(e.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
                         {canEdit(session) && <td><button className="btn btn-sm btn-danger" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => deleteEquipment(e.id)}>Remove</button></td>}
@@ -1275,7 +1275,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                           <React.Fragment key={rec.id}>
                             <tr style={{ background: rec.is_retraining ? '#e0f2fe' : expired ? 'var(--accent2-light)' : soon ? 'var(--warn-light)' : 'transparent' }}>
                               <td style={{ fontWeight: 500 }}>
-                                {eq ? (eq.nickname || eq.equipment_name) : 'Unknown'}
+                                {eq ? (eq.equipment_name || eq.nickname) : 'Unknown'}
                                 {rec.is_retraining && <span style={{ marginLeft: 6, fontSize: 10, background: '#0369a1', color: '#fff', borderRadius: 3, padding: '1px 6px', fontWeight: 600 }}>Retraining</span>}
                               </td>
                               <td style={{ fontFamily: 'var(--mono)' }}>{rec.trained_date || '—'}</td>
@@ -1313,7 +1313,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                         return (
                           <React.Fragment key={`req-${req.id}`}>
                           <tr style={{ background: '#fef3c7' }}>
-                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || req.equipment_name}</td>
+                            <td style={{ fontWeight: 500 }}>{eq?.equipment_name || eq?.equipment_name || req.equipment_name}</td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td><span style={{ fontSize: 11, background: '#fde68a', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>⏳ Awaiting date</span></td>
@@ -1347,7 +1347,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                           <tr style={{ background: bg }}>
                             <td style={{ fontWeight: 500 }}>
                               <button onClick={goToHub} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', fontSize: 'inherit' }}>
-                                {eq?.nickname || eq?.equipment_name || '—'}
+                                {eq?.equipment_name || eq?.nickname || '—'}
                               </button>
                             </td>
                             <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? new Date(dateVal).toLocaleDateString() : '—'}</td>
@@ -1381,7 +1381,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                         return (
                           <React.Fragment key={`exam-${exam.equipment_id}`}>
                           <tr style={{ background: '#E1F5EE' }}>
-                            <td style={{ fontWeight: 500 }}>{eq?.nickname || eq?.equipment_name || '—'}</td>
+                            <td style={{ fontWeight: 500 }}>{eq?.equipment_name || eq?.nickname || '—'}</td>
                             <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{new Date(exam.created_at).toLocaleDateString()}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>Self</td>
                             <td>
@@ -1447,7 +1447,7 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
           <select value={selectedEq} onChange={e => setSelectedEq(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
             <option value="">— Select equipment —</option>
             {equipment.map(e => (
-              <option key={e.id} value={e.id} disabled={pendingIds.has(e.id)}>{e.nickname || e.equipment_name}{pendingIds.has(e.id) ? ' (pending)' : ''}</option>
+              <option key={e.id} value={e.id} disabled={pendingIds.has(e.id)}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}{pendingIds.has(e.id) ? ' (pending)' : ''}</option>
             ))}
           </select>
           <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting || !selectedEq}>{submitting ? 'Submitting…' : 'Submit request'}</button>
@@ -1458,7 +1458,7 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
         return (
           <div key={req.id} style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#92400e' }}>⏳ {eq?.nickname || req.equipment_name}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#92400e' }}>⏳ {eq?.equipment_name || req.equipment_name}</div>
               <div style={{ fontSize: 12, color: '#92400e' }}>{req.requested_at ? `Submitted ${new Date(req.requested_at).toLocaleDateString()} — ` : ''}lab manager will review and approve your request</div>
             </div>
           </div>
@@ -1473,7 +1473,7 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
   const [find, setFind] = useState('')
   const trainedEquipmentIds = new Set((existingRecords || []).filter(r => !r.is_retraining).map(r => r.equipment_id))
   const isTaken = e => !form.isRetraining && trainedEquipmentIds.has(e.id)
-  const label = e => e.nickname || e.equipment_name
+  const label = e => e.equipment_name || e.nickname
   const q = find.trim().toLowerCase()
   const shown = equipment.filter(e => !q || [e.nickname, e.equipment_name, e.category].some(v => v?.toLowerCase().includes(q)))
   const free = shown.filter(e => !isTaken(e))
@@ -2553,7 +2553,7 @@ export default function TrainingRecords() {
           <div style={{ fontWeight: 600, marginBottom: 6 }}>⏰ Retraining Reminders</div>
           {expiryAlerts.map((a, i) => (
             <div key={i} style={{ fontSize: 13 }}>
-              • <strong>{a.users?.last_name || a.users?.name}</strong> — {a.equipment_inventory?.nickname || a.equipment_inventory?.equipment_name} expires {a.expires_at}
+              • <strong>{a.users?.last_name || a.users?.name}</strong> — {a.equipment_inventory?.equipment_name || a.equipment_inventory?.nickname} expires {a.expires_at}
               {new Date(a.expires_at) < new Date() ? ' (EXPIRED)' : ''}
             </div>
           ))}

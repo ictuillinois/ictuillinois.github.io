@@ -150,7 +150,7 @@ export default function ExportData({ session, toast }) {
 
       setStatus('Reading records…')
       const { data: eqRows } = await sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('organization_id', orgId)
-      const eqName = Object.fromEntries((eqRows || []).map(e => [e.id, e.nickname || e.equipment_name]))
+      const eqName = Object.fromEntries((eqRows || []).map(e => [e.id, e.equipment_name || e.nickname]))
       let orgProjects = [], orgMaterials = [], orgTested = []
       if (opts.projects) {
         orgProjects = (await sb.from('projects').select('*').eq('organization_id', orgId).order('name')).data || []

@@ -1603,7 +1603,7 @@ function MaintenanceRecords({ session }) {
                             <EquipmentAvatar url={photoMap[item.id]} size={34} />
                             <div>
                               {item.out_of_service && <span style={{ marginRight: 4, fontSize: 10, background: '#fcebeb', color: '#a32d2d', borderRadius: 3, padding: '1px 4px', fontWeight: 700 }}>OOS</span>}
-                              {item.nickname || item.equipment_name}
+                              {item.equipment_name || item.nickname}
                             </div>
                           </div>
                         </td>
@@ -1626,7 +1626,7 @@ function MaintenanceRecords({ session }) {
                         {canEdit(session) && (
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
-                              <button data-tooltip="Set max usage hours and current usage" className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => setEditHours({ id: item.id, name: item.nickname || item.equipment_name, max_usage_hours: item.max_usage_hours || '', usage_hours_since_maintenance: item.usage_hours_since_maintenance || 0 })}>⚙️ Set</button>
+                              <button data-tooltip="Set max usage hours and current usage" className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => setEditHours({ id: item.id, name: item.equipment_name || item.nickname, max_usage_hours: item.max_usage_hours || '', usage_hours_since_maintenance: item.usage_hours_since_maintenance || 0 })}>⚙️ Set</button>
                               <button data-tooltip="Reset usage hours to 0 and set today as last maintenance date" className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => resetUsage(item.id)}>↺ Time Reset</button>
                             </div>
                           </td>
