@@ -2281,3 +2281,12 @@ CSV, notifications, calendar links), Training Records and Training Schedule,
 and Export Data. Lists sort by `equipment_name`. Write new code as
 `eq.equipment_name || eq.nickname`, never the other way round. Search still
 matches both.
+
+## The address follows the current page (Oct 23 2026, both apps)
+
+App.jsx keeps `?screen=<current>` in the address (replaceState, signed in
+only; the dashboard is a clean address), so a refresh returns to the page you
+were on. The Project Materials page still writes its own address
+(`?screen=projectmaterials&project=…&material=…`) for Back / Forward — that
+address used to stay after leaving the page, so every refresh reopened it.
+Leaving it now replaces it. Sidebar sub-tabs are not in the address.
