@@ -42,7 +42,9 @@ export function reductionKind(materialType, methodKey) {
 
 // Container types, shared by the material form and the reduction modal so the
 // two cannot offer different lists for the same question.
-export const CONTAINER_TYPES = ['Metal Bucket','Plastic Bucket','5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
+// 'Metal Bucket' and 'Plastic Bucket' removed Oct 26 2026 (sizes only). A
+// material saved with one still shows it in its drop-down — see keepOld.
+export const CONTAINER_TYPES = ['5-Gallon Metal Bucket','5-Gallon Plastic Bucket','3.5-Gallon Plastic Bucket','Gallon Can','Quart Can','Sample Bag','Sample Box','Other']
 
 // Default thumbnail for a material with no photo, by type.
 //
@@ -73,3 +75,8 @@ const MATERIAL_ICONS = {
 export function materialIcon(type) {
   return MATERIAL_ICONS[type] || '\u{1F9EA}'
 }
+
+// A value saved before it left CONTAINER_TYPES: listed in that one drop-down so
+// the form shows what is stored instead of a blank, and saving unchanged keeps it.
+export const containerOptions = current =>
+  current && !CONTAINER_TYPES.includes(current) ? [current, ...CONTAINER_TYPES] : CONTAINER_TYPES

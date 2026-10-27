@@ -1,7 +1,7 @@
 import FloorPlanPicker, { formatLocation } from '../../components/FloorPlanPicker'
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../../lib/supabase'
-import { SIEVE_SIZES, FRACTION_SIZES, CONTAINER_TYPES } from '../../lib/materialFields'
+import { SIEVE_SIZES, FRACTION_SIZES, containerOptions } from '../../lib/materialFields'
 import MaterialIcon from '../../components/MaterialIcon'
 import { generateBarcodeId, buildScanUrl, FIELD_LIMITS, overLimit, TESTED_LIMITS, TESTED_LOCATIONS, testedLocation, generateTestedBarcodeId, buildTestedScanUrl, testedLabelSections } from '../../lib/materialLabel'
 import MaterialLabel from '../../components/MaterialLabel'
@@ -447,7 +447,7 @@ function QtyForm({ form, setForm }) {
         <label>Container Type</label>
         <select value={form.container_type || ''} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
           <option value="">— Select container type —</option>
-          {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {containerOptions(form.container_type).map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       </div>
       {form.container_type === 'Other' && (
@@ -1550,7 +1550,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
               <label>Splitting to?</label>
               <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
                 <option value="">— Select container type —</option>
-                {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                {containerOptions(form.container_type).map(opt => <option key={opt} value={opt}>{opt}</option>)}
               </select>
             </div>
             {form.container_type === 'Other' && (
@@ -1597,7 +1597,7 @@ function ReductionMaterialForm({ material, parent, project, isSolo, onSaved }) {
               <label>Container Type</label>
               <select value={form.container_type} onChange={e => setForm(f => ({ ...f, container_type: e.target.value }))}>
                 <option value="">— Select container type —</option>
-                {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                {containerOptions(form.container_type).map(opt => <option key={opt} value={opt}>{opt}</option>)}
               </select>
             </div>
             {form.container_type === 'Other' && (

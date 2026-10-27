@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
-import { REDUCTION_METHODS, CONTAINER_TYPES } from '../lib/materialFields'
+import { REDUCTION_METHODS, containerOptions } from '../lib/materialFields'
 
 // Material reduction: derive new materials from an existing one.
 //
@@ -304,7 +304,7 @@ export default function MaterialReductionModal({ session, isSolo, viewingWorkspa
                   <label>Splitting to? <span style={{ color: '#c84b2f' }}>*</span></label>
                   <select value={contType} onChange={e => setContType(e.target.value)}>
                     <option value="">— Select container type —</option>
-                    {CONTAINER_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    {containerOptions(contType).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
                 </div>
                 <div className="field" style={{ marginBottom: 0 }}>
