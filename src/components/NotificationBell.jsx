@@ -18,7 +18,7 @@ const BOOKING_ICONS = {
 }
 
 export default function NotificationBell() {
-  const { session, setScreen, setSidebarSubTab, setPendingProfileTab, setPendingBookingNotif } = useAppStore()
+  const { session, setScreen, setSidebarSubTab, setPendingProfileTab, setPendingBookingNotif, setPendingTrainingUser } = useAppStore()
   const [notifications, setNotifications] = useState([])
   const [open, setOpen] = useState(false)
   const panelRef = useRef(null)
@@ -77,10 +77,16 @@ export default function NotificationBell() {
   async function handleClick(n) {
     await markRead(n)
     if (n._src === 'booking') {
-      if (n.type === 'waive_before_photo' || n.type === 'after_photo_review') {
-        setPendingBookingNotif(n)
+      if (n.type === 'training_scheduled' || n.type === 'training_confirmed') {
+        // a training date proposed / confirmed: it lives on the Equipment tab
+        setScreen('training')
+        setSidebarSubTab('equipment')
+      } else {
+        if (n.type === 'waive_before_photo' || n.type === 'after_photo_review') {
+          setPendingBookingNotif(n)
+        }
+        setScreen('booking')
       }
-      setScreen('booking')
     } else if (n.type === 'new_message') {
       setScreen('remessages')
     } else if (n.type === 'team_invite') {
@@ -99,7 +105,16 @@ export default function NotificationBell() {
       setSidebarSubTab('locker')
     } else if (['training_submitted', 'training_approved', 'training_expiring', 'safety_step_submitted', 'safety_skip_request'].includes(n.type)) {
       setScreen('training')
-    } else if (n.task_id) {
+    } else if (['training_request', 'training_confirmed'].includes(n.type)) {
+      // A lab user asked for equipment training, accepted or countered a
+      // training time, or passed an exam. The title starts with their name
+      // ("Mohammad … requested equipment training"), so open that person.
+      setScreen('training')
+      setSidebarSubTab('equipment')
+      const who = (n.title || '').match(/^(.+?) (requested|accepted|proposed|passed)\b/)?.[1]
+      if (who) setPendingTrainingUser(who)
+    } else if (n.task_id || ['reminder_daily', 'deadline_reminder'].includes(n.type)) {
+      // the daily summary of several tasks has no single task_id
       setScreen('pm')
     }
     setOpen(false)
