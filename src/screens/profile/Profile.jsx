@@ -989,7 +989,7 @@ function NotificationPrefsPanel({ userId, role }) {
       { key: 'icons_granted', label: 'New icon added to my dashboard' },
     ]},
     { title: '🔧 Equipment Maintenance', desc: 'Reminders when equipment you are responsible for is coming due.', roles: ['user', 'admin', 'solo'], events: [
-      { key: 'maintenance_reminder', label: 'Maintenance due — reminder 2 weeks before and 1 week before due date' },
+      { key: 'maintenance_reminder', label: 'Maintenance due — 2 weeks and 1 week before, on the day, then weekly while overdue (equipment you are ticked Remind on)' },
     ]},
   ].filter(s => s.roles.includes(role))
 

@@ -584,7 +584,7 @@ export default function Layout({ children }) {
     if (dailyRef.current || !session?.userId) return
     dailyRef.current = true
     import('../lib/dailyReminders')
-      .then(m => m.runDailyTaskReminders())
+      .then(async m => { await m.runDailyTaskReminders(); await m.runMaintenanceReminders() })
       .catch(e => console.warn('[daily reminders]', e))
   }, [session?.userId])
 

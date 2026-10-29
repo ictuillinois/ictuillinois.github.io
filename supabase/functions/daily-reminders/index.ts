@@ -32,6 +32,46 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const TZ = Deno.env.get("REMINDER_TZ") ?? "America/Chicago";
 const HOUR = Number(Deno.env.get("REMINDER_HOUR") ?? "7");
 
+// Where email buttons lead. ICT-Lab once pointed at ictlab.app, a domain with
+// no nameservers, so every "View Task" button in these emails led nowhere.
+const APP_URL = "https://ictlab.labhive.app";
+const APP_NAME = "ICT-Lab";
+const TASK_CTA = { label: `View Task in ${APP_NAME} →`, url: `${APP_URL}?screen=pm` };
+const MAINT_CTA = { label: "Open Equipment & Maintenance →", url: `${APP_URL}?screen=equipment` };
+
+// ── Equipment maintenance reminders ─────────────────────────────────────────
+// Same rules as src/lib/dailyReminders.js — keep the two in step.
+// Stages are WINDOWS, not exact days: a run that is missed (or a due date set
+// 10 days out) still gets the reminder the next morning. Each stage is claimed
+// once per due date, so moving the date re-arms them.
+//   15+ days away   nothing
+//   8–14 days       "due in 2 weeks"  (once)
+//   1–7 days        "due in 1 week"   (once)
+//   due day         "due today"       (once; also catches up days 1–6 overdue)
+//   7+ days over    "overdue"         (once a week until the date is moved)
+function daysUntil(due: string, today: string): number {
+  return Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+}
+function maintenanceStage(due: string, today: string): { kind: string; sentFor: string; title: string } | null {
+  const d = daysUntil(due, today);
+  const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+  if (d > 14) return null;
+  if (d > 7) return { kind: "maint_2weeks", sentFor: due, title: `Maintenance due in ${d === 14 ? "2 weeks" : days(d)}` };
+  if (d > 0) return { kind: "maint_1week", sentFor: due, title: d === 1 ? "Maintenance due tomorrow" : `Maintenance due in ${d === 7 ? "1 week" : days(d)}` };
+  if (d > -7) return { kind: "maint_due", sentFor: due, title: d === 0 ? "Maintenance due today" : `Maintenance overdue by ${days(-d)}` };
+  const weeks = Math.floor(-d / 7);
+  return { kind: "maint_overdue", sentFor: addDays(due, weeks * 7), title: `Maintenance overdue by ${weeks} week${weeks === 1 ? "" : "s"}` };
+}
+// Only the people ticked "Remind" under Responsible for Maintenance — the old
+// dashboard job messaged every assignee, ticked or not.
+function remindedIds(assignees: unknown): string[] {
+  const list = Array.isArray(assignees) ? assignees : [];
+  return [...new Set(list.filter((a: any) => a?.id && a.remind === true).map((a: any) => String(a.id)))];
+}
+function fmtDate(d: string): string {
+  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, // service role → bypasses RLS
@@ -65,7 +105,7 @@ async function claim(userId: string, kind: string, refId: string | null, sentFor
   return false;
 }
 
-async function notify(userId: string, type: string, title: string, body: string, taskId: string | null) {
+async function notify(userId: string, type: string, title: string, body: string, taskId: string | null, cta = TASK_CTA) {
   const { data: prefs } = await supabase.from("notification_prefs")
     .select("*").eq("user_id", userId).maybeSingle();
 
@@ -82,7 +122,7 @@ async function notify(userId: string, type: string, title: string, body: string,
   if (!to) return;
   const { error } = await supabase.from("email_notifications_queue").insert({
     to_email: to, subject: title, body, user_id: userId, type,
-    html_body: emailHtml(title, body),
+    html_body: emailHtml(title, body, cta),
   });
   if (error) console.error("[daily-reminders] email queue failed:", error.message);
 }
@@ -102,14 +142,14 @@ async function addressFor(userId: string): Promise<string | null> {
   } catch { return null; }
 }
 
-function emailHtml(title: string, body: string) {
+function emailHtml(title: string, body: string, cta: { label: string; url: string }) {
   return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a">
   <div style="font-size:18px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
   <div style="font-size:15px;line-height:1.6;color:#444;margin-bottom:24px">${escapeHtml(body)}</div>
-  <a href="https://ictlab.app/?screen=pm" style="display:inline-block;background:#1D9E75;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600">View Task in ICT-Lab →</a>
+  <a href="${escapeHtml(cta.url)}" style="display:inline-block;background:#1D9E75;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600">${escapeHtml(cta.label)}</a>
   <div style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888">
-    You are receiving this because daily task reminders are on.
-    <a href="https://ictlab.app/?screen=profile" style="color:#888">Change your notification settings</a>.
+    You are receiving this because these reminders are on.
+    <a href="${APP_URL}?screen=profile" style="color:#888">Change your notification settings</a>.
   </div>
 </div>`;
 }
@@ -182,5 +222,29 @@ Deno.serve(async (req) => {
     }
   }
 
-  return Response.json({ ok: true, tz: TZ, today, daily, deadline });
+  // --- equipment maintenance: the responsible lab managers who ticked Remind ---
+  // Replaces the pg_cron job "maintenance-reminders-daily" (made in the
+  // dashboard, in no file): it ignored the Remind tick, fired only on the exact
+  // 14th and 7th day, ran at 3am Chicago, and queued emails with no address.
+  // maintenance_reminder_setup.sql unschedules it.
+  let maint = 0;
+  const { data: eqs, error: eqErr } = await supabase.from("equipment_inventory")
+    .select("id, equipment_name, nickname, next_maintenance_date, maintenance_assignees, organization_id")
+    .eq("is_active", true).not("next_maintenance_date", "is", null)
+    .lte("next_maintenance_date", addDays(today, 14));
+  if (eqErr) console.error("[daily-reminders] equipment load failed:", eqErr.message);
+  for (const eq of eqs ?? []) {
+    const stage = maintenanceStage(eq.next_maintenance_date, today);
+    if (!stage) continue;
+    const name = eq.equipment_name || eq.nickname || "Equipment";
+    for (const uid of remindedIds(eq.maintenance_assignees)) {
+      if (!(await claim(uid, stage.kind, eq.id, stage.sentFor, eq.organization_id ?? null))) continue;
+      await notify(uid, "maintenance_reminder", `🔧 ${stage.title}: ${name}`,
+        `${name} is due for maintenance on ${fmtDate(eq.next_maintenance_date)}. You are listed as responsible for its maintenance.`,
+        null, MAINT_CTA);
+      maint++;
+    }
+  }
+
+  return Response.json({ ok: true, tz: TZ, today, daily, deadline, maint });
 });

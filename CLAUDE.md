@@ -2290,3 +2290,27 @@ were on. The Project Materials page still writes its own address
 (`?screen=projectmaterials&project=…&material=…`) for Back / Forward — that
 address used to stay after leaving the page, so every refresh reopened it.
 Leaving it now replaces it. Sidebar sub-tabs are not in the address.
+
+## Equipment maintenance reminders (Oct 2026, both apps)
+
+Sent by the **daily-reminders** Edge Function (7am local, with the task
+reminders) and, as a fallback on sign-in, by `runMaintenanceReminders()` in
+`src/lib/dailyReminders.js`. Both claim through `reminder_sends`, so only one
+sends. Keep their stage rules (`maintenanceStage`) in step.
+
+- Who: lab managers in an item's **Responsible for Maintenance** list with
+  **Remind** ticked (`maintenance_assignees[].remind === true`), active items only.
+- When (from `next_maintenance_date`): 8–14 days → "due in 2 weeks", 1–7 days
+  → "due in 1 week", due day → "due today" (also catches up days 1–6 overdue),
+  then once a week while overdue. Windows, not exact days: a missed run still
+  sends the next morning. Each stage once per due date (`ref_id` = equipment id,
+  `sent_for` = due date / overdue week), so moving the date re-arms them.
+- Pref key `maintenance_reminder` / `email_maintenance_reminder`; the bell
+  opens Equipment & Maintenance.
+- Dates only — NOT hours. Maintenance Records' "hours used" sums every
+  booking ever, not hours since the last maintenance, so it cannot drive a
+  reminder until it is reset-aware.
+- Replaced the dashboard-made pg_cron job `maintenance-reminders-daily` /
+  `send_maintenance_reminders()` (ignored the tick, exact 14th/7th day only,
+  3am Chicago, emails with no to_email). `maintenance_reminder_setup.sql`
+  unschedules and drops it — run it in BOTH projects.

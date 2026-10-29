@@ -10,7 +10,8 @@ import { buildEmailHtml } from './emailTemplate'
 // The preference check is deliberately "not false", not "=== true": a user who
 // has never opened the notifications panel has no prefs row at all, and they
 // should still be notified.
-export async function sendTaskNotification(userId, type, title, body, taskId = null) {
+// cta: { label, url } for the email button — defaults to the Task Board.
+export async function sendTaskNotification(userId, type, title, body, taskId = null, cta = {}) {
   if (!userId) return
   const { data: prefs } = await sb.from('notification_prefs').select('*').eq('user_id', userId).maybeSingle()
   if (!prefs || prefs[type] !== false) {
@@ -28,8 +29,8 @@ export async function sendTaskNotification(userId, type, title, body, taskId = n
     }
     const htmlBody = buildEmailHtml({
       title, body,
-      ctaLabel: 'View Task in ICT-Lab →',
-      ctaUrl: 'https://ictlab.labhive.app/?screen=pm',
+      ctaLabel: cta.label || 'View Task in ICT-Lab →',
+      ctaUrl: cta.url || 'https://ictlab.labhive.app/?screen=pm',
       prefsUrl: 'https://ictlab.labhive.app/?screen=profile',
       orgContact,
     })

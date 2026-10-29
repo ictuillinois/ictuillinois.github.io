@@ -32,6 +32,48 @@ async function claim(userId, kind, refId, sentFor, orgId) {
   return false
 }
 
+// ── Equipment maintenance (same stages as the Edge Function — keep in step) ──
+const addDays = (date, n) => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const daysUntil = (due, today) => Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000)
+const days = n => `${n} day${n === 1 ? '' : 's'}`
+export function maintenanceStage(due, today) {
+  const d = daysUntil(due, today)
+  if (d > 14) return null
+  if (d > 7) return { kind: 'maint_2weeks', sentFor: due, title: `Maintenance due in ${d === 14 ? '2 weeks' : days(d)}` }
+  if (d > 0) return { kind: 'maint_1week', sentFor: due, title: d === 1 ? 'Maintenance due tomorrow' : `Maintenance due in ${d === 7 ? '1 week' : days(d)}` }
+  if (d > -7) return { kind: 'maint_due', sentFor: due, title: d === 0 ? 'Maintenance due today' : `Maintenance overdue by ${days(-d)}` }
+  const weeks = Math.floor(-d / 7)
+  return { kind: 'maint_overdue', sentFor: addDays(due, weeks * 7), title: `Maintenance overdue by ${weeks} week${weeks === 1 ? '' : 's'}` }
+}
+
+// The signed-in person's own maintenance reminders: equipment where they are
+// ticked Remind under Responsible for Maintenance. Claims through the same
+// reminder_sends rows as the Edge Function, so whichever runs first sends.
+export async function runMaintenanceReminders() {
+  const session = useAppStore.getState?.().session
+  const userId = session?.userId
+  if (!userId) return
+  const today = todayStr()
+  const { data: eqs, error } = await sb.from('equipment_inventory')
+    .select('id, equipment_name, nickname, next_maintenance_date, maintenance_assignees, organization_id')
+    .eq('is_active', true).not('next_maintenance_date', 'is', null)
+    .lte('next_maintenance_date', addDays(today, 14))
+  if (error) { console.warn('[maintenanceReminders] load failed:', error.message); return }
+  for (const eq of eqs || []) {
+    const mine = (Array.isArray(eq.maintenance_assignees) ? eq.maintenance_assignees : [])
+      .some(a => String(a?.id) === String(userId) && a.remind === true)
+    if (!mine) continue
+    const stage = maintenanceStage(eq.next_maintenance_date, today)
+    if (!stage) continue
+    if (!await claim(userId, stage.kind, eq.id, stage.sentFor, eq.organization_id || session?.organizationId || null)) continue
+    const name = eq.equipment_name || eq.nickname || 'Equipment'
+    const when = new Date(`${eq.next_maintenance_date}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    await sendTaskNotification(userId, 'maintenance_reminder', `🔧 ${stage.title}: ${name}`,
+      `${name} is due for maintenance on ${when}. You are listed as responsible for its maintenance.`, null,
+      { label: 'Open Equipment & Maintenance →', url: 'https://ictlab.labhive.app?screen=equipment' })
+  }
+}
+
 export async function runDailyTaskReminders() {
   const session = useAppStore.getState?.().session
   const userId = session?.userId
