@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { sb } from '../lib/supabase'
 import { useAppStore } from '../store/useAppStore'
+import { sendTaskNotification } from '../lib/notify'
 
 export function formatLocation(loc) {
   if (!loc) return ''
@@ -49,6 +50,23 @@ const ICT_ROOMS = [
   { id: 'ICT-119', label: '119' }, { id: 'ICT-119A', label: '119A' },
   { id: 'ICT-122', label: '122' },
 ]
+
+// ── Racks: shelves and places (Oct 2026) ────────────────────────
+// Shelves are lettered from the TOP: A = the top shelf (the old "Shelf 1").
+// A rack spot may divide every shelf into places (placesPerShelf). A place is
+// named by its shelf letter and number — A1, A2, A3 — and has its own id:
+//   <spot>-R<rack>-S<shelf>           whole shelf   (placesPerShelf = 1)
+//   <spot>-R<rack>-S<shelf>-P<place>  one place     (placesPerShelf > 1)
+// Places are drawn right to left (3 · 2 · 1), as they are labelled on the
+// racks themselves.
+export const shelfLetter = n => String.fromCharCode(64 + Number(n))
+const RACK_SLOT = /^(.+)-R(\d+)-S(\d+)(?:-P(\d+))?$/
+const placeCount = spot => Math.max(1, parseInt(spot?.placesPerShelf) || 1)
+function slotName(spot, r, sh, pl) {
+  const rack = spot?.rackNames?.[r - 1] || `Rack ${r}`
+  return pl ? `${rack} · ${shelfLetter(sh)}${pl}` : `${rack} · Shelf ${shelfLetter(sh)}`
+}
+const APP_PROJECTS_URL = 'https://ictlab.labhive.app/?screen=projects'
 
 // ── Tooltip ───────────────────────────────────────────────────
 function Tooltip({ x, y, info, onClose }) {
@@ -919,11 +937,20 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [saving, setSaving] = useState(false)
   const [spots, setSpots] = useState([])
   const [editingSpots, setEditingSpots] = useState(!!allowLayoutEdit)
-  const [showAddStorage, setShowAddStorage] = useState(false)
   const [viewSpotId, setViewSpotId] = useState('')
-  const [pickedSpotId, setPickedSpotId] = useState('')
-  const [pickedRack, setPickedRack] = useState('')
-  const [pickedShelf, setPickedShelf] = useState('')
+  // In the spot window: the place clicked (details + actions below the racks)
+  const [focusId, setFocusId] = useState('')
+  // A lab manager moving someone's material: the storage row being moved
+  const [moveItem, setMoveItem] = useState(null)
+  // "Set up shelves" (lab managers / admins): the spot being set up + its draft
+  const [setupOpen, setSetupOpen] = useState(false)
+  const [setupSpotId, setSetupSpotId] = useState('')
+  const [setupDraft, setSetupDraft] = useState(null)
+  const [setupError, setSetupError] = useState('')
+  const [busy, setBusy] = useState(false)
+  // Every users row of the signed-in person (one login can hold a lab-user and
+  // a lab-manager row): a place stored from either is theirs.
+  const [myIds, setMyIds] = useState(session?.userId ? [String(session.userId)] : [])
   const [facilityOrder, setFacilityOrder] = useState(null) // saved tab order (array of facility keys), null until loaded
   const [dragTabKey, setDragTabKey] = useState(null)
   const canEdit = !!session
@@ -933,6 +960,11 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   // dedicated Admin → Floor Plan entry point (allowLayoutEdit) — never from
   // the regular material storage picker, regardless of role.
   const canEditLayout = allowLayoutEdit && !viewOnly && session?.role === 'admin'
+  // Lab managers/admins can store anywhere, move anyone's material and set up
+  // the shelves; lab users store only in free places or places they own.
+  const isManagerOrAdmin = session?.role === 'admin' || session?.role === 'user' || session?.userId === null
+  // The window picks a place for THIS material only when opened from a material
+  const picking = !viewOnly && canEdit && !!materialId && !allowLayoutEdit
 
   useEffect(() => { loadAll() }, [])
 
@@ -950,6 +982,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       locQuery = locQuery.eq('organization_id', '00000000-0000-0000-0000-000000000000')
     }
 
+    if (session?.email && !isSolo) {
+      sb.from('users').select('id').ilike('email', session.email).then(({ data }) => {
+        if (data?.length) setMyIds([...new Set([String(session.userId), ...data.map(u => String(u.id))])])
+      }, () => {})
+    }
+
     const [{ data: locData }, { data: planData }, { data: spotsData }, { data: orderData }] = await Promise.all([
       locQuery,
       orgId
@@ -959,15 +997,27 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       sb.from('ict_layout').select('value').eq('key', 'facility_tab_order').single(),
     ])
 
+    // One place can now hold several materials (one storage row each), all
+    // placed by the same person: whoever stored there first owns the place.
     const map = {}
     ;(locData || []).forEach(loc => {
-      map[loc.location_id] = {
-        occupied: loc.occupied,
-        project_name: loc.project_name,
-        material_type: loc.material_type,
-        occupied_by: loc.occupied_by,
-        db_id: loc.id,
-      }
+      const e = map[loc.location_id] || (map[loc.location_id] = { occupied: false, items: [], db_id: loc.id })
+      if (!loc.occupied) return
+      e.occupied = true
+      e.items.push({
+        row_id: loc.id, material_id: loc.material_id, project_id: loc.project_id,
+        project_name: loc.project_name, material_type: loc.material_type,
+        occupied_by: loc.occupied_by, occupied_by_id: loc.occupied_by_id || null, occupied_at: loc.occupied_at,
+      })
+    })
+    Object.values(map).forEach(e => {
+      if (!e.items.length) return
+      e.items.sort((x, y) => String(x.occupied_at || '').localeCompare(String(y.occupied_at || '')))
+      const first = e.items[0]
+      e.project_name = first.project_name
+      e.material_type = first.material_type
+      e.occupied_by = first.occupied_by
+      e.owner_id = first.occupied_by_id
     })
     setOccupancy(map)
 
@@ -993,26 +1043,41 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     setLoading(false)
   }
 
-  // Picking a location now saves and closes immediately — single slot,
-  // no separate staging + "Confirm N locations" step.
+  // ── Who may use a place ──
+  // Owner = the person who stored there first. Rows from before the owner id
+  // was recorded fall back to the name they were stored under.
+  function isMine(occ) {
+    if (!occ?.occupied) return false
+    if (occ.owner_id) return myIds.includes(String(occ.owner_id))
+    return !!occ.occupied_by && occ.occupied_by === session?.username
+  }
+  // 'free' | 'here' (this material is already there) | 'mine' | 'taken'
+  function placeState(id) {
+    const occ = occupancy[id]
+    if (selected.includes(id)) return 'here'
+    if (!occ?.occupied) return 'free'
+    return isMine(occ) ? 'mine' : 'taken'
+  }
+
+  // Picking a location on a room/zone saves and closes immediately — single
+  // slot, no separate staging + "Confirm N locations" step.
   function pickLocation(id) {
     if (!canEdit) return
     saveLocations([id])
   }
 
-  function getLocationDetail(id) {
-    // Spot rack/shelf slot: e.g. spot_1234567890-R2-S3
-    const rackMatch = id.match(/^(.+)-R(\d+)-S(\d+)$/)
+  function getLocationDetail(id, list = spots) {
+    // Rack slot: spot_123-R2-S3 (whole shelf) or spot_123-R2-S3-P1 (one place)
+    const rackMatch = id.match(RACK_SLOT)
     if (rackMatch) {
-      const spot = spots.find(s => s.id === rackMatch[1])
+      const spot = list.find(s => s.id === rackMatch[1])
       const fac = spot?.facility || 'ICT'
       const room = fac === 'ICT' ? ICT_ROOMS.find(r => r.id === spot?.room_id) : null
-      const rackName = spot?.rackNames?.[parseInt(rackMatch[2]) - 1] || `Rack ${rackMatch[2]}`
-      const label = spot ? `${spot.name} · ${rackName} · Shelf ${rackMatch[3]}` : id
+      const label = spot ? `${spot.name} · ${slotName(spot, +rackMatch[2], +rackMatch[3], rackMatch[4] ? +rackMatch[4] : null)}` : id
       return { location: fac === 'ICT' ? (room?.label || 'ICT Building') : 'MPF', detail: label, facility: fac }
     }
     // Spot itself (pallet/floor — single slot)
-    const spot = spots.find(s => s.id === id)
+    const spot = list.find(s => s.id === id)
     if (spot) {
       const fac = spot.facility || 'ICT'
       const room = fac === 'ICT' ? ICT_ROOMS.find(r => r.id === spot.room_id) : null
@@ -1049,67 +1114,58 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     if (error) {
       console.error('saveSpots failed:', error)
       alert('Spots could not be saved: ' + (error.message || error.code || 'unknown error'))
+      return false
     }
+    return true
   }
 
-  // Lab managers/admins can override an already-occupied slot (e.g. to fix a
-  // stale reservation); regular lab users are blocked from touching one.
-  const isManagerOrAdmin = session?.role === 'admin' || session?.role === 'user'
   const spotsForFacility = spots.filter(s => (s.facility || 'ICT') === (facility === 'MPF' ? 'MPF' : 'ICT'))
-  const pickedSpot = spots.find(s => s.id === pickedSpotId) || null
   const viewSpot = spots.find(s => s.id === viewSpotId) || null
-  const canConfirmAddStorage = pickedSpot && (
-    pickedSpot.type === 'racks'
-      ? !!pickedRack && !!pickedShelf
-      : (isManagerOrAdmin || !occupancy[pickedSpot.id]?.occupied)
-  )
 
-  function confirmAddStorage() {
-    if (!pickedSpot) return
-    let id, label
-    if (pickedSpot.type === 'racks') {
-      if (!pickedRack || !pickedShelf) return
-      id = `${pickedSpot.id}-R${pickedRack}-S${pickedShelf}`
-      label = `${pickedSpot.name} · Rack ${pickedRack} · Shelf ${pickedShelf}`
-    } else {
-      id = pickedSpot.id
-      label = pickedSpot.name
+  // A storage row write. occupied_by_id is new (storage_owner_setup.sql): if
+  // the column is not there yet, store without it rather than fail the save.
+  async function writeRow(kind, payload, rowId) {
+    const run = body => kind === 'update'
+      ? sb.from('storage_locations').update(body).eq('id', rowId)
+      : sb.from('storage_locations').insert(body)
+    let { error } = await run(payload)
+    if (error && /occupied_by_id/.test(error.message || '')) {
+      const { occupied_by_id, ...rest } = payload
+      ;({ error } = await run(rest))
     }
-    setShowAddStorage(false)
-    setPickedSpotId(''); setPickedRack(''); setPickedShelf('')
-    saveLocations([id])
+    if (error) throw error
   }
 
   async function saveLocations(idsArray) {
     if (!canEdit) { onConfirm([]); onClose(); return }
     setSaving(true)
     try {
-      // Get previously assigned locations for this material
+      const isSolo = session?.loginMode === 'solo'
+      const orgId = session?.organizationId || null
+      const orgFilter = q => isSolo ? q.is('organization_id', null) : q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+
+      // This material's current storage rows
       const { data: existing } = await sb.from('storage_locations')
         .select('*').eq('material_id', materialId)
-
       const existingIds = (existing || []).map(e => e.location_id)
 
-      // Release locations no longer selected
-      const toRelease = existingIds.filter(id => !idsArray.includes(id))
-      for (const id of toRelease) {
+      // Release only THIS material's row — a place can hold other materials
+      // too, and they stay put.
+      const toRelease = (existing || []).filter(e => !idsArray.includes(e.location_id))
+      for (const row of toRelease) {
         await sb.from('storage_locations').update({
           occupied: false, project_id: null, material_id: null,
           project_name: null, material_type: null,
           occupied_at: null, occupied_by: null,
-        }).eq('location_id', id)
+        }).eq('id', row.id)
       }
 
-      // Occupy newly selected locations
+      // Store in the newly chosen places: reuse a free row for that place, or add one
       const toOccupy = idsArray.filter(id => !existingIds.includes(id))
-      const isSolo = session?.loginMode === 'solo'
-      const orgId = session?.organizationId || null
       for (const id of toOccupy) {
         const det = getLocationDetail(id)
-        let locLookup = sb.from('storage_locations').select('id').eq('location_id', id)
-        if (isSolo) locLookup = locLookup.is('organization_id', null)
-        else locLookup = locLookup.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
-        const { data: existing_loc } = await locLookup.single()
+        const { data: freeRows } = await orgFilter(sb.from('storage_locations').select('id')
+          .eq('location_id', id).eq('occupied', false)).limit(1)
         const payload = {
           location_id: id,
           location_label: det.detail,
@@ -1121,16 +1177,13 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
           material_type: materialType,
           occupied_at: new Date().toISOString(),
           occupied_by: session?.username,
+          occupied_by_id: session?.userId || null,
           organization_id: isSolo ? null : orgId,
         }
-        if (existing_loc) {
-          await sb.from('storage_locations').update(payload).eq('location_id', id)
-        } else {
-          await sb.from('storage_locations').insert(payload)
-        }
+        if (freeRows?.length) await writeRow('update', payload, freeRows[0].id)
+        else await writeRow('insert', payload)
       }
 
-      // Return selected as location objects
       const result = idsArray.map(id => {
         const det = getLocationDetail(id)
         return { location_id: id, location: det.location, detail: det.detail }
@@ -1139,10 +1192,157 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       onClose()
     } catch (e) {
       console.error(e)
+      alert('The storage location could not be saved: ' + (e?.message || e))
     }
     setSaving(false)
   }
 
+  // ── A lab manager moves someone's material to another place ──
+  async function moveMaterial(item, toId) {
+    setBusy(true)
+    try {
+      const fromLabel = getLocationDetail(item.from_id).detail
+      const det = getLocationDetail(toId)
+      const { data: moved, error } = await sb.from('storage_locations')
+        .update({ location_id: toId, location_label: det.detail, facility: det.facility })
+        .eq('id', item.row_id).select('id')
+      if (error) throw error
+      if (!moved?.length) throw new Error('nothing was changed — the material may have been moved already')
+
+      // The material's own record shows where it is stored
+      let materialName = item.material_type || 'material'
+      if (item.material_id) {
+        const { data: m } = await sb.from('project_materials').select('id, name, locations').eq('id', item.material_id).maybeSingle()
+        if (m) {
+          materialName = m.name || materialName
+          const locs = (m.locations || []).map(l => l.location_id === item.from_id
+            ? { location_id: toId, location: det.location, detail: det.detail } : l)
+          await sb.from('project_materials').update({ locations: locs }).eq('id', m.id)
+        }
+      }
+
+      // Tell the person who stored it (not when you move your own)
+      let ownerId = item.occupied_by_id
+      if (!ownerId && item.occupied_by && session?.organizationId) {
+        const { data: u } = await sb.from('users').select('id').eq('name', item.occupied_by)
+          .eq('organization_id', session.organizationId).eq('is_active', true).limit(1)
+        ownerId = u?.[0]?.id || null
+      }
+      if (ownerId && String(ownerId) !== String(session?.userId)) {
+        await sendTaskNotification(ownerId, 'storage_moved',
+          `📦 Your material was moved: ${materialName}`,
+          `${session?.username || 'A lab manager'} moved ${materialName}${item.project_name ? ` (${item.project_name})` : ''} from ${fromLabel} to ${det.detail}.`,
+          null, { label: 'Open Project Workspace →', url: APP_PROJECTS_URL })
+      }
+      setMoveItem(null)
+      setFocusId(toId)
+      await loadAll()
+    } catch (e) {
+      alert('The material could not be moved: ' + (e?.message || e))
+    }
+    setBusy(false)
+  }
+
+  // ── Set up shelves (lab managers / admins) ──
+  function openSetup(spotId = '') {
+    setSetupOpen(true)
+    setSetupError('')
+    chooseSetupSpot(spotId)
+  }
+  function chooseSetupSpot(id) {
+    setSetupSpotId(id)
+    setSetupError('')
+    const sp = spots.find(x => x.id === id)
+    setSetupDraft(sp ? {
+      type: sp.type || 'pallet',
+      rackNames: sp.rackNames?.length ? [...sp.rackNames] : ['Rack 1'],
+      shelvesPerRack: sp.shelvesPerRack || 1,
+      placesPerShelf: placeCount(sp),
+    } : null)
+  }
+  function setDraftRackCount(n) {
+    const count = Math.min(12, Math.max(1, parseInt(n) || 1))
+    setSetupDraft(d => ({ ...d, rackNames: Array.from({ length: count }, (_, i) => d.rackNames[i] || `Rack ${i + 1}`) }))
+  }
+
+  // Where a stored row goes when its spot's layout changes, or null if its
+  // place would disappear. Whole shelf → place 1 when places are added (the
+  // owner can move it to 2 or 3 later); place 1 → whole shelf when removed.
+  function remapSlot(id, spot, next) {
+    if (id === spot.id) return next.type === 'racks' ? null : id
+    const m = id.match(RACK_SLOT)
+    if (!m || m[1] !== spot.id || next.type !== 'racks') return null
+    const r = +m[2], sh = +m[3], pl = m[4] ? +m[4] : null
+    if (r > next.rackNames.length || sh > next.shelvesPerRack) return null
+    const base = `${spot.id}-R${r}-S${sh}`
+    if (next.placesPerShelf > 1) {
+      if (!pl) return `${base}-P1`
+      return pl <= next.placesPerShelf ? id : null
+    }
+    if (!pl || pl === 1) return base
+    return null
+  }
+
+  async function saveSetup() {
+    const spot = spots.find(x => x.id === setupSpotId)
+    if (!spot || !setupDraft) return
+    const next = {
+      type: setupDraft.type,
+      rackNames: setupDraft.rackNames.map((n, i) => n.trim() || `Rack ${i + 1}`),
+      shelvesPerRack: Math.min(26, Math.max(1, parseInt(setupDraft.shelvesPerRack) || 1)),
+      placesPerShelf: Math.min(12, Math.max(1, parseInt(setupDraft.placesPerShelf) || 1)),
+    }
+    const nextSpot = next.type === 'racks'
+      ? { ...spot, type: 'racks', rackNames: next.rackNames, shelvesPerRack: next.shelvesPerRack, placesPerShelf: next.placesPerShelf }
+      : (({ rackNames, shelvesPerRack, placesPerShelf, ...rest }) => ({ ...rest, type: next.type }))(spot)
+    const nextSpots = spots.map(x => x.id === spot.id ? nextSpot : x)
+
+    setBusy(true)
+    setSetupError('')
+    try {
+      // Everything stored in this spot right now
+      const orgId = session?.organizationId
+      let q = sb.from('storage_locations').select('id, location_id, material_id, project_name, occupied_by')
+        .eq('occupied', true).or(`location_id.eq.${spot.id},location_id.like.${spot.id}-R*`)
+      q = orgId ? q.eq('organization_id', orgId) : q.is('organization_id', null)
+      const { data: rows, error } = await q
+      if (error) throw error
+
+      // Nothing stored may vanish: those materials have to be moved first
+      const lost = (rows || []).filter(r => remapSlot(r.location_id, spot, next) === null)
+      if (lost.length) {
+        setSetupError('These places still hold materials and would disappear with this change: '
+          + lost.map(r => `${getLocationDetail(r.location_id).detail} (${r.project_name || 'material'}, ${r.occupied_by || 'unknown'})`).join('; ')
+          + '. Move those materials first, then change the layout.')
+        setBusy(false)
+        return
+      }
+      if (!(await saveSpots(nextSpots))) { setBusy(false); return }
+
+      // Re-file what is stored here under the new names (A2 rather than Shelf 2)
+      for (const r of rows || []) {
+        const newId = remapSlot(r.location_id, spot, next)
+        const det = getLocationDetail(newId, nextSpots)
+        await sb.from('storage_locations').update({ location_id: newId, location_label: det.detail }).eq('id', r.id)
+        if (!r.material_id) continue
+        const { data: m } = await sb.from('project_materials').select('id, locations').eq('id', r.material_id).maybeSingle()
+        if (!m) continue
+        const locs = (m.locations || []).map(l => l.location_id === r.location_id
+          ? { location_id: newId, location: det.location, detail: det.detail } : l)
+        await sb.from('project_materials').update({ locations: locs }).eq('id', m.id)
+      }
+      // This material's own selection follows its place too
+      setSelected(sel => sel.map(id => {
+        const hit = (rows || []).find(r => r.location_id === id)
+        return hit ? remapSlot(id, spot, next) : id
+      }))
+      await loadAll()
+      setSetupOpen(false)
+    } catch (e) {
+      setSetupError('Could not save: ' + (e?.message || e))
+    }
+    setBusy(false)
+  }
 
   // Legend
   const legend = [
@@ -1161,11 +1361,11 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)', gap: 10 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>{allowLayoutEdit ? '🗺️ Manage Floor Plan Spots' : viewOnly ? '🗺️ Floor Map — Storage Locations' : 'Select storage location'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{allowLayoutEdit ? 'Create and reposition spots for lab managers and lab users to reserve' : viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap to select · Occupied locations show project info on tap'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{allowLayoutEdit ? 'Create and reposition spots for lab managers and lab users to reserve' : viewOnly ? 'Tap an occupied location to see project and material info' : 'Tap a spot to open it, then pick a shelf or place · Taken places show who has them'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-            {!allowLayoutEdit && !viewOnly && canEdit && (facility === 'ICT' || facility === 'MPF') && !editingSpots && (
-              <button className="btn btn-sm" onClick={() => setShowAddStorage(true)} style={{ fontSize: 13 }}>📦 Add storage to spot</button>
+            {!allowLayoutEdit && isManagerOrAdmin && (facility === 'ICT' || facility === 'MPF') && !editingSpots && (
+              <button className="btn btn-sm" onClick={() => openSetup('')} style={{ fontSize: 13 }}>🛠 Set up shelves</button>
             )}
             {canEditLayout && (facility === 'ICT' || facility === 'MPF') && (
               <button className="btn btn-sm" onClick={() => setEditingSpots(v => !v)}
@@ -1274,114 +1474,232 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       </div>
     </div>
 
-    {showAddStorage && (
+    {/* ── Set up shelves: lab managers / admins shape the space; nothing is stored here ── */}
+    {setupOpen && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>📦 Add storage to spot</div>
-            <button className="btn btn-sm" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>✕ Close</button>
+        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 520, width: '100%', border: '1px solid var(--border)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>🛠 Set up shelves</div>
+            <button className="btn btn-sm" onClick={() => setSetupOpen(false)}>✕ Close</button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+            Shape the space: racks, shelves and the places on each shelf. Materials are not stored here — people pick their place by opening the spot on the map.
           </div>
           {spotsForFacility.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text3)', padding: '10px 0' }}>No spots yet — ask your lab manager to create one via "Edit Spots".</div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', padding: '10px 0' }}>No spots on this map yet. An admin adds spots in Admin → Floor Plan → Edit Spots.</div>
           ) : (
             <>
               <div className="field">
                 <label>Spot</label>
-                <select value={pickedSpotId} onChange={e => { setPickedSpotId(e.target.value); setPickedRack(''); setPickedShelf('') }}>
+                <select value={setupSpotId} onChange={e => chooseSetupSpot(e.target.value)}>
                   <option value="">— Select a spot —</option>
-                  {spotsForFacility.map(s => {
-                    const room = (s.facility || 'ICT') === 'ICT' ? ICT_ROOMS.find(r => r.id === s.room_id) : null
-                    return <option key={s.id} value={s.id}>{(s.facility || 'ICT') === 'ICT' ? (room?.label || s.room_id) : 'MPF'} — {s.name}</option>
+                  {spotsForFacility.map(sp => {
+                    const room = (sp.facility || 'ICT') === 'ICT' ? ICT_ROOMS.find(r => r.id === sp.room_id) : null
+                    return <option key={sp.id} value={sp.id}>{(sp.facility || 'ICT') === 'ICT' ? (room?.label || sp.room_id) : 'MPF'} — {sp.name}</option>
                   })}
                 </select>
               </div>
-              {pickedSpot?.type === 'racks' && (
-                <div className="grid-2">
-                  <div className="field"><label>Rack</label>
-                    <select value={pickedRack} onChange={e => { setPickedRack(e.target.value); setPickedShelf('') }}>
-                      <option value="">— Select rack —</option>
-                      {(pickedSpot.rackNames || []).map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
+              {setupDraft && (
+                <>
+                  <div className="field">
+                    <label>Type</label>
+                    <select value={setupDraft.type} onChange={e => setSetupDraft(d => ({ ...d, type: e.target.value }))}>
+                      <option value="pallet">Pallet (one place)</option>
+                      <option value="floor">Floor (one place)</option>
+                      <option value="racks">Racks with shelves</option>
                     </select>
                   </div>
-                  <div className="field"><label>Shelf (1 = top)</label>
-                    <select value={pickedShelf} onChange={e => setPickedShelf(e.target.value)} disabled={!pickedRack}>
-                      <option value="">— Select shelf —</option>
-                      {pickedRack && Array.from({ length: pickedSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
-                        const slotId = `${pickedSpot.id}-R${pickedRack}-S${n}`
-                        const occ = occupancy[slotId]?.occupied
-                        return <option key={n} value={n} disabled={occ && !isManagerOrAdmin}>Shelf {n}{occ ? ' (occupied)' : ''}</option>
-                      })}
-                    </select>
+                  {setupDraft.type === 'racks' && (
+                    <>
+                      <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+                        <div className="field"><label>Racks</label>
+                          <input type="number" min={1} max={12} value={setupDraft.rackNames.length} onChange={e => setDraftRackCount(e.target.value)} />
+                        </div>
+                        <div className="field"><label>Shelves per rack</label>
+                          <input type="number" min={1} max={26} value={setupDraft.shelvesPerRack} onChange={e => setSetupDraft(d => ({ ...d, shelvesPerRack: e.target.value }))} />
+                        </div>
+                        <div className="field"><label>Places per shelf</label>
+                          <input type="number" min={1} max={12} value={setupDraft.placesPerShelf} onChange={e => setSetupDraft(d => ({ ...d, placesPerShelf: e.target.value }))} />
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label>Rack names</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 6 }}>
+                          {setupDraft.rackNames.map((name, i) => (
+                            <input key={i} value={name} placeholder={`Rack ${i + 1}`}
+                              onChange={e => setSetupDraft(d => { const n = [...d.rackNames]; n[i] = e.target.value; return { ...d, rackNames: n } })} />
+                          ))}
+                        </div>
+                      </div>
+                      {/* What the shelves will be called, top shelf first */}
+                      {(() => {
+                        const sh = Math.min(26, Math.max(1, parseInt(setupDraft.shelvesPerRack) || 1))
+                        const pl = Math.min(12, Math.max(1, parseInt(setupDraft.placesPerShelf) || 1))
+                        return (
+                          <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 10, fontSize: 12, display: 'grid', gap: 4 }}>
+                            <div style={{ color: 'var(--text3)', fontWeight: 600 }}>Each rack will read, top to bottom:</div>
+                            {Array.from({ length: sh }, (_, i) => i + 1).map(n => (
+                              <div key={n} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <b style={{ width: 18 }}>{shelfLetter(n)}</b>
+                                {pl > 1
+                                  ? Array.from({ length: pl }, (_, k) => pl - k).map(p => <span key={p} style={{ border: '1px solid var(--border)', borderRadius: 5, padding: '1px 8px', background: 'var(--surface)' }}>{shelfLetter(n)}{p}</span>)
+                                  : <span style={{ color: 'var(--text3)' }}>whole shelf</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </>
+                  )}
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 10, lineHeight: 1.5 }}>
+                    When places are added, anything already on a shelf moves to place 1; its owner can move it to another free place. A place that still holds materials cannot be removed.
                   </div>
-                </div>
+                </>
               )}
-              {pickedSpot && pickedSpot.type !== 'racks' && (
-                occupancy[pickedSpot.id]?.occupied
-                  ? <div style={{ fontSize: 13, color: '#c84b2f', padding: '8px 0' }}>
-                      This spot is already occupied.{isManagerOrAdmin ? ' As a lab manager/admin you can still reassign it.' : ''}
-                    </div>
-                  : <div style={{ fontSize: 13, color: 'var(--text3)', padding: '8px 0' }}>This is a single-slot spot — no further selection needed.</div>
-              )}
+              {setupError && <div style={{ fontSize: 13, color: '#c84b2f', background: '#fdecea', borderRadius: 8, padding: '8px 10px', marginTop: 10 }}>{setupError}</div>}
             </>
           )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-            <button className="btn" onClick={() => { setShowAddStorage(false); setPickedSpotId(''); setPickedRack(''); setPickedShelf('') }}>Cancel</button>
-            <button className="btn btn-primary" onClick={confirmAddStorage} disabled={!canConfirmAddStorage}>Confirm</button>
+            <button className="btn" onClick={() => setSetupOpen(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveSetup} disabled={!setupDraft || busy}>{busy ? 'Saving…' : 'Save layout'}</button>
           </div>
         </div>
       </div>
     )}
 
-    {viewSpot && (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 24, maxWidth: 420, width: '100%', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>ℹ️ {viewSpot.name}</div>
-            <button className="btn btn-sm" onClick={() => setViewSpotId('')}>✕ Close</button>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
-            {(viewSpot.facility || 'ICT') === 'ICT' ? (ICT_ROOMS.find(r => r.id === viewSpot.room_id)?.label || 'ICT Building') : 'MPF'}
-          </div>
-          {viewSpot.type === 'racks' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
-              {(viewSpot.rackNames || []).map((rackName, ri) => (
-                <div key={ri}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 6 }}>{rackName}</div>
-                  {Array.from({ length: viewSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
-                    const slotId = `${viewSpot.id}-R${ri + 1}-S${n}`
-                    const occ = occupancy[slotId]
-                    return (
-                      <div key={n} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '5px 8px', borderRadius: 6, background: occ?.occupied ? '#fdecea' : 'var(--row-a)', marginTop: 3 }}>
-                        <span style={{ color: 'var(--text2)' }}>Shelf {n}</span>
-                        {occ?.occupied ? (
-                          <span style={{ textAlign: 'right' }}>
-                            <span style={{ color: '#a32d2d', fontWeight: 600 }}>{occ.project_name || 'Occupied'}</span>
-                            {occ.material_type && <span style={{ color: 'var(--text3)' }}> · {occ.material_type}</span>}
-                            {occ.occupied_by && <span style={{ display: 'block', color: 'var(--text3)' }}>In charge: {occ.occupied_by}</span>}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text3)' }}>Available</span>
+    {/* ── A spot's window: pick a place here ── */}
+    {viewSpot && (() => {
+      const isRacks = viewSpot.type === 'racks'
+      const places = placeCount(viewSpot)
+      const focus = isRacks ? focusId : viewSpot.id
+      const focusOcc = focus ? occupancy[focus] : null
+      const focusState = focus ? placeState(focus) : null
+      const focusName = focus ? (isRacks ? getLocationDetail(focus).detail.replace(`${viewSpot.name} · `, '') : viewSpot.name) : ''
+      const closeWindow = () => { setViewSpotId(''); setFocusId(''); setMoveItem(null) }
+
+      const tileColours = st => st === 'here' ? { bg: '#E1F5EE', bd: '#1D9E75', fg: '#085041' }
+        : st === 'mine' ? { bg: '#fef3c7', bd: '#d4a520', fg: '#7a4a00' }
+        : st === 'taken' ? { bg: '#fdecea', bd: '#e6a5a4', fg: '#a32d2d' }
+        : { bg: 'var(--surface)', bd: 'var(--border)', fg: 'var(--text2)' }
+      const stateText = (st, occ) => st === 'here' ? 'This material' : st === 'mine' ? `Yours · ${occ.items.length}` : st === 'taken' ? (occ.occupied_by || 'Taken') : 'Free'
+
+      function tile(id, label, wide) {
+        const st = placeState(id)
+        const occ = occupancy[id]
+        const c = tileColours(st)
+        const on = focusId === id
+        return (
+          <button key={id} type="button" onClick={() => setFocusId(id)}
+            style={{ flex: wide ? 1 : '1 1 0', minWidth: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+              background: c.bg, border: `1.5px solid ${on ? 'var(--accent)' : c.bd}`, borderRadius: 8, padding: '6px 8px',
+              boxShadow: on ? '0 0 0 3px var(--accent-light)' : 'none' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{label}</div>
+            <div style={{ fontSize: 11, color: c.fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stateText(st, occ)}</div>
+          </button>
+        )
+      }
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: 20, maxWidth: isRacks && places > 1 ? 560 : 440, width: '100%', border: '1px solid var(--border)', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{viewSpot.name}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {isManagerOrAdmin && !allowLayoutEdit && <button className="btn btn-sm" onClick={() => openSetup(viewSpot.id)}>🛠 Set up</button>}
+                <button className="btn btn-sm" onClick={closeWindow}>✕ Close</button>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              {(viewSpot.facility || 'ICT') === 'ICT' ? (ICT_ROOMS.find(r => r.id === viewSpot.room_id)?.label || 'ICT Building') : 'MPF'}
+              {isRacks && ' · shelves A (top) down'}{isRacks && places > 1 && ` · ${places} places per shelf`}
+            </div>
+
+            {moveItem && (
+              <div style={{ background: '#EEEDFE', border: '1px solid #C5C2F5', color: '#3730a3', borderRadius: 8, padding: '8px 10px', fontSize: 12.5, marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ flex: 1 }}>Moving <b>{moveItem.project_name || 'material'}</b> from {getLocationDetail(moveItem.from_id).detail.replace(`${viewSpot.name} · `, '')}. Pick its new place.</span>
+                <button className="btn btn-sm" onClick={() => setMoveItem(null)}>Cancel</button>
+              </div>
+            )}
+
+            {/* The racks: every shelf, and its places */}
+            {isRacks && (
+              <div style={{ overflowY: 'auto', display: 'grid', gap: 10, paddingRight: 2 }}>
+                {(viewSpot.rackNames || []).map((rackName, ri) => (
+                  <div key={ri}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{rackName}</div>
+                    <div style={{ display: 'grid', gap: 4 }}>
+                      {Array.from({ length: viewSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
+                        const base = `${viewSpot.id}-R${ri + 1}-S${n}`
+                        return (
+                          <div key={n} style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
+                            <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>{shelfLetter(n)}</div>
+                            {places > 1
+                              ? Array.from({ length: places }, (_, k) => places - k).map(p => tile(`${base}-P${p}`, `${shelfLetter(n)}${p}`))
+                              : tile(base, `Shelf ${shelfLetter(n)}`, true)}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* The chosen place: what is there, and what you can do */}
+            {focus ? (
+              <div style={{ borderTop: isRacks ? '1px solid var(--border)' : 'none', marginTop: isRacks ? 10 : 0, paddingTop: isRacks ? 10 : 0, display: 'grid', gap: 8, flexShrink: 0 }}>
+                <div style={{ fontSize: 13 }}>
+                  <b>{focusName}</b>{' · '}
+                  <span style={{ color: tileColours(focusState).fg }}>
+                    {focusState === 'free' ? 'Available' : focusState === 'here' ? 'This material is stored here'
+                      : focusState === 'mine' ? 'Your place — you can store more here' : `Taken by ${focusOcc?.occupied_by || 'someone else'}`}
+                  </span>
+                </div>
+                {focusOcc?.occupied && (
+                  <div style={{ display: 'grid', gap: 4, maxHeight: 140, overflowY: 'auto' }}>
+                    {focusOcc.items.map(it => (
+                      <div key={it.row_id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, background: 'var(--row-a-strong)', borderRadius: 6, padding: '5px 8px' }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <b style={{ color: '#a32d2d' }}>{it.project_name || 'Project'}</b>
+                          {it.material_type && <span style={{ color: 'var(--text3)' }}> · {it.material_type}</span>}
+                          <span style={{ display: 'block', color: 'var(--text3)' }}>Stored by {it.occupied_by || 'unknown'}</span>
+                        </span>
+                        {isManagerOrAdmin && it.material_id !== materialId && !moveItem && (
+                          <button className="btn btn-sm" onClick={() => setMoveItem({ ...it, from_id: focus })}>Move</button>
                         )}
                       </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          ) : (
-            occupancy[viewSpot.id]?.occupied ? (
-              <div style={{ fontSize: 13, padding: '8px 0' }}>
-                <div><strong style={{ color: '#a32d2d' }}>{occupancy[viewSpot.id].project_name || 'Occupied'}</strong></div>
-                {occupancy[viewSpot.id].material_type && <div style={{ color: 'var(--text3)' }}>{occupancy[viewSpot.id].material_type}</div>}
-                {occupancy[viewSpot.id].occupied_by && <div style={{ color: 'var(--text3)' }}>In charge: {occupancy[viewSpot.id].occupied_by}</div>}
+                    ))}
+                  </div>
+                )}
+                {moveItem ? (
+                  focus !== moveItem.from_id && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {focusState === 'taken' && <span style={{ fontSize: 12, color: '#a32d2d', flex: 1 }}>Someone else has this place — the material will share it.</span>}
+                      <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => moveMaterial(moveItem, focus)}>{busy ? 'Moving…' : `Move here (${focusName})`}</button>
+                    </div>
+                  )
+                ) : picking && focusState !== 'here' && (
+                  focusState === 'taken' && !isManagerOrAdmin ? (
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>Only the person who stores here first can add to this place. Pick a free place, or ask a lab manager.</div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {focusState === 'taken' && <span style={{ fontSize: 12, color: '#a32d2d', flex: 1 }}>This place belongs to {focusOcc?.occupied_by || 'someone else'}. As a lab manager you can still store here.</span>}
+                      <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveLocations([focus])}>
+                        {saving ? 'Saving…' : `Store this material in ${focusName}`}
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
-            ) : (
-              <div style={{ fontSize: 13, color: 'var(--text3)', padding: '8px 0' }}>Available — nothing stored here right now.</div>
-            )
-          )}
+            ) : isRacks && (
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 10, flexShrink: 0 }}>
+                {picking ? 'Click a shelf or place to choose it.' : 'Click a shelf or place to see what is stored there.'}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    )}
+      )
+    })()}
     </>
   )
 }

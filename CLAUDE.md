@@ -2314,3 +2314,28 @@ sends. Keep their stage rules (`maintenanceStage`) in step.
   `send_maintenance_reminders()` (ignored the tick, exact 14th/7th day only,
   3am Chicago, emails with no to_email). `maintenance_reminder_setup.sql`
   unschedules and drops it — run it in BOTH projects.
+
+## Storage places: shelves A–Z, places per shelf, owners (ICT-Lab, Oct 30 2026)
+
+`src/components/FloorPlanPicker.jsx`. A rack spot (`ict_layout.ict_spots`)
+has `rackNames`, `shelvesPerRack` and `placesPerShelf` (default 1).
+
+- Shelves are lettered from the TOP (A = the old "Shelf 1"). Places are A1,
+  A2, A3…, drawn right to left (3 · 2 · 1) as labelled on the racks. Ids:
+  `<spot>-R<r>-S<s>` (whole shelf) / `<spot>-R<r>-S<s>-P<p>` (place).
+- **Picking happens in the spot's window** (click the spot on the map →
+  click a shelf/place → Store). "Add storage to spot" is gone; in its place
+  **Set up shelves** (lab managers / admins) edits racks, shelves and places.
+  It refuses a change that would remove a place still holding material, and
+  re-files what is stored: whole shelf → place 1 when places are added.
+- **One place, many materials, one owner:** one `storage_locations` row per
+  material. Owner = the earliest row's `occupied_by_id` (fallback: name);
+  ownership counts every `users` row sharing the person's email. Others
+  cannot store there; lab managers / admins can, and can **Move** anyone's
+  material — `project_materials.locations` is updated and the owner gets a
+  `storage_moved` notification (bell → Projects).
+- Releasing frees only THAT material's row (by row id), never the place.
+- `storage_owner_setup.sql` adds `occupied_by_id` (+ backfill by unique
+  name). The app retries without the column if it is missing.
+- Ownership is a UI rule: `storage_locations` / `ict_layout` policies are
+  org-wide, so the API does not enforce it (security review pending).

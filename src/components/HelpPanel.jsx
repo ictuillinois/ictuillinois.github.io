@@ -42,6 +42,8 @@ const HELP_CONTENT = {
       'Every material has a printable 4×6 label with its own barcode and QR code',
       'Tested samples get their own label: use the Tested pill, or the Tested materials label tab on a material. Tested Materials (sidebar) lists them all',
       'Non-Project Material (on the Materials view) is for material that belongs to no project',
+      'Storage: in the material\'s Location step, open a spot on the map (for example Walk-in Cooler 1), click a free shelf or place (A is the top shelf; A1, A2, A3 are its places) and press Store. The first person to store in a place owns it and can keep adding materials there',
+      T('Set up shelves (on the storage map): racks, shelves and places per shelf for any spot. Open a place to Move anyone\'s material to another place; its owner is notified', 'manager'),
       T('You see the projects you are assigned to', 'labuser'),
       T('Manage Projects: create projects and assign lab users. Material Types: the types offered in the Add material form', 'manager'),
     ],
