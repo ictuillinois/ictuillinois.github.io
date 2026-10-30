@@ -57,8 +57,8 @@ const ICT_ROOMS = [
 // named by its shelf letter and number — A1, A2, A3 — and has its own id:
 //   <spot>-R<rack>-S<shelf>           whole shelf   (placesPerShelf = 1)
 //   <spot>-R<rack>-S<shelf>-P<place>  one place     (placesPerShelf > 1)
-// Places are drawn right to left (3 · 2 · 1), as they are labelled on the
-// racks themselves.
+// In the spot window a shelf is one row; clicking it lists its places
+// A1, A2, A3 underneath to choose from.
 export const shelfLetter = n => String.fromCharCode(64 + Number(n))
 const RACK_SLOT = /^(.+)-R(\d+)-S(\d+)(?:-P(\d+))?$/
 const placeCount = spot => Math.max(1, parseInt(spot?.placesPerShelf) || 1)
@@ -940,6 +940,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
   const [viewSpotId, setViewSpotId] = useState('')
   // In the spot window: the place clicked (details + actions below the racks)
   const [focusId, setFocusId] = useState('')
+  // A shelf divided into places opens as a list (A1, A2, A3) under its row
+  const [openShelf, setOpenShelf] = useState('')
   // A lab manager moving someone's material: the storage row being moved
   const [moveItem, setMoveItem] = useState(null)
   // "Set up shelves" (lab managers / admins): the spot being set up + its draft
@@ -1542,7 +1544,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                               <div key={n} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                 <b style={{ width: 18 }}>{shelfLetter(n)}</b>
                                 {pl > 1
-                                  ? Array.from({ length: pl }, (_, k) => pl - k).map(p => <span key={p} style={{ border: '1px solid var(--border)', borderRadius: 5, padding: '1px 8px', background: 'var(--surface)' }}>{shelfLetter(n)}{p}</span>)
+                                  ? Array.from({ length: pl }, (_, k) => k + 1).map(p => <span key={p} style={{ border: '1px solid var(--border)', borderRadius: 5, padding: '1px 8px', background: 'var(--surface)' }}>{shelfLetter(n)}{p}</span>)
                                   : <span style={{ color: 'var(--text3)' }}>whole shelf</span>}
                               </div>
                             ))}
@@ -1575,7 +1577,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       const focusOcc = focus ? occupancy[focus] : null
       const focusState = focus ? placeState(focus) : null
       const focusName = focus ? (isRacks ? getLocationDetail(focus).detail.replace(`${viewSpot.name} · `, '') : viewSpot.name) : ''
-      const closeWindow = () => { setViewSpotId(''); setFocusId(''); setMoveItem(null) }
+      const closeWindow = () => { setViewSpotId(''); setFocusId(''); setMoveItem(null); setOpenShelf('') }
 
       const tileColours = st => st === 'here' ? { bg: '#E1F5EE', bd: '#1D9E75', fg: '#085041' }
         : st === 'mine' ? { bg: '#fef3c7', bd: '#d4a520', fg: '#7a4a00' }
@@ -1630,12 +1632,45 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                     <div style={{ display: 'grid', gap: 4 }}>
                       {Array.from({ length: viewSpot.shelvesPerRack }, (_, i) => i + 1).map(n => {
                         const base = `${viewSpot.id}-R${ri + 1}-S${n}`
-                        return (
+                        const letter = shelfLetter(n)
+                        if (places === 1) return (
                           <div key={n} style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
-                            <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>{shelfLetter(n)}</div>
-                            {places > 1
-                              ? Array.from({ length: places }, (_, k) => places - k).map(p => tile(`${base}-P${p}`, `${shelfLetter(n)}${p}`))
-                              : tile(base, `Shelf ${shelfLetter(n)}`, true)}
+                            <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>{letter}</div>
+                            {tile(base, `Shelf ${letter}`, true)}
+                          </div>
+                        )
+                        // Divided shelf: one row with a summary; click to list A1, A2, A3
+                        const ids = Array.from({ length: places }, (_, k) => `${base}-P${k + 1}`)
+                        const states = ids.map(placeState)
+                        const free = states.filter(x => x === 'free').length
+                        const hereIdx = states.indexOf('here')
+                        const shelfState = hereIdx >= 0 ? 'here' : states.includes('mine') ? 'mine' : free === 0 ? 'taken' : 'free'
+                        const c = tileColours(shelfState)
+                        const open = openShelf === base
+                        const summary = hereIdx >= 0 ? `This material · ${letter}${hereIdx + 1}`
+                          : free === places ? `${places} places free`
+                          : free === 0 ? 'Full' : `${free} of ${places} places free`
+                        return (
+                          <div key={n}>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
+                              <div style={{ width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>{letter}</div>
+                              <button type="button" onClick={() => setOpenShelf(open ? '' : base)}
+                                style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                                  background: c.bg, border: `1.5px solid ${open ? 'var(--accent)' : c.bd}`, borderRadius: 8, padding: '6px 8px' }}>
+                                <span style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>Shelf {letter}</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: c.fg }}>{summary}</span>
+                                </span>
+                                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{open ? '▴' : '▾'}</span>
+                              </button>
+                            </div>
+                            {open && (
+                              <div style={{ display: 'grid', gap: 4, margin: '4px 0 6px 26px', paddingLeft: 8, borderLeft: '2px solid var(--accent-light)' }}>
+                                {ids.map((id, k) => (
+                                  <div key={id} style={{ display: 'flex' }}>{tile(id, `${letter}${k + 1}`, true)}</div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
                       })}

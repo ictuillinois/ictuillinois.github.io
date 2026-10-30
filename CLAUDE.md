@@ -2321,7 +2321,8 @@ sends. Keep their stage rules (`maintenanceStage`) in step.
 has `rackNames`, `shelvesPerRack` and `placesPerShelf` (default 1).
 
 - Shelves are lettered from the TOP (A = the old "Shelf 1"). Places are A1,
-  A2, A3…, drawn right to left (3 · 2 · 1) as labelled on the racks. Ids:
+  A2, A3…: a divided shelf is ONE row in the spot window; clicking it lists
+  its places underneath. Same system for every rack spot (coolers, Big10). Ids:
   `<spot>-R<r>-S<s>` (whole shelf) / `<spot>-R<r>-S<s>-P<p>` (place).
 - **Picking happens in the spot's window** (click the spot on the map →
   click a shelf/place → Store). "Add storage to spot" is gone; in its place
