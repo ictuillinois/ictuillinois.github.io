@@ -502,12 +502,13 @@ function localFmt(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, selectedSlot, onBookingReschedule, canReschedule }) {
+function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, onBookingClick, canBook, selectedSlot, onBookingReschedule, canReschedule }) {
   const [drag, setDrag] = useState(null)
   const [bookingDrag, setBookingDrag] = useState(null)
   const bookingDragRef = useRef(null)
   const colRefs = useRef([])
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  // Week view: 7 columns from the week's start. Day view: one column, wider.
+  const days = Array.from({ length: dayCount }, (_, i) => addDays(weekStart, i))
   const today = new Date()
 
   function yToSlot(y) {
@@ -515,7 +516,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
   }
 
   function getDayAndSlotFromXY(clientX, clientY) {
-    for (let di = 0; di < 7; di++) {
+    for (let di = 0; di < days.length; di++) {
       const col = colRefs.current[di]
       if (!col) continue
       const rect = col.getBoundingClientRect()
@@ -571,7 +572,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
 
   // ── Booking reschedule drag ──────────────────────────────────
   function dateToAbsSlot(date) {
-    const di = Math.max(0, Math.min(6, Math.floor((date - days[0]) / 86400000)))
+    const di = Math.max(0, Math.min(days.length - 1, Math.floor((date - days[0]) / 86400000)))
     return di * 48 + Math.floor((date.getHours() * 60 + date.getMinutes()) / 30)
   }
   function absSlotToDate(abs) {
@@ -732,10 +733,12 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
     <div className='booking-week-scroll' data-hour-px={2 * SLOT_H} style={{ userSelect: 'none', overflowY: 'auto', overflowX: 'auto', maxHeight: 'calc(100vh - 240px)' }}>
 
       {/* Sticky header row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minWidth: 500, position: 'sticky', top: 0, zIndex: 20, background: 'var(--surface)', borderBottom: '2px solid var(--border)' }}>
         <div style={{ height: 40, position: 'sticky', left: 0, zIndex: 21, background: 'var(--surface)' }} />
         {days.map((day, i) => (
-          <div key={i} style={{ height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11, borderLeft: '1px solid var(--border)', background: sameDay(day, today) ? 'var(--accent-light)' : 'var(--surface)' }}>
+          <div key={i} onClick={onDayClick && days.length > 1 ? () => onDayClick(day) : undefined}
+            title={onDayClick && days.length > 1 ? 'Open this day' : undefined}
+            style={{ cursor: onDayClick && days.length > 1 ? 'pointer' : undefined, height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11, borderLeft: '1px solid var(--border)', background: sameDay(day, today) ? 'var(--accent-light)' : 'var(--surface)' }}>
             <div style={{ color: 'var(--text3)', fontFamily: 'var(--mono)', fontSize: 10 }}>{DAYS[day.getDay()]}</div>
             <div style={{ fontWeight: sameDay(day, today) ? 700 : 500, fontSize: 13, color: sameDay(day, today) ? 'var(--accent)' : 'var(--text)' }}>{day.getDate()}</div>
           </div>
@@ -743,7 +746,7 @@ function WeekView({ weekStart, bookings, onSlotClick, onBookingClick, canBook, s
       </div>
 
       {/* Grid body */}
-      <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', minWidth: 500, position: 'relative' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minWidth: 500, position: 'relative' }}>
         {/* Time labels column — sticky left on horizontal scroll */}
         <div style={{ position: 'sticky', left: 0, zIndex: 10, background: 'var(--surface)', height: TOTAL_H }}>
           {HOURS.map(h => (
@@ -2234,6 +2237,9 @@ function BookingCalendar({ session }) {
   const [calView, setCalView] = useState('week')
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()))
   const [monthDate, setMonthDate] = useState(new Date())
+  // Day view: busy instruments are easier to read one day at a time
+  const [dayDate, setDayDate] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })
+  const isGridView = calView === 'week' || calView === 'day'
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [showMultiModal, setShowMultiModal] = useState(false)
   const [multiSlot, setMultiSlot] = useState(null)
@@ -2264,7 +2270,7 @@ function BookingCalendar({ session }) {
   const [orgLabUsers, setOrgLabUsers] = useState([])
 
   useEffect(() => { loadEquipment(); loadNotifications() }, [])
-  useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, calView, filterLabUser])
+  useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, dayDate, calView, filterLabUser])
   useEffect(() => { loadBookings() }, [])
 
   // Open waive/review modal when arriving from notification bell
@@ -2280,7 +2286,7 @@ function BookingCalendar({ session }) {
   useEffect(() => {
     const interval = setInterval(loadBookings, 30000)
     return () => clearInterval(interval)
-  }, [selectedEq, weekStart, monthDate, calView])
+  }, [selectedEq, weekStart, monthDate, dayDate, calView])
   // Hourly after-photo reminder check
   useEffect(() => {
     const interval = setInterval(() => checkPhotoReminders(equipmentRef.current), 60 * 60 * 1000)
@@ -2510,7 +2516,10 @@ function BookingCalendar({ session }) {
 
   async function loadBookings() {
     let start, end
-    if (calView === 'week') {
+    if (calView === 'day') {
+      start = dayDate.toISOString()
+      end = addDays(dayDate, 1).toISOString()
+    } else if (calView === 'week') {
       start = weekStart.toISOString()
       end = addDays(weekStart, 7).toISOString()
     } else {
@@ -2645,7 +2654,7 @@ function BookingCalendar({ session }) {
       fillMultiSlot(slot)
     } else {
       setBookingDraft(slot)
-      const usePanel = !isMobile && window.innerWidth >= 1050 && calView === 'week'
+      const usePanel = !isMobile && window.innerWidth >= 1050 && isGridView
       if (!usePanel) {
         // Mobile + narrow desktop: show draft bar so calendar stays draggable
         setShowBookingModal(false)
@@ -3116,18 +3125,26 @@ function BookingCalendar({ session }) {
         {/* Calendar toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="btn btn-sm" onClick={() => { if (calView === 'week') setWeekStart(d => addDays(d, -7)); else setMonthDate(d => addMonths(d, -1)) }}>←</button>
+            <button className="btn btn-sm" onClick={() => { if (calView === 'day') setDayDate(d => addDays(d, -1)); else if (calView === 'week') setWeekStart(d => addDays(d, -7)); else setMonthDate(d => addMonths(d, -1)) }}>←</button>
             <div style={{ fontWeight: 600, fontSize: 15, minWidth: 180, textAlign: 'center' }}>
-              {calView === 'week'
+              {calView === 'day'
+                ? fmt(dayDate, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+                : calView === 'week'
                 ? `${fmt(weekStart, { month: 'short', day: 'numeric' })} – ${fmt(addDays(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`
                 : `${MONTHS[monthDate.getMonth()]} ${monthDate.getFullYear()}`
               }
             </div>
-            <button className="btn btn-sm" onClick={() => { if (calView === 'week') setWeekStart(d => addDays(d, 7)); else setMonthDate(d => addMonths(d, 1)) }}>→</button>
-            <button className="btn btn-sm" onClick={() => { setWeekStart(startOfWeek(new Date())); setMonthDate(new Date()) }} style={{ fontSize: 11 }}>Today</button>
+            <button className="btn btn-sm" onClick={() => { if (calView === 'day') setDayDate(d => addDays(d, 1)); else if (calView === 'week') setWeekStart(d => addDays(d, 7)); else setMonthDate(d => addMonths(d, 1)) }}>→</button>
+            <button className="btn btn-sm" onClick={() => { const t = new Date(); t.setHours(0, 0, 0, 0); setDayDate(t); setWeekStart(startOfWeek(new Date())); setMonthDate(new Date()) }} style={{ fontSize: 11 }}>Today</button>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button className="btn btn-sm" style={{ background: calView === 'week' ? 'var(--accent-light)' : 'transparent', color: calView === 'week' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'week' ? 600 : 400 }} onClick={() => setCalView('week')}>Week</button>
+            <button className="btn btn-sm" style={{ background: calView === 'day' ? 'var(--accent-light)' : 'transparent', color: calView === 'day' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'day' ? 600 : 400 }} onClick={() => {
+              // Open on today if this week holds it, else on the week's first day
+              const t = new Date(); t.setHours(0, 0, 0, 0)
+              if (calView === 'week') setDayDate(t >= weekStart && t < addDays(weekStart, 7) ? t : new Date(weekStart))
+              setCalView('day')
+            }}>Day</button>
+            <button className="btn btn-sm" style={{ background: calView === 'week' ? 'var(--accent-light)' : 'transparent', color: calView === 'week' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'week' ? 600 : 400 }} onClick={() => { if (calView === 'day') setWeekStart(startOfWeek(dayDate)); setCalView('week') }}>Week</button>
             <button className="btn btn-sm" style={{ background: calView === 'month' ? 'var(--accent-light)' : 'transparent', color: calView === 'month' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'month' ? 600 : 400 }} onClick={() => setCalView('month')}>Month</button>
             <button className="btn btn-sm btn-primary" data-tour="book" onClick={() => {
               if (selectedEq.length > 1) { setMultiSlot(null); setShowMultiModal(true) }
@@ -3146,7 +3163,7 @@ function BookingCalendar({ session }) {
           ))}
         </div>
 
-        {calView === 'week' ? (
+        {isGridView ? (
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <div data-tour="calendar" style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               {selectedEq.length === 0 && (
@@ -3256,7 +3273,9 @@ function BookingCalendar({ session }) {
                   </div>
                 </div>
               )}
-              <WeekView weekStart={weekStart} bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
+              <WeekView weekStart={calView === 'day' ? dayDate : weekStart} dayCount={calView === 'day' ? 1 : 7}
+                onDayClick={d => { const x = new Date(d); x.setHours(0, 0, 0, 0); setDayDate(x); setCalView('day') }}
+                bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
             </div>
             {/* Booking form side panel — only wide desktops (≥1050px) so calendar has room */}
             {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && (
@@ -3310,7 +3329,7 @@ function BookingCalendar({ session }) {
         />
       )}
       {/* Full overlay: edit mode, month view, narrow desktop (< 1050px), or mobile after "Book" tapped */}
-      {showBookingModal && (editBooking || (isMobile) || calView !== 'week' || window.innerWidth < 1050) && (
+      {showBookingModal && (editBooking || (isMobile) || !isGridView || window.innerWidth < 1050) && (
         <BookingModal
           booking={editBooking}
           equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
