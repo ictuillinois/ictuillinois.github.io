@@ -999,29 +999,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       sb.from('ict_layout').select('value').eq('key', 'facility_tab_order').single(),
     ])
 
-    // One place can now hold several materials (one storage row each), all
-    // placed by the same person: whoever stored there first owns the place.
-    const map = {}
-    ;(locData || []).forEach(loc => {
-      const e = map[loc.location_id] || (map[loc.location_id] = { occupied: false, items: [], db_id: loc.id })
-      if (!loc.occupied) return
-      e.occupied = true
-      e.items.push({
-        row_id: loc.id, material_id: loc.material_id, project_id: loc.project_id,
-        project_name: loc.project_name, material_type: loc.material_type,
-        occupied_by: loc.occupied_by, occupied_by_id: loc.occupied_by_id || null, occupied_at: loc.occupied_at,
-      })
-    })
-    Object.values(map).forEach(e => {
-      if (!e.items.length) return
-      e.items.sort((x, y) => String(x.occupied_at || '').localeCompare(String(y.occupied_at || '')))
-      const first = e.items[0]
-      e.project_name = first.project_name
-      e.material_type = first.material_type
-      e.occupied_by = first.occupied_by
-      e.owner_id = first.occupied_by_id
-    })
-    setOccupancy(map)
+    setOccupancy(buildOccupancy(locData))
 
     const plans = planData || []
     setCustomPlans(plans)
@@ -1045,6 +1023,42 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     setLoading(false)
   }
 
+  // One storage row per material; rows grouped by place
+  function buildOccupancy(locData) {
+    // One place can now hold several materials (one storage row each), all
+    // placed by the same person: whoever stored there first owns the place.
+    const map = {}
+    ;(locData || []).forEach(loc => {
+      const e = map[loc.location_id] || (map[loc.location_id] = { occupied: false, items: [], db_id: loc.id })
+      if (!loc.occupied) return
+      e.occupied = true
+      e.items.push({
+        row_id: loc.id, material_id: loc.material_id, project_id: loc.project_id,
+        project_name: loc.project_name, material_type: loc.material_type,
+        occupied_by: loc.occupied_by, occupied_by_id: loc.occupied_by_id || null, occupied_at: loc.occupied_at,
+      })
+    })
+    Object.values(map).forEach(e => {
+      if (!e.items.length) return
+      e.items.sort((x, y) => String(x.occupied_at || '').localeCompare(String(y.occupied_at || '')))
+      const first = e.items[0]
+      e.project_name = first.project_name
+      e.material_type = first.material_type
+      e.occupied_by = first.occupied_by
+      e.owner_id = first.occupied_by_id
+    })
+    return map
+  }
+
+  async function reloadOccupancy() {
+    const isSolo = session?.loginMode === 'solo'
+    const orgId = session?.organizationId
+    let q = sb.from('storage_locations').select('*')
+    q = isSolo ? q.is('organization_id', null) : q.eq('organization_id', orgId || '00000000-0000-0000-0000-000000000000')
+    const { data } = await q
+    setOccupancy(buildOccupancy(data))
+  }
+
   // ── Who may use a place ──
   // Owner = the person who stored there first. Rows from before the owner id
   // was recorded fall back to the name they were stored under.
@@ -1059,6 +1073,12 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     if (selected.includes(id)) return 'here'
     if (!occ?.occupied) return 'free'
     return isMine(occ) ? 'mine' : 'taken'
+  }
+
+  // Clicking the place that holds THIS material again takes it back out
+  async function unstore(id) {
+    setFocusId('')
+    await saveLocations(selected.filter(x => x !== id), { keepOpen: true })
   }
 
   // Picking a location on a room/zone saves and closes immediately — single
@@ -1138,7 +1158,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
     if (error) throw error
   }
 
-  async function saveLocations(idsArray) {
+  async function saveLocations(idsArray, { keepOpen = false } = {}) {
     if (!canEdit) { onConfirm([]); onClose(); return }
     setSaving(true)
     try {
@@ -1191,7 +1211,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         return { location_id: id, location: det.location, detail: det.detail }
       })
       onConfirm(result)
-      onClose()
+      if (keepOpen) { setSelected(idsArray); await reloadOccupancy() }
+      else onClose()
     } catch (e) {
       console.error(e)
       alert('The storage location could not be saved: ' + (e?.message || e))
@@ -1238,7 +1259,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
       }
       setMoveItem(null)
       setFocusId(toId)
-      await loadAll()
+      await reloadOccupancy()
     } catch (e) {
       alert('The material could not be moved: ' + (e?.message || e))
     }
@@ -1338,7 +1359,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         const hit = (rows || []).find(r => r.location_id === id)
         return hit ? remapSlot(id, spot, next) : id
       }))
-      await loadAll()
+      await reloadOccupancy()
       setSetupOpen(false)
     } catch (e) {
       setSetupError('Could not save: ' + (e?.message || e))
@@ -1583,7 +1604,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         : st === 'mine' ? { bg: '#fef3c7', bd: '#d4a520', fg: '#7a4a00' }
         : st === 'taken' ? { bg: '#fdecea', bd: '#e6a5a4', fg: '#a32d2d' }
         : { bg: 'var(--surface)', bd: 'var(--border)', fg: 'var(--text2)' }
-      const stateText = (st, occ) => st === 'here' ? 'This material' : st === 'mine' ? `Yours · ${occ.items.length}` : st === 'taken' ? (occ.occupied_by || 'Taken') : 'Free'
+      const stateText = (st, occ) => st === 'here' ? (picking ? 'This material · click to undo' : 'This material') : st === 'mine' ? `Yours · ${occ.items.length}` : st === 'taken' ? (occ.occupied_by || 'Taken') : 'Free'
 
       function tile(id, label, wide) {
         const st = placeState(id)
@@ -1591,7 +1612,8 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         const c = tileColours(st)
         const on = focusId === id
         return (
-          <button key={id} type="button" onClick={() => setFocusId(id)}
+          <button key={id} type="button" disabled={saving} title={picking && st === 'here' ? 'Click again to take this material out of here' : undefined}
+            onClick={() => (picking && st === 'here') ? unstore(id) : setFocusId(id)}
             style={{ flex: wide ? 1 : '1 1 0', minWidth: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
               background: c.bg, border: `1.5px solid ${on ? 'var(--accent)' : c.bd}`, borderRadius: 8, padding: '6px 8px',
               boxShadow: on ? '0 0 0 3px var(--accent-light)' : 'none' }}>
@@ -1713,14 +1735,18 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                       <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => moveMaterial(moveItem, focus)}>{busy ? 'Moving…' : `Move here (${focusName})`}</button>
                     </div>
                   )
-                ) : picking && focusState !== 'here' && (
+                ) : picking && focusState === 'here' ? (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-sm" disabled={saving} onClick={() => unstore(focus)}>{saving ? 'Saving…' : `Take this material out of ${focusName}`}</button>
+                  </div>
+                ) : picking && (
                   focusState === 'taken' && !isManagerOrAdmin ? (
                     <div style={{ fontSize: 12, color: 'var(--text3)' }}>Only the person who stores here first can add to this place. Pick a free place, or ask a lab manager.</div>
                   ) : (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       {focusState === 'taken' && <span style={{ fontSize: 12, color: '#a32d2d', flex: 1 }}>This place belongs to {focusOcc?.occupied_by || 'someone else'}. As a lab manager you can still store here.</span>}
                       <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveLocations([focus])}>
-                        {saving ? 'Saving…' : `Store this material in ${focusName}`}
+                        {saving ? 'Saving…' : selected.length ? `Move this material to ${focusName}` : `Store this material in ${focusName}`}
                       </button>
                     </div>
                   )
