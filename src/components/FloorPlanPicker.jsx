@@ -1604,7 +1604,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         : st === 'mine' ? { bg: '#fef3c7', bd: '#d4a520', fg: '#7a4a00' }
         : st === 'taken' ? { bg: '#fdecea', bd: '#e6a5a4', fg: '#a32d2d' }
         : { bg: 'var(--surface)', bd: 'var(--border)', fg: 'var(--text2)' }
-      const stateText = (st, occ) => st === 'here' ? (picking ? 'This material · click to undo' : 'This material') : st === 'mine' ? `Yours · ${occ.items.length}` : st === 'taken' ? (occ.occupied_by || 'Taken') : 'Free'
+      const stateText = (st, occ) => st === 'here' ? 'This material' : st === 'mine' ? `Yours · ${occ.items.length}` : st === 'taken' ? (occ.occupied_by || 'Taken') : 'Free'
 
       function tile(id, label, wide) {
         const st = placeState(id)
@@ -1612,8 +1612,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
         const c = tileColours(st)
         const on = focusId === id
         return (
-          <button key={id} type="button" disabled={saving} title={picking && st === 'here' ? 'Click again to take this material out of here' : undefined}
-            onClick={() => (picking && st === 'here') ? unstore(id) : setFocusId(id)}
+          <button key={id} type="button" onClick={() => setFocusId(id)}
             style={{ flex: wide ? 1 : '1 1 0', minWidth: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
               background: c.bg, border: `1.5px solid ${on ? 'var(--accent)' : c.bd}`, borderRadius: 8, padding: '6px 8px',
               boxShadow: on ? '0 0 0 3px var(--accent-light)' : 'none' }}>
@@ -1704,7 +1703,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
 
             {/* The chosen place: what is there, and what you can do */}
             {focus ? (
-              <div style={{ borderTop: isRacks ? '1px solid var(--border)' : 'none', marginTop: isRacks ? 10 : 0, paddingTop: isRacks ? 10 : 0, display: 'grid', gap: 8, flexShrink: 0 }}>
+              <div style={{ marginTop: isRacks ? 10 : 0, padding: 12, border: '1.5px solid var(--accent)', background: 'var(--surface2)', borderRadius: 10, display: 'grid', gap: 8, flexShrink: 0 }}>
                 <div style={{ fontSize: 13 }}>
                   <b>{focusName}</b>{' · '}
                   <span style={{ color: tileColours(focusState).fg }}>
@@ -1736,8 +1735,10 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                     </div>
                   )
                 ) : picking && focusState === 'here' ? (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-sm" disabled={saving} onClick={() => unstore(focus)}>{saving ? 'Saving…' : `Take this material out of ${focusName}`}</button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text3)', flex: 1 }}>Remove it to free {focusName}, or pick another place to move it.</span>
+                    <button className="btn btn-sm" onClick={() => isRacks ? setFocusId('') : closeWindow()}>Cancel</button>
+                    <button className="btn btn-sm" style={{ color: '#c84b2f', borderColor: '#e6a5a4' }} disabled={saving} onClick={() => unstore(focus)}>{saving ? 'Saving…' : `Remove this material from ${focusName}`}</button>
                   </div>
                 ) : picking && (
                   focusState === 'taken' && !isManagerOrAdmin ? (
@@ -1745,6 +1746,7 @@ export default function FloorPlanPicker({ projectId, projectName, materialId, ma
                   ) : (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                       {focusState === 'taken' && <span style={{ fontSize: 12, color: '#a32d2d', flex: 1 }}>This place belongs to {focusOcc?.occupied_by || 'someone else'}. As a lab manager you can still store here.</span>}
+                      <button className="btn btn-sm" onClick={() => isRacks ? setFocusId('') : closeWindow()}>Cancel</button>
                       <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => saveLocations([focus])}>
                         {saving ? 'Saving…' : selected.length ? `Move this material to ${focusName}` : `Store this material in ${focusName}`}
                       </button>
