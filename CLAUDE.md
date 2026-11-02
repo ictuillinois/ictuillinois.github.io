@@ -2373,3 +2373,9 @@ never read as an exam that happened.
   columns); a waiver refuses with a toast rather than save as a passed exam.
 - SQL: `training_exam_waiver.sql` (same file in both folders, after
   training_privacy.sql, whose guard list now includes training_equipment).
+- **Also on the request card** (Training requests, `TrainingRequestsPanel` in
+  TrainingSchedule.jsx): **✓ Trained before — give access** (optional training
+  date + trainer) writes the same waived record and DELETES the request — not
+  status 'approved', because Booking's 3-month check treats an approved
+  request as lifting the retraining block for good. Disabled ("not for
+  retraining") when that person already has a record for the equipment.

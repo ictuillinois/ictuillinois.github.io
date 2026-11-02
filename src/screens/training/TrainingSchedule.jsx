@@ -44,6 +44,14 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
   const [proposeDate, setProposeDate] = useState('')
   const [proposeNotes, setProposeNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  // "Trained before — give access" (Nov 2026): the request whose box is open,
+  // and its training date / trainer. trainedPairs = user|equipment pairs that
+  // already have a record: a request on one of those is a RETRAINING, and
+  // retraining always needs the exam, so the pass is not offered.
+  const [granting, setGranting] = useState(null)
+  const [grantDate, setGrantDate] = useState('')
+  const [grantBy, setGrantBy] = useState('')
+  const [trainedPairs, setTrainedPairs] = useState(new Set())
 
   useEffect(() => { load() }, [])
 
@@ -58,6 +66,11 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
       retQ, schedQ, eqQ,
       sb.from('equipment_exam_questions').select('equipment_id'),
     ])
+    const uids = [...new Set((reqs || []).filter(r => r.status === 'pending').map(r => r.user_id))]
+    const { data: te } = uids.length
+      ? await sb.from('training_equipment').select('user_id, equipment_id').in('user_id', uids)
+      : { data: [] }
+    setTrainedPairs(new Set((te || []).map(t => `${t.user_id}|${t.equipment_id}`)))
     setRequests(reqs || [])
     setSchedules(sched || [])
     setEquipment(eq || [])
@@ -65,23 +78,38 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     setLoading(false)
   }
 
-  async function approveDirectly(req) {
+  // The lab user was trained outside the app and it was never recorded: give
+  // booking access now, with no training session and no exam, ONCE. Same
+  // record as Add equipment training's "Trained before" box (exam_waived).
+  // Not for retraining — see trainedPairs. The request is deleted, not marked
+  // approved: Booking treats an approved request as lifting the 3-month
+  // retraining block for good, and the next retraining must need the exam.
+  async function giveAccessTrainedBefore(req) {
     setSaving(true)
     const eqName = req.equipment_name || equipment.find(e => e.id === req.equipment_id)?.equipment_name || 'equipment'
+    const date = grantDate || new Date().toISOString().split('T')[0]
+    const expires = new Date(new Date(date).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const { error } = await sb.from('training_equipment').insert({
       user_id: req.user_id, equipment_id: req.equipment_id,
-      trained_date: new Date().toISOString().split('T')[0],
-      trained_by: session.username, passed_exam: true,
+      trained_date: date, trained_by: grantBy.trim() || session.username,
+      passed_exam: true, expires_at: expires, is_retraining: false,
+      exam_waived: true, exam_waived_by: session.username || 'Lab Manager', exam_waived_at: new Date().toISOString(),
     })
-    if (error) { toast('Error: ' + error.message); setSaving(false); return }
+    if (error) {
+      toast(/exam_waived|schema cache/i.test(error.message)
+        ? 'Giving access without the exam needs training_exam_waiver.sql to be run in Supabase first.'
+        : 'Could not give access: ' + error.message)
+      setSaving(false); return
+    }
     await sb.from('retraining_requests').delete().eq('id', req.id)
+    const msg = `${session.username} gave you access to ${eqName} — your earlier training counts, so no training session or exam is needed this time. When retraining is due, the exam is required.`
     await sb.from('notifications').insert({
       user_id: req.user_id, type: 'training_approved',
-      title: `Training approved: ${eqName}`,
-      body: `${session.username} approved your training. You can now book this equipment.`,
-      read: false,
+      title: `Access given: ${eqName}`, body: msg, read: false,
     }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
-    toast('Training approved ✓')
+    await sendTrainingEmail(req.user_id, 'training_approved', `Access given — ${eqName}`, 'You can book this equipment', msg)
+    toast('Access given ✓')
+    setGranting(null); setGrantDate(''); setGrantBy('')
     setSaving(false); load()
   }
 
@@ -203,13 +231,47 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-sm btn-primary" onClick={() => { setProposing(req); setProposeDate(''); setProposeNotes('') }}>
+                    <button className="btn btn-sm btn-primary" onClick={() => { setGranting(null); setProposing(req); setProposeDate(''); setProposeNotes('') }}>
                       📅 {sched ? 'Change date' : 'Propose training date'}
                     </button>
+                    {trainedPairs.has(`${req.user_id}|${req.equipment_id}`) ? (
+                      <button className="btn btn-sm" disabled title="This is a retraining: the exam is required." style={{ opacity: 0.55 }}>
+                        Trained before — give access · not for retraining
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm" style={{ border: '1.5px solid #7dd3fc', background: '#e0f2fe', color: '#0369a1' }}
+                        onClick={() => { setProposing(null); setGranting(req); setGrantDate(''); setGrantBy('') }}>
+                        ✓ Trained before — give access
+                      </button>
+                    )}
                     <button className="btn btn-sm btn-danger" onClick={async () => {
                       await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
                       toast('Request denied.'); load()
                     }}>✕ Deny</button>
+                  </div>
+                )}
+                {granting?.id === req.id && (
+                  <div style={{ marginTop: 10, background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#0369a1', marginBottom: 4 }}>
+                      Give {req.user_name} access to {eq?.equipment_name || req.equipment_name} without training or exam?
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+                      For training that really happened but was never recorded in the app. This time only: when retraining is due, the exam is required as usual.
+                    </div>
+                    <div className="grid-2">
+                      <div className="field" style={{ marginBottom: 8 }}>
+                        <label>When were they trained? <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(optional)</span></label>
+                        <input type="date" value={grantDate} onChange={e => setGrantDate(e.target.value)} />
+                      </div>
+                      <div className="field" style={{ marginBottom: 8 }}>
+                        <label>Trained by <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(optional)</span></label>
+                        <input value={grantBy} onChange={e => setGrantBy(e.target.value)} placeholder={session.username} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-sm btn-primary" disabled={saving} onClick={() => giveAccessTrainedBefore(req)}>{saving ? 'Saving…' : 'Give access'}</button>
+                      <button className="btn btn-sm" onClick={() => setGranting(null)}>Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>
