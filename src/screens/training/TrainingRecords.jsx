@@ -7,7 +7,7 @@ import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { requiredSafetySteps } from '../labsafety/safetySteps'
-import { forLabUsers, labUserEquipment } from '../../lib/equipmentAccess'
+import { forLabUsers, labUserEquipment, retrainingDueIds } from '../../lib/equipmentAccess'
 import VehicleAgreement from './VehicleAgreement'
 import { AvatarDisplay } from '../../components/Avatars'
 import { useAppStore } from '../../store/useAppStore'
@@ -87,6 +87,17 @@ const PROJECT_GROUPS = ['Material', 'Sustainability', 'GPR', 'Mechanic', 'Other'
 // ── Helpers ───────────────────────────────────────────────────
 function canEdit(session) {
   return session?.role === 'admin' || session?.role === 'user'
+}
+
+// One row per instrument (Nov 2026). A retraining adds a NEW record — the
+// history is kept — but a person is trained on an instrument once, so lists
+// and counts use the newest record per equipment. Two BBR-1 rows read as a
+// duplicate.
+function latestPerEquipment(recs) {
+  const stamp = r => `${r.trained_date || ''}|${r.created_at || ''}`
+  const by = new Map()
+  for (const r of recs) { const cur = by.get(r.equipment_id); if (!cur || stamp(r) > stamp(cur)) by.set(r.equipment_id, r) }
+  return [...by.values()]
 }
 
 function fullName(u) {
@@ -786,6 +797,8 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   // Approve here, and the card calls back so this table reloads after an
   // action there. Without it each showed the other's old state until refresh.
   const [requestsKey, setRequestsKey] = useState(0)
+  // Lab user only: instruments whose retraining is due (lib/equipmentAccess)
+  const [retrainDueIds, setRetrainDueIds] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const equipImportRef = useRef(null)
   const [equipSubTab, setEquipSubTab] = useState('training')
@@ -863,6 +876,11 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     const [{ data: eq }, { data: rec }, { data: retrainReqs }, { data: scheds }, { data: exams }, { data: prog }] = await Promise.all([
       equipQuery, recQuery, pendingQ, schedQ, examQ, progQ,
     ])
+    if (session?.role === 'lab_user' && session?.userId) {
+      const { data: bk } = await sb.from('equipment_bookings').select('equipment_id, start_time')
+        .eq('user_id', session.userId).eq('status', 'confirmed')
+      setRetrainDueIds(retrainingDueIds(bk || [], (rec || []).filter(r => String(r.user_id) === String(session.userId))))
+    }
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
@@ -873,6 +891,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   }
 
   function getRecords(userId) { return records.filter(r => r.user_id === userId) }
+  function getLatest(userId) { return latestPerEquipment(getRecords(userId)) }
   function getProgress(userId, equipmentId) {
     return materialProgress.find(p => String(p.user_id) === String(userId) && p.equipment_id === equipmentId)
   }
@@ -1063,9 +1082,21 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       ;({ error } = await sb.from('training_equipment').insert(ids.map(base)))
     }
     if (error) { toast('Could not add the training: ' + error.message); return }
+    // A record answers that person's open request on the same equipment —
+    // "Log retraining" left it open, so its bar never went away.
+    await sb.from('retraining_requests').delete().eq('user_id', userId).eq('status', 'pending').in('equipment_id', ids)
+    setRequestsKey(k => k + 1)
     setAddingRecord(null)
     load(); onChanged?.()
     toast(`${ids.length} training record${ids.length !== 1 ? 's' : ''} added${skipped ? ` · ${skipped} already in the list` : ''}.`)
+  }
+
+  async function declineRequest(req) {
+    const { error } = await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
+    if (error) { toast('Could not decline: ' + error.message); return }
+    setPendingRetraining(prev => prev.filter(r => r.id !== req.id))
+    setRequestsKey(k => k + 1)
+    toast('Request declined.')
   }
 
   async function togglePassed(rec) {
@@ -1196,7 +1227,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       {(hideChrome || equipSubTab === 'training') && (
         <div>
           {!canEdit(session) && (
-            <RetrainingRequestPanel session={session} equipment={equipment} pendingRetraining={pendingRetraining} onSubmit={submitRetrainingRequest} />
+            <RetrainingRequestPanel session={session} equipment={equipment} pendingRetraining={pendingRetraining} onSubmit={submitRetrainingRequest} myRecords={getLatest(session.userId)} retrainDueIds={retrainDueIds} />
           )}
           {/* Managers: request queue lives here now (sidebar Requests tab removed) —
               per-user in the hub panel, full org queue in All-users audit mode */}
@@ -1216,8 +1247,8 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
           )}
           {(() => {
             const searchBase = search.trim() ? labUsers.filter(u => fullName(u).toLowerCase().includes(search.toLowerCase())) : labUsers
-            const passedMap = labUsers.reduce((acc, u) => { acc[u.id] = getRecords(u.id).filter(r => r.passed_exam).length; return acc }, {})
-            const totalMap = labUsers.reduce((acc, u) => { acc[u.id] = getRecords(u.id).length; return acc }, {})
+            const passedMap = labUsers.reduce((acc, u) => { acc[u.id] = getLatest(u.id).filter(r => r.passed_exam).length; return acc }, {})
+            const totalMap = labUsers.reduce((acc, u) => { acc[u.id] = getLatest(u.id).length; return acc }, {})
             const withRecords = labUsers.filter(u => totalMap[u.id] > 0).length
             const allPassed = labUsers.filter(u => totalMap[u.id] > 0 && passedMap[u.id] === totalMap[u.id]).length
             const pending = labUsers.filter(u => totalMap[u.id] > 0 && passedMap[u.id] < totalMap[u.id]).length
@@ -1244,7 +1275,8 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                   <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>No lab users match.</div>
                 )}
                 {(hideChrome ? labUsers : displayLabUsers).map((u, idx) => {
-            const recs = getRecords(u.id)
+            const allRecs = getRecords(u.id)
+            const recs = latestPerEquipment(allRecs)
             const passedCount = recs.filter(r => r.passed_exam).length
             const headerBg = idx % 2 === 0 ? 'var(--row-a-strong)' : 'var(--row-b-strong)'
             const approvedEquipIds = new Set(recs.map(r => r.equipment_id))
@@ -1299,6 +1331,12 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                               <td style={{ fontWeight: 500 }}>
                                 {eq ? (eq.equipment_name || eq.nickname) : 'Unknown'}
                                 {rec.is_retraining && <span style={{ marginLeft: 6, fontSize: 10, background: '#0369a1', color: '#fff', borderRadius: 3, padding: '1px 6px', fontWeight: 600 }}>Retraining</span>}
+                                {(() => {
+                                  const hist = allRecs.filter(r => r.equipment_id === rec.equipment_id && r.id !== rec.id)
+                                  if (!hist.length) return null
+                                  const first = hist.map(r => r.trained_date).filter(Boolean).sort()[0]
+                                  return <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{first ? `First trained ${first} · ` : ''}{hist.length + 1} records</div>
+                                })()}
                               </td>
                               <td style={{ fontFamily: 'var(--mono)' }}>{rec.trained_date || '—'}</td>
                               <td>{rec.trained_by || '—'}</td>
@@ -1326,9 +1364,14 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                               <tr>
                                 <td colSpan={cols} style={{ padding: 0, border: 'none' }}>
                                   <div style={{ background: '#fef3c7', borderTop: '1px solid #f0d070', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                                    <div style={{ fontSize: 12, color: '#92400e' }}>⚠️ <strong>Retraining required</strong> — not used in 3+ months.</div>
+                                    {/* A request on equipment they already have a record for. It used
+                                        to say "not used in 3+ months", which was not why it was here. */}
+                                    <div style={{ fontSize: 12, color: '#92400e' }}>🔄 <strong>Asked for training again</strong>{retrainReq.requested_at ? ` on ${new Date(retrainReq.requested_at).toLocaleDateString()}` : ''} — already trained. Log a retraining (the exam is required) or decline.</div>
                                     {canEdit(session) && (
-                                      <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setAddingRecord({ userId: u.id, equipmentId: rec.equipment_id, isRetraining: true })}>🔄 Log retraining</button>
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setAddingRecord({ userId: u.id, equipmentId: rec.equipment_id, isRetraining: true })}>🔄 Log retraining</button>
+                                        <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => declineRequest(retrainReq)}>Decline</button>
+                                      </div>
                                     )}
                                   </div>
                                 </td>
@@ -1452,7 +1495,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   )
 }
 
-function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmit }) {
+function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmit, myRecords = [], retrainDueIds = new Set() }) {
   const [selectedEq, setSelectedEq] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useAppStore()
@@ -1467,6 +1510,18 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
 
   const myPending = pendingRetraining.filter(r => String(r.user_id) === String(session.userId))
   const pendingIds = new Set(pendingRetraining.map(r => r.equipment_id))
+  // Already trained = a record that has not expired and no retraining due:
+  // nothing to ask for (asking anyway made a second record of the same
+  // instrument). Expired or retraining due → they may ask.
+  const today = new Date().toISOString().split('T')[0]
+  const recBy = new Map(myRecords.map(r => [r.equipment_id, r]))
+  const why = e => {
+    const r = recBy.get(e.id)
+    if (!r) return null
+    if (r.expires_at && r.expires_at < today) return 'expired'
+    if (retrainDueIds.has(e.id)) return 'retraining due'
+    return 'trained'
+  }
   return (
     <div style={{ marginBottom: 16 }}>
       <div className="card" style={{ marginBottom: myPending.length > 0 ? 12 : 0, borderColor: '#0369a1' }}>
@@ -1476,7 +1531,7 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
           <select value={selectedEq} onChange={e => setSelectedEq(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
             <option value="">— Select equipment —</option>
             {equipment.map(e => (
-              <option key={e.id} value={e.id} disabled={pendingIds.has(e.id)}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}{pendingIds.has(e.id) ? ' (pending)' : ''}</option>
+              <option key={e.id} value={e.id} disabled={pendingIds.has(e.id) || why(e) === 'trained'}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}{pendingIds.has(e.id) ? ' (pending)' : why(e) ? ` (${why(e)})` : ''}</option>
             ))}
           </select>
           <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting || !selectedEq}>{submitting ? 'Submitting…' : 'Submit request'}</button>

@@ -5,7 +5,7 @@ import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { forLabUsers, requiresTraining, isVehicle } from '../../lib/equipmentAccess'
+import { forLabUsers, requiresTraining, isVehicle, retrainingDueIds } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
@@ -2383,12 +2383,15 @@ function BookingCalendar({ session }) {
       .select('equipment_id, status').eq('user_id', session.userId)
     const approvedEq = new Set((retraining || []).filter(r => r.status === 'approved').map(r => r.equipment_id))
     const pendingEq = new Set((retraining || []).filter(r => r.status === 'pending').map(r => r.equipment_id))
-    // Block equipment not used in 3 months without approved retraining
-    const blocked = Object.entries(lastBooked)
-      .filter(([eqId, lastDate]) => lastDate < threeMonthsAgo && !approvedEq.has(eqId))
+    // Block equipment not used in 3 months without approved retraining — and
+    // not (re)trained in those 3 months either: a logged retraining lifts it.
+    const { data: myTraining } = await sb.from('training_equipment')
+      .select('equipment_id, trained_date').eq('user_id', session.userId)
+    const due = retrainingDueIds(userBookings, myTraining || [])
+    const blocked = [...due]
+      .filter(eqId => !approvedEq.has(eqId))
       // nothing to retrain on equipment that needs no training
-      .filter(([eqId]) => requiresTraining(eqList.find(e => e.id === eqId)))
-      .map(([eqId]) => eqId)
+      .filter(eqId => requiresTraining(eqList.find(e => e.id === eqId)))
     setRetrainingBlocked(blocked)
     // Add in-app notification for newly blocked items (not already pending)
     for (const eqId of blocked) {

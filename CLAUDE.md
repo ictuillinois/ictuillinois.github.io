@@ -2379,3 +2379,20 @@ never read as an exam that happened.
   status 'approved', because Booking's 3-month check treats an approved
   request as lifting the retraining block for good. Disabled ("not for
   retraining") when that person already has a record for the equipment.
+
+## Equipment training: one row per instrument, retraining rule in one place (Nov 2026, both apps)
+
+- **One row per instrument.** A retraining adds a new `training_equipment`
+  record (history kept), but the table, the "N/N passed" counts and the hub
+  filters use the newest per equipment (`latestPerEquipment()` in
+  TrainingRecords.jsx); the row says "First trained … · N records".
+- **Lab users cannot ask for training they already have.** Request Training
+  greys out an instrument with a current record ("trained"); "expired" and
+  "retraining due" may still be asked for.
+- **A saved record closes that person's open request** on the same equipment
+  ("Log retraining" used to leave it, so its bar never went away). A repeat
+  request on a trained instrument shows "Asked for training again" with Log
+  retraining / Decline — it used to claim "not used in 3+ months".
+- **Retraining due = `retrainingDueIds()` in lib/equipmentAccess.js**: last
+  booking older than 3 months AND no (re)training in those 3 months. Booking
+  looked at bookings only, so a logged retraining never lifted the lock.

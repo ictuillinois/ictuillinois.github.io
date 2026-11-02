@@ -107,3 +107,21 @@ export function requiresTraining(eq) {
 export function isVehicle(eq) {
   return /vehicle/i.test(eq?.category || '')
 }
+
+// Retraining (Nov 2026): due on an instrument the person last BOOKED more than
+// 3 months ago, unless they were (re)trained on it within those 3 months.
+// Booking used to look at bookings only, so a logged retraining never lifted
+// the lock. One rule for Booking and for the lab user's Request Training list.
+export const RETRAIN_MONTHS = 3
+export function retrainingDueIds(bookings = [], trainings = [], now = new Date()) {
+  const cutoff = new Date(now); cutoff.setMonth(cutoff.getMonth() - RETRAIN_MONTHS)
+  const latest = (rows, field) => rows.reduce((acc, r) => {
+    if (!r[field]) return acc
+    const t = new Date(r[field])
+    if (!acc[r.equipment_id] || t > acc[r.equipment_id]) acc[r.equipment_id] = t
+    return acc
+  }, {})
+  const booked = latest(bookings, 'start_time')
+  const trained = latest(trainings, 'trained_date')
+  return new Set(Object.keys(booked).filter(id => booked[id] < cutoff && !(trained[id] && trained[id] >= cutoff)))
+}
