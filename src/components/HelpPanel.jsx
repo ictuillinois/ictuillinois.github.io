@@ -60,6 +60,7 @@ const HELP_CONTENT = {
       'Vehicle → Forms: tick the vehicles you need, read the Golf Cart Manual page by page, then download, sign and upload the two forms',
       T('Vehicle → Training records: confirm requested vehicles once that person\'s forms are approved. Add or remove vehicles in the ICT vehicle list', 'manager'),
       'Equipment: training per instrument. Equipment you have not used for 3 months needs retraining before you can book it',
+      T('Equipment → + Add training: for someone trained before whose training was never recorded here, tick "Trained before. Give access without the exam". It works once; retraining still needs the exam', 'manager'),
       T('Lab User Locker: request a locker. A lab manager assigns one and you get a notification', 'labuser'),
       T('Lab User Locker: assign or decline requests in the Locker requests box, or on a lab user\'s card', 'manager'),
       'Exam: take the equipment knowledge exam',

@@ -91,7 +91,9 @@ BEGIN
     ('training_golf_car',       'trained,trained_date,trained_by',                   '{"trained": false}'),
     ('training_building_alarm', 'trained,trained_date,trained_by',                   '{"trained": false}'),
     ('lab_safety_progress',     'completed,approved_by,approved_at',                 '{"completed": false}'),
-    ('vehicle_agreements',      'approved_by,approved_by_name,approved_at',          '{}')
+    ('vehicle_agreements',      'approved_by,approved_by_name,approved_at',          '{}'),
+    -- exam waiver columns only (training_exam_waiver.sql adds them); passed_exam is not guarded
+    ('training_equipment',      'exam_waived,exam_waived_by,exam_waived_at',         '{"exam_waived": false}')
   ) AS v(tbl, cols, fresh) LOOP
     IF to_regclass('public.' || g.tbl) IS NULL THEN CONTINUE; END IF;
     EXECUTE format('DROP TRIGGER IF EXISTS guard_training_approval_trg ON %I', g.tbl);

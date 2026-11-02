@@ -1026,7 +1026,12 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   // Several instruments at once (Oct 2026): a lab user who passed training on
   // a set of equipment is recorded in one save. Ones already in their list
   // are skipped (not for retraining, which adds a new record on purpose).
-  async function addTrainingRecords(userId, equipmentIds, date, trainedBy, passed, isRetraining) {
+  // examWaived (Nov 2026): the lab user was trained outside the app and the
+  // record was never entered. Access is given this once without the exam —
+  // passed_exam is set so booking opens, and exam_waived says no exam was
+  // taken. Never for retraining: when retraining is due the exam is required.
+  async function addTrainingRecords(userId, equipmentIds, date, trainedBy, passed, isRetraining, examWaived = false) {
+    if (isRetraining) examWaived = false
     let ids = [...new Set(equipmentIds)].filter(Boolean)
     if (!ids.length) { toast('Tick at least one equipment.'); return }
     let skipped = 0
@@ -1039,8 +1044,19 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       if (!ids.length) { toast('All of these are already in the training list for this lab user.'); return }
     }
     const expires = date ? new Date(new Date(date).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : null
-    const { error } = await sb.from('training_equipment').insert(ids.map(equipmentId => (
-      { user_id: userId, equipment_id: equipmentId, trained_date: date, trained_by: trainedBy, passed_exam: passed, expires_at: expires })))
+    const base = equipmentId => ({ user_id: userId, equipment_id: equipmentId, trained_date: date, trained_by: trainedBy, passed_exam: passed || examWaived, expires_at: expires })
+    const flags = {
+      is_retraining: !!isRetraining,
+      ...(examWaived ? { exam_waived: true, exam_waived_by: session.username || 'Lab Manager', exam_waived_at: new Date().toISOString() } : {}),
+    }
+    let { error } = await sb.from('training_equipment').insert(ids.map(id => ({ ...base(id), ...flags })))
+    // Before training_exam_waiver.sql the new columns are missing and the whole
+    // insert is refused. A plain record is saved without them; a waiver is not,
+    // because without the column it would read as an exam that was passed.
+    if (error && /exam_waived|is_retraining|schema cache/i.test(error.message)) {
+      if (examWaived) { toast('Giving access without the exam needs training_exam_waiver.sql to be run in Supabase first.'); return }
+      ;({ error } = await sb.from('training_equipment').insert(ids.map(base)))
+    }
     if (error) { toast('Could not add the training: ' + error.message); return }
     setAddingRecord(null)
     load(); onChanged?.()
@@ -1281,7 +1297,14 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                               <td style={{ fontFamily: 'var(--mono)' }}>{rec.trained_date || '—'}</td>
                               <td>{rec.trained_by || '—'}</td>
                               <td>
-                                {canManage ? (
+                                {rec.exam_waived ? (
+                                  // Access given without the exam (trained outside the app) — shown as
+                                  // what it is, never as an exam that was passed.
+                                  <span title={`Access given by ${rec.exam_waived_by || 'a lab manager'}${rec.exam_waived_at ? ' on ' + new Date(rec.exam_waived_at).toLocaleDateString() : ''}. No exam taken; retraining will need the exam.`}
+                                    style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                    ✓ Access given · trained before, no exam
+                                  </span>
+                                ) : canManage ? (
                                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
                                     <input type="checkbox" checked={rec.passed_exam || false} onChange={() => togglePassed(rec)} style={{ width: 'auto' }} />
                                     <span style={{ color: rec.passed_exam ? 'var(--accent)' : 'var(--text3)' }}>{rec.passed_exam ? 'Yes' : 'No'}</span>
@@ -1469,7 +1492,8 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
 }
 
 function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave, onClose, defaultEquipmentId, defaultIsRetraining }) {
-  const [form, setForm] = useState({ equipmentIds: defaultEquipmentId ? [defaultEquipmentId] : [], date: new Date().toISOString().split('T')[0], trainedBy: session.username, passed: false, isRetraining: defaultIsRetraining || false })
+  const [form, setForm] = useState({ equipmentIds: defaultEquipmentId ? [defaultEquipmentId] : [], date: new Date().toISOString().split('T')[0], trainedBy: session.username, passed: false, isRetraining: defaultIsRetraining || false, examWaived: false })
+  const waived = form.examWaived && !form.isRetraining
   const [find, setFind] = useState('')
   const trainedEquipmentIds = new Set((existingRecords || []).filter(r => !r.is_retraining).map(r => r.equipment_id))
   const isTaken = e => !form.isRetraining && trainedEquipmentIds.has(e.id)
@@ -1507,16 +1531,31 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
               )
             })}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{picked.length} selected — the date, trainer and exam result below apply to all of them.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{picked.length} selected — the date, trainer and choices below apply to all of them.</div>
         </div>
         <div className="grid-2">
           <div className="field"><label>Training Date</label><input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
           <div className="field"><label>Trained By</label><input value={form.trainedBy} onChange={e => setForm(f => ({ ...f, trainedBy: e.target.value }))} /></div>
         </div>
         <div className="field">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
-            <input type="checkbox" checked={form.passed} onChange={e => setForm(f => ({ ...f, passed: e.target.checked }))} style={{ width: 'auto' }} />Passed exam
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: waived ? 'default' : 'pointer', marginBottom: 8, color: waived ? 'var(--text3)' : undefined }}>
+            <input type="checkbox" checked={form.passed && !waived} disabled={waived} onChange={e => setForm(f => ({ ...f, passed: e.target.checked }))} style={{ width: 'auto' }} />
+            <span>Passed exam{waived && <span style={{ display: 'block', fontSize: 12 }}>not needed when access is given below</span>}</span>
           </label>
+          {canEdit(session) && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: form.isRetraining ? 'default' : 'pointer', marginBottom: 8, padding: '8px 10px', borderRadius: 8,
+              border: `1.5px solid ${form.isRetraining ? 'var(--border)' : '#7dd3fc'}`, background: form.isRetraining ? 'var(--surface2)' : '#e0f2fe' }}>
+              <input type="checkbox" checked={waived} disabled={form.isRetraining} onChange={e => setForm(f => ({ ...f, examWaived: e.target.checked }))} style={{ width: 'auto', marginTop: 3 }} />
+              <span style={{ fontSize: 13, color: form.isRetraining ? 'var(--text3)' : 'var(--text)' }}>
+                <span style={{ fontWeight: 600, color: form.isRetraining ? 'var(--text3)' : '#0369a1' }}>Trained before. Give access without the exam</span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                  {form.isRetraining
+                    ? 'Not for retraining: the exam is required.'
+                    : 'This time only, for training not recorded in the app. When retraining is due, the exam is required as usual.'}
+                </span>
+              </span>
+            </label>
+          )}
           {canEdit(session) && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 0 }}>
               <input type="checkbox" checked={form.isRetraining} onChange={e => setForm(f => ({ ...f, isRetraining: e.target.checked }))} style={{ width: 'auto' }} />
@@ -1525,7 +1564,7 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-          <button className="btn btn-primary" disabled={!picked.length} onClick={() => onSave(userId, picked, form.date, form.trainedBy, form.passed, form.isRetraining)}>
+          <button className="btn btn-primary" disabled={!picked.length} onClick={() => onSave(userId, picked, form.date, form.trainedBy, form.passed && !waived, form.isRetraining, waived)}>
             {picked.length > 1 ? `Save ${picked.length} trainings` : 'Save'}
           </button>
           <button className="btn" onClick={onClose}>Cancel</button>

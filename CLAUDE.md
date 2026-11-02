@@ -2353,3 +2353,23 @@ sent it, and `email_notifications_queue.reply_to` (passed to Resend by
 `[ICT-Lab · Settings report] N changes` (to ictengineers@ too — NOT settings.admin_email: admin@ictlab.app is only a sign-in, ictlab.app has no mail server, and every report bounced; a `report_email` settings row overrides).
 Both app inserts retry without `reply_to` if the column is missing — the
 Customer Service one never read its error. SQL: `email_subjects_setup.sql`.
+
+## Equipment training: access without the exam, once (Nov 2026, both apps)
+
+Add equipment training (`AddTrainingRecord` in TrainingRecords.jsx) has a tick
+box **"Trained before. Give access without the exam"** for a lab user who
+really was trained but whose training was never recorded in the app. It saves
+`passed_exam = true` (so booking opens) plus `exam_waived = true`,
+`exam_waived_by`, `exam_waived_at`; the row shows a blue **"Access given ·
+trained before, no exam"** chip, never the Passed exam checkbox — a waiver must
+never read as an exam that happened.
+- **Once only:** switched off and greyed when *Mark as retraining* is ticked —
+  retraining always needs the exam. `addTrainingRecords` also forces it off.
+- `is_retraining` is now saved; before this the Retraining badge existed but
+  the flag was never written.
+- A lab user cannot set the waiver through the API: `guard_training_approval`
+  covers training_equipment's waiver columns (not passed_exam).
+- Before the SQL runs, a plain record still saves (retried without the new
+  columns); a waiver refuses with a toast rather than save as a passed exam.
+- SQL: `training_exam_waiver.sql` (same file in both folders, after
+  training_privacy.sql, whose guard list now includes training_equipment).
