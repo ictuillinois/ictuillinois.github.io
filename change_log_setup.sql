@@ -178,7 +178,7 @@ BEGIN
   html := html || '</table><p style="font-family:Arial,sans-serif;color:#666">Before and after values are in the Change log in the super admin panel.</p>';
 
   INSERT INTO email_notifications_queue (to_email, subject, body, html_body, type)
-  VALUES (to_addr, 'Daily settings report — ' || n || ' change' || CASE WHEN n = 1 THEN '' ELSE 's' END, txt, html, 'change_digest');
+  VALUES (to_addr, '[ICT-Lab · Settings report] ' || n || ' change' || CASE WHEN n = 1 THEN '' ELSE 's' END, txt, html, 'change_digest');
   UPDATE change_log SET digested = TRUE WHERE NOT digested;
   RETURN n;
 END $$;

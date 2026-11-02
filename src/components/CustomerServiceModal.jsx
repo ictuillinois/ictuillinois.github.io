@@ -75,12 +75,20 @@ export default function CustomerServiceModal({ onClose }) {
         ctaUrl: 'https://ictlab.labhive.app/?screen=dashboard',
         prefsUrl: 'https://ictlab.labhive.app/?screen=dashboard',
       })
-      await sb.from('email_notifications_queue').insert({
+      // ictengineers@ stays the receiver. "[ICT-Lab · Customer Service] <subject>
+      // — <sender>" says what it is and who wrote; Reply answers the sender
+      // (reply_to), not noreply@, which nobody reads.
+      const mail = {
         to_email: 'ictengineers@mx.uillinois.edu',
-        subject: `[ICT-Lab Support] ${subject.trim()}`,
+        subject: `[ICT-Lab · Customer Service] ${subject.trim()} — ${senderName}`,
         body: emailBody,
         html_body: htmlBody,
-      })
+        type: 'support_message',
+      }
+      const { error: mailErr } = await sb.from('email_notifications_queue').insert({ ...mail, reply_to: email.trim().toLowerCase() })
+      // Before email_subjects_setup.sql the column is missing and the whole
+      // insert is refused — send it without Reply-To rather than not at all.
+      if (mailErr) await sb.from('email_notifications_queue').insert(mail)
       fetch('https://ilqnwprvxwbhvrjstwsd.supabase.co/functions/v1/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
 
       setDone(true)

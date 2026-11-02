@@ -2340,3 +2340,16 @@ has `rackNames`, `shelvesPerRack` and `placesPerShelf` (default 1).
   name). The app retries without the column if it is missing.
 - Ownership is a UI rule: `storage_locations` / `ict_layout` policies are
   org-wide, so the API does not enforce it (security review pending).
+
+## Emails to the ICT engineers: labelled, Reply → sender (Nov 2026)
+
+Customer Service and Sara's problem reports still go to
+**ictengineers@mx.uillinois.edu** — the receiver for user requests; never
+route ICT-Lab mail to a personal address. Subjects say what it is and who
+sent it, and `email_notifications_queue.reply_to` (passed to Resend by
+`send-emails`) makes Reply answer the sender instead of noreply@:
+`[ICT-Lab · Customer Service] <subject> — <sender>` ·
+`[ICT-Lab · Problem report] <who> (<screen>)` ·
+`[ICT-Lab · Settings report] N changes` (to settings.admin_email).
+Both app inserts retry without `reply_to` if the column is missing — the
+Customer Service one never read its error. SQL: `email_subjects_setup.sql`.

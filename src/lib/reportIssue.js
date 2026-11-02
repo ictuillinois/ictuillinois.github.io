@@ -84,16 +84,22 @@ export async function reportIssue({ session, message, file, screen }) {
   }
 
   // 5. email, so it lands without the app being open
-  const { error: mailErr } = await sb.from('email_notifications_queue').insert({
+  // "[ICT-Lab · Problem report] <who> (<screen>)"; Reply answers the reporter.
+  const mail = {
     to_email: SUPPORT_EMAIL,
-    subject: `[ICT-Lab] ${subject}`,
+    subject: `[ICT-Lab · Problem report] ${who}${screen ? ` (${screen})` : ''}`,
     body,
     html_body: buildEmailHtml({
       title: subject, body,
       ctaLabel: 'Open ICT-Lab →', ctaUrl: `${APP_URL}/?screen=dashboard`,
       prefsUrl: `${APP_URL}/?screen=profile`,
     }),
-  })
+    type: 'app_error',
+  }
+  let { error: mailErr } = await sb.from('email_notifications_queue').insert(email ? { ...mail, reply_to: email } : mail)
+  // Before email_subjects_setup.sql the reply_to column is missing and the
+  // whole insert is refused — send without it rather than not at all.
+  if (mailErr && email) ({ error: mailErr } = await sb.from('email_notifications_queue').insert(mail))
   if (mailErr) problems.push('the notification email was not queued')
   // Nudge the sender rather than waiting up to a minute for the cron.
   else fetch(`${sb.supabaseUrl}/functions/v1/send-emails`, {
