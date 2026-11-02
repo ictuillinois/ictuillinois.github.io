@@ -1538,12 +1538,12 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
           <div className="field"><label>Trained By</label><input value={form.trainedBy} onChange={e => setForm(f => ({ ...f, trainedBy: e.target.value }))} /></div>
         </div>
         <div className="field">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: waived ? 'default' : 'pointer', marginBottom: 8, color: waived ? 'var(--text3)' : undefined }}>
-            <input type="checkbox" checked={form.passed && !waived} disabled={waived} onChange={e => setForm(f => ({ ...f, passed: e.target.checked }))} style={{ width: 'auto' }} />
-            <span>Passed exam{waived && <span style={{ display: 'block', fontSize: 12 }}>not needed when access is given below</span>}</span>
-          </label>
+          {/* Trained before comes FIRST: it replaces training and exam, so when it
+              is ticked the other two boxes are hidden rather than left to puzzle
+              over. Passed exam = trained here and passed (gives access); left
+              unticked, they cannot book until they pass the exam. */}
           {canEdit(session) && (
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: form.isRetraining ? 'default' : 'pointer', marginBottom: 8, padding: '8px 10px', borderRadius: 8,
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: form.isRetraining ? 'default' : 'pointer', marginBottom: 10, padding: '8px 10px', borderRadius: 8,
               border: `1.5px solid ${form.isRetraining ? 'var(--border)' : '#7dd3fc'}`, background: form.isRetraining ? 'var(--surface2)' : '#e0f2fe' }}>
               <input type="checkbox" checked={waived} disabled={form.isRetraining} onChange={e => setForm(f => ({ ...f, examWaived: e.target.checked }))} style={{ width: 'auto', marginTop: 3 }} />
               <span style={{ fontSize: 13, color: form.isRetraining ? 'var(--text3)' : 'var(--text)' }}>
@@ -1556,11 +1556,23 @@ function AddTrainingRecord({ userId, equipment, existingRecords, session, onSave
               </span>
             </label>
           )}
-          {canEdit(session) && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 0 }}>
-              <input type="checkbox" checked={form.isRetraining} onChange={e => setForm(f => ({ ...f, isRetraining: e.target.checked }))} style={{ width: 'auto' }} />
-              <span style={{ color: '#0369a1', fontWeight: 500 }}>🔄 Mark as retraining</span>
-            </label>
+          {!waived && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+                <input type="checkbox" checked={form.passed} onChange={e => setForm(f => ({ ...f, passed: e.target.checked }))} style={{ width: 'auto', marginTop: 3 }} />
+                <span>Passed exam
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)' }}>
+                    {form.passed ? 'They can book this equipment.' : 'Leave unticked if they still have to pass the exam. They cannot book until they do.'}
+                  </span>
+                </span>
+              </label>
+              {canEdit(session) && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 0 }}>
+                  <input type="checkbox" checked={form.isRetraining} onChange={e => setForm(f => ({ ...f, isRetraining: e.target.checked }))} style={{ width: 'auto' }} />
+                  <span style={{ color: '#0369a1', fontWeight: 500 }}>🔄 Mark as retraining</span>
+                </label>
+              )}
+            </>
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
