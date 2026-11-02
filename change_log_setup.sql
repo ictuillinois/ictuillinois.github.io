@@ -18,7 +18,7 @@
 -- not settings for everyone and are left out, as are users and screen access.
 --
 -- Each change → one change_log row + one super-admin bell alert. Each morning
--- (8am Chicago) the previous day's changes are emailed to settings.admin_email.
+-- (8am Chicago) the previous day's changes are emailed to ictengineers@mx.uillinois.edu.
 -- ===========================================================================
 
 CREATE TABLE IF NOT EXISTS change_log (
@@ -155,7 +155,12 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   to_addr text; n integer; txt text; html text; r record; vals text;
 BEGIN
-  SELECT value INTO to_addr FROM settings WHERE key = 'admin_email';
+  -- To ictengineers@ (one inbox for everything ICT-Lab sends). NOT
+  -- settings.admin_email: that is the super admin's sign-in, admin@ictlab.app,
+  -- and ictlab.app has no mail server — every report bounced. A
+  -- settings 'report_email' row overrides it.
+  SELECT trim(both '"' from value) INTO to_addr FROM settings WHERE key = 'report_email';
+  to_addr := COALESCE(NULLIF(to_addr, ''), 'ictengineers@mx.uillinois.edu');
   SELECT count(*) INTO n FROM change_log WHERE NOT digested;
   IF n = 0 OR to_addr IS NULL OR to_addr = '' THEN RETURN 0; END IF;
 

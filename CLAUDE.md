@@ -1650,7 +1650,7 @@ types changing with no way to say who or when.
   unknown screens are covered. Each change → a `change_log` row (super admin
   SELECT only) and a `setting_change` alert in SuperAdminBell.
 - **Daily report:** pg_cron `daily-change-digest` at 13:00 UTC runs
-  `queue_change_digest()` → one email to `settings.admin_email` listing
+  `queue_change_digest()` → one email to ictengineers@mx.uillinois.edu (ICT-Lab; see "Emails to the ICT engineers") listing
   undigested rows; none when nothing changed.
 - **Viewer:** `ChangeLogCard` (src/components/ChangeLog.jsx) at the top of
   the super admin panel — filter, search, before/after per field.
@@ -2350,6 +2350,6 @@ sent it, and `email_notifications_queue.reply_to` (passed to Resend by
 `send-emails`) makes Reply answer the sender instead of noreply@:
 `[ICT-Lab · Customer Service] <subject> — <sender>` ·
 `[ICT-Lab · Problem report] <who> (<screen>)` ·
-`[ICT-Lab · Settings report] N changes` (to settings.admin_email).
+`[ICT-Lab · Settings report] N changes` (to ictengineers@ too — NOT settings.admin_email: admin@ictlab.app is only a sign-in, ictlab.app has no mail server, and every report bounced; a `report_email` settings row overrides).
 Both app inserts retry without `reply_to` if the column is missing — the
 Customer Service one never read its error. SQL: `email_subjects_setup.sql`.

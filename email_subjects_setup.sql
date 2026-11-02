@@ -4,7 +4,7 @@
 -- and Reply answers the sender (reply_to, passed to Resend by send-emails):
 --   [ICT-Lab · Customer Service] <subject> — <sender>   → ictengineers@mx.uillinois.edu
 --   [ICT-Lab · Problem report] <who> (<screen>)         → ictengineers@mx.uillinois.edu
---   [ICT-Lab · Settings report] <n> changes              → settings.admin_email
+--   [ICT-Lab · Settings report] <n> changes              → ictengineers@mx.uillinois.edu
 -- The digest function also lives in change_log_setup.sql (updated together).
 -- After running: redeploy the send-emails Edge Function.
 
@@ -15,7 +15,12 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   to_addr text; n integer; txt text; html text; r record; vals text;
 BEGIN
-  SELECT value INTO to_addr FROM settings WHERE key = 'admin_email';
+  -- To ictengineers@ (one inbox for everything ICT-Lab sends). NOT
+  -- settings.admin_email: that is the super admin's sign-in, admin@ictlab.app,
+  -- and ictlab.app has no mail server — every report bounced. A
+  -- settings 'report_email' row overrides it.
+  SELECT trim(both '"' from value) INTO to_addr FROM settings WHERE key = 'report_email';
+  to_addr := COALESCE(NULLIF(to_addr, ''), 'ictengineers@mx.uillinois.edu');
   SELECT count(*) INTO n FROM change_log WHERE NOT digested;
   IF n = 0 OR to_addr IS NULL OR to_addr = '' THEN RETURN 0; END IF;
 
@@ -45,8 +50,8 @@ END $$;
 
 NOTIFY pgrst, 'reload schema';
 
--- Check (expected: 1 | 1 | the address the daily settings report goes to)
+-- Check (expected: 1 | 1 | 1)
 SELECT
   (SELECT count(*) FROM information_schema.columns WHERE table_name = 'email_notifications_queue' AND column_name = 'reply_to') AS reply_to_column,
   (SELECT count(*) FROM pg_proc WHERE proname = 'queue_change_digest' AND prosrc LIKE '%ICT-Lab · Settings report%')     AS digest_subject,
-  (SELECT trim(both '"' from value) FROM settings WHERE key = 'admin_email')                                              AS settings_report_goes_to;
+  (SELECT count(*) FROM pg_proc WHERE proname = 'queue_change_digest' AND prosrc LIKE '%ictengineers@mx.uillinois.edu%') AS report_to_engineers;
