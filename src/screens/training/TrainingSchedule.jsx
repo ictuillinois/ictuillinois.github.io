@@ -33,7 +33,7 @@ function fmtDT(d) {
 // forUserId: only show requests from that user (hub Equipment tab,
 // "This user" mode). compact: small empty state instead of the big one.
 // ══════════════════════════════════════════════════════════════
-export function TrainingRequestsPanel({ session, forUserId = null, compact = false }) {
+export function TrainingRequestsPanel({ session, forUserId = null, compact = false, refreshKey = 0, onChanged }) {
   const { toast } = useAppStore()
   const [requests, setRequests] = useState([])
   const [schedules, setSchedules] = useState([])
@@ -53,7 +53,10 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
   const [grantBy, setGrantBy] = useState('')
   const [trainedPairs, setTrainedPairs] = useState(new Set())
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [refreshKey])
+
+  // After a change here, reload and tell the records table below (onChanged).
+  function changed() { load(); onChanged?.() }
 
   async function load() {
     setLoading(true)
@@ -110,7 +113,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     await sendTrainingEmail(req.user_id, 'training_approved', `Access given — ${eqName}`, 'You can book this equipment', msg)
     toast('Access given ✓')
     setGranting(null); setGrantDate(''); setGrantBy('')
-    setSaving(false); load()
+    setSaving(false); changed()
   }
 
   function getSchedule(requestId) {
@@ -153,7 +156,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     await sendTrainingEmail(req.user_id, 'training_approved', `Training scheduled — ${req.equipment_name}`, 'Your training has been scheduled', notifMsg)
     toast('Training date scheduled ✓')
     setProposing(null); setProposeDate(''); setProposeNotes('')
-    setSaving(false); load()
+    setSaving(false); changed()
   }
 
   async function confirmSchedule(sched) {
@@ -164,7 +167,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     const msg = `Training confirmed for ${eqName} on ${when}. Please review the SOP and training videos before your session.`
     await sb.from('booking_notifications').insert({ booking_id: null, user_id: sched.user_id, type: 'training_confirmed', message: msg, read: false })
     await sendTrainingEmail(sched.user_id, 'training_approved', `Training confirmed — ${eqName}`, 'Your training has been confirmed', msg)
-    toast('Training confirmed ✓'); load()
+    toast('Training confirmed ✓'); changed()
   }
 
   // Filter at render time so switching the selected user doesn't refetch
@@ -246,7 +249,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                     )}
                     <button className="btn btn-sm btn-danger" onClick={async () => {
                       await sb.from('retraining_requests').update({ status: 'denied', reviewed_by: session.username, reviewed_at: new Date().toISOString() }).eq('id', req.id)
-                      toast('Request denied.'); load()
+                      toast('Request denied.'); changed()
                     }}>✕ Deny</button>
                   </div>
                 )}

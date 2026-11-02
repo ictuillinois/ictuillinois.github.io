@@ -781,6 +781,11 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   const [showAddEquip, setShowAddEquip] = useState(false)
   const [newEquip, setNewEquip] = useState({ name: '', description: '' })
   const [addingRecord, setAddingRecord] = useState(null)
+  // The Training requests card above the table and this table read the same
+  // requests but load separately: bumping this makes the card reload after an
+  // Approve here, and the card calls back so this table reloads after an
+  // action there. Without it each showed the other's old state until refresh.
+  const [requestsKey, setRequestsKey] = useState(0)
   const [importing, setImporting] = useState(false)
   const equipImportRef = useRef(null)
   const [equipSubTab, setEquipSubTab] = useState('training')
@@ -1101,6 +1106,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       body: `${session.username || 'Your lab manager'} approved your training. You can now book this equipment.`,
       read: false,
     }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
+    setRequestsKey(k => k + 1)
     onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
     load()
   }
@@ -1197,7 +1203,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
           {canEdit(session) && !isSolo && (
             <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>📋 Training Requests</div>
-              <TrainingRequestsPanel session={session} forUserId={hideChrome ? labUsers[0]?.id : null} compact />
+              <TrainingRequestsPanel session={session} forUserId={hideChrome ? labUsers[0]?.id : null} compact refreshKey={requestsKey} onChanged={() => { load(); onChanged?.() }} />
             </div>
           )}
           {!hideChrome && canEdit(session) && (
