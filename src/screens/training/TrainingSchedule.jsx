@@ -331,17 +331,25 @@ export function UserTrainingSchedule({ session }) {
   const [equipment, setEquipment] = useState([])
   const [loading, setLoading] = useState(true)
   const [counterDate, setCounterDate] = useState({})
+  // For the confirmed-session banner: which exams this lab user has passed and
+  // which instruments have an exam at all (requires_exam + questions).
+  const [passedEqIds, setPassedEqIds] = useState(new Set())
+  const [examEqIds, setExamEqIds] = useState(new Set())
   const [dismissed, setDismissed] = useState(() => new Set(JSON.parse(localStorage.getItem(`ilab_dismissed_sched_${session?.userId}`) || '[]')))
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const [{ data: sched }, { data: reqs }, { data: eq }] = await Promise.all([
+    const [{ data: sched }, { data: reqs }, { data: eq }, { data: passed }, { data: qs }] = await Promise.all([
       sb.from('training_schedule').select('*').eq('user_id', session.userId).order('created_at', { ascending: false }),
       sb.from('retraining_requests').select('*').eq('user_id', session.userId).eq('status', 'pending').order('requested_at', { ascending: false }),
-      sb.from('equipment_inventory').select('id, equipment_name, nickname').eq('is_active', true),
+      sb.from('equipment_inventory').select('id, equipment_name, nickname, requires_exam').eq('is_active', true),
+      sb.from('equipment_exam_results').select('equipment_id').eq('user_id', session.userId).eq('passed', true),
+      sb.from('equipment_exam_questions').select('equipment_id'),
     ])
+    setPassedEqIds(new Set((passed || []).map(r => r.equipment_id)))
+    setExamEqIds(new Set((qs || []).map(r => r.equipment_id)))
     setSchedules(sched || [])
     setRequests(reqs || [])
     setEquipment(eq || [])
@@ -483,24 +491,51 @@ export function UserTrainingSchedule({ session }) {
         )
       })}
       {confirmed.filter(s => !dismissed.has(s.id)).map(sched => {
+        // Nov 2026: this banner is where a lab user learns what to do before
+        // the session — it used to say only "review the SOP" with a plain link,
+        // and never mentioned the exam they must pass.
         const eq = equipment.find(e => e.id === sched.equipment_id)
+        const eqName = eq?.equipment_name || eq?.nickname || 'this equipment'
+        const hasExam = !!eq && eq.requires_exam !== false && examEqIds.has(eq.id)
+        const examDone = passedEqIds.has(sched.equipment_id)
+        const examState = !hasExam ? 'none' : examDone ? 'passed' : sched.exam_skipped ? 'skipped' : 'todo'
+        const openMaterials = () => { localStorage.setItem('selectEquipment', sched.equipment_id); useAppStore.getState().setScreen('equipmenthub') }
+        const openExam = () => {
+          localStorage.setItem('examEquipment', sched.equipment_id)
+          const st = useAppStore.getState(); st.setScreen('training'); st.setSidebarSubTab('exam')
+        }
+        const step = (n, done, text, note) => (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
+              background: done ? '#085041' : '#fff', color: done ? '#fff' : '#085041', border: '1.5px solid #085041' }}>{done ? '✓' : n}</span>
+            <span style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{text}{note && <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)' }}>{note}</span>}</span>
+          </div>
+        )
         return (
-          <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12, position: 'relative' }}>
+          <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12, position: 'relative', display: 'grid', gap: 10 }}>
             <button onClick={() => dismissConfirmed(sched.id)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#085041', opacity: 0.5, lineHeight: 1, padding: 4 }} title="Dismiss">✕</button>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#085041', marginBottom: 4, paddingRight: 24 }}>
-              ✓ Training confirmed: {eq?.equipment_name || eq?.nickname}
+            <div style={{ paddingRight: 24 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#085041' }}>✓ Training session confirmed: {eqName}</div>
+              <div style={{ fontSize: 13, color: '#085041', marginTop: 2 }}>
+                📅 {fmtDT(sched.confirmed_date)}{sched.proposed_by ? ` · with ${sched.proposed_by}` : ''}{sched.notes ? ` · ${sched.notes}` : ''}
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: '#085041' }}>
-              {fmtDT(sched.confirmed_date)} — Please review the SOP and training videos before your session.
+            <div style={{ background: '#fff', border: '1px solid #9FE1CB', borderRadius: 10, padding: '10px 12px', display: 'grid', gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: '#085041' }}>Before your session</div>
+              {step(1, false, 'Watch the training video and read the SOP')}
+              {examState !== 'none' && step(2, examState !== 'todo',
+                examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it' : 'Take the exam and pass it',
+                examState === 'todo' ? 'You need 70% to pass and can retake it. Without it the training cannot be confirmed.' : null)}
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>After the session, your lab manager confirms the training and you can start booking.</div>
             </div>
-            <a href="#" onClick={e => {
-                e.preventDefault()
-                localStorage.setItem('selectEquipment', sched.equipment_id)
-                useAppStore.getState().setScreen('equipmenthub')
-              }}
-              style={{ fontSize: 13, color: 'var(--accent)', display: 'block', marginTop: 8, textDecoration: 'none', fontWeight: 500 }}>
-              → Go to Equipment page to review materials
-            </a>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" style={{ fontWeight: 700 }} onClick={openMaterials}>
+                Review the SOP & video →
+              </button>
+              {examState === 'todo' && (
+                <button className="btn btn-primary" style={{ fontWeight: 700 }} onClick={openExam}>Take the exam →</button>
+              )}
+            </div>
           </div>
         )
       })}
