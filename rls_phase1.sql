@@ -163,14 +163,18 @@ END $$;
 
 SELECT _apply_rls('settings', 'settings_read_anon', $b$
 FOR SELECT TO anon
-USING (key NOT IN ('admin_password','admin_email','super_admin_auth_id'))
+-- *api_key* / *secret* rows hidden too: anthropic_api_key was public until
+-- Nov 2026 (settings_secrets_lockdown.sql). Secrets go in Edge Function secrets.
+USING (key NOT IN ('admin_password','admin_email','super_admin_auth_id')
+       AND key NOT ILIKE '%api_key%' AND key NOT ILIKE '%secret%')
 $b$);
 
 -- Authenticated users may read super_admin_auth_id (it's only a UUID and the
 -- login flow compares it after signInWithPassword). Credentials stay hidden.
 SELECT _apply_rls('settings', 'settings_read_auth', $b$
 FOR SELECT TO authenticated
-USING (is_super_admin() OR key NOT IN ('admin_password','admin_email'))
+USING (is_super_admin() OR (key NOT IN ('admin_password','admin_email')
+       AND key NOT ILIKE '%api_key%' AND key NOT ILIKE '%secret%'))
 $b$);
 
 SELECT _apply_rls('settings', 'settings_write', $b$
