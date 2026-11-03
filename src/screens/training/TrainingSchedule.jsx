@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
+import { readExamFile } from '../../lib/examParser'
 
 async function sendTrainingEmail(userId, prefKey, subject, title, body) {
   if (!userId) return
@@ -510,66 +511,36 @@ export function UserTrainingSchedule({ session }) {
 // ══════════════════════════════════════════════════════════════
 // EXAM SYSTEM
 // ══════════════════════════════════════════════════════════════
-// ── PDF/Word Question Uploader (AI-powered) ──────────────────
+// ── PDF/Word Question Uploader — read in the browser, no AI (lib/examParser) ──
 function PdfQuestionUploader({ equipmentId, onImported }) {
   const { toast } = useAppStore()
   const [file, setFile] = useState(null)
   const [extracting, setExtracting] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [warnings, setWarnings] = useState([])
   const fileRef = useRef(null)
-
-  async function readFileText(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = e => resolve(e.target.result)
-      reader.onerror = reject
-      if (file.name.endsWith('.pdf')) {
-        // Read as base64 for PDF
-        reader.readAsDataURL(file)
-      } else {
-        reader.readAsText(file)
-      }
-    })
-  }
 
   async function extractQuestions() {
     if (!file) return
     setExtracting(true)
     try {
-      const fileContent = await readFileText(file)
-      const isBase64 = fileContent.startsWith('data:')
-
-      const messages = isBase64
-        ? [{ role: 'user', content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileContent.split(',')[1] } },
-            { type: 'text', text: 'Extract all exam questions from this document. Return ONLY a JSON array with no markdown. Each object must have: question (string), option_a, option_b, option_c, option_d (strings), correct_answer ("a","b","c", or "d"). If the correct answer is marked/highlighted, use it. If not, make your best guess based on context.' }
-          ]}]
-        : [{ role: 'user', content: `Extract all exam questions from this text. Return ONLY a JSON array with no markdown. Each object: { question, option_a, option_b, option_c, option_d, correct_answer }. Correct answer must be "a","b","c", or "d".
-
-Text:
-${fileContent.slice(0, 8000)}` }]
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages })
-      })
-      const data = await response.json()
-      const text = data.content?.map(c => c.text || '').join('') || ''
-      const clean = text.replace(/```json|```/g, '').trim()
-      const questions = JSON.parse(clean)
-      if (!Array.isArray(questions) || questions.length === 0) throw new Error('No questions found')
-      setPreview(questions)
-      toast(`Found ${questions.length} questions — review and import.`)
+      const { questions, warnings } = await readExamFile(file)
+      if (!questions.length) throw new Error('No questions found. Number each question (1. 2. 3.) and letter its options (A. B. C. D.).')
+      setPreview(questions); setWarnings(warnings)
+      toast(`Found ${questions.length} question${questions.length !== 1 ? 's' : ''} — check them, then import.`)
     } catch (e) {
       console.error(e)
-      toast('Could not extract questions. Make sure the file has numbered questions with A/B/C/D options.')
+      toast(e.message || 'Could not read the file.')
     }
     setExtracting(false)
   }
 
+  const setAnswer = (i, letter) => setPreview(p => p.map((q, j) => j === i ? { ...q, correct_answer: letter } : q))
+  const missing = (preview || []).filter(q => !q.correct_answer).length
+
   async function importQuestions() {
     if (!preview?.length) return
+    if (missing) { toast(`Pick the correct answer for ${missing} question${missing !== 1 ? 's' : ''} first.`); return }
     let count = 0
     for (let i = 0; i < preview.length; i++) {
       const q = preview[i]
@@ -590,18 +561,18 @@ ${fileContent.slice(0, 8000)}` }]
 
   return (
     <div>
-      <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" style={{ display: 'none' }}
-        onChange={e => { setFile(e.target.files[0]); setPreview(null) }} />
+      <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" style={{ display: 'none' }}
+        onChange={e => { setFile(e.target.files[0]); setPreview(null); setWarnings([]) }} />
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: preview ? 16 : 0 }}>
         <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
           📁 {file ? file.name : 'Choose file'}
         </button>
         {file && (
           <button className="btn btn-sm btn-primary" onClick={extractQuestions} disabled={extracting}>
-            {extracting ? '⏳ Extracting questions…' : '✨ Extract questions with AI'}
+            {extracting ? 'Reading the file…' : 'Read questions from file'}
           </button>
         )}
-        {file && <button className="btn btn-sm" onClick={() => { setFile(null); setPreview(null) }}>✕</button>}
+        {file && <button className="btn btn-sm" onClick={() => { setFile(null); setPreview(null); setWarnings([]) }}>✕</button>}
       </div>
 
       {preview && (
@@ -609,10 +580,23 @@ ${fileContent.slice(0, 8000)}` }]
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--accent)' }}>
             Preview — {preview.length} questions found
           </div>
+          {warnings.length > 0 && (
+            <div style={{ fontSize: 12, background: '#fef3c7', color: '#92400e', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+              {warnings.map((w, i) => <div key={i}>{w}</div>)}
+            </div>
+          )}
           <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
             {preview.map((q, i) => (
               <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: i < preview.length-1 ? '1px solid var(--surface2)' : 'none' }}>
-                <div style={{ fontWeight: 500, fontSize: 12, marginBottom: 4 }}>Q{i+1}: {q.question}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 500, fontSize: 12 }}>Q{i+1}: {q.question}</div>
+                  {/* The file's answer can be checked and changed before import */}
+                  <select value={q.correct_answer || ''} onChange={e => setAnswer(i, e.target.value)}
+                    style={{ width: 'auto', fontSize: 11, padding: '2px 6px', flexShrink: 0, borderColor: q.correct_answer ? 'var(--border)' : '#f59e0b', background: q.correct_answer ? undefined : '#fef3c7' }}>
+                    <option value="" disabled>Answer?</option>
+                    {['a','b','c','d'].filter(o => q[`option_${o}`]).map(o => <option key={o} value={o}>Answer: {o.toUpperCase()}{q[`option_${o}`] === 'True' || q[`option_${o}`] === 'False' ? ` (${q[`option_${o}`]})` : ''}</option>)}
+                  </select>
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--text2)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                   {['a','b','c','d'].map(opt => q[`option_${opt}`] && (
                     <div key={opt} style={{ color: q.correct_answer?.toLowerCase() === opt ? '#085041' : 'inherit', fontWeight: q.correct_answer?.toLowerCase() === opt ? 600 : 400 }}>
@@ -624,7 +608,7 @@ ${fileContent.slice(0, 8000)}` }]
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary btn-sm" onClick={importQuestions}>Import all {preview.length} questions</button>
+            <button className="btn btn-primary btn-sm" onClick={importQuestions} disabled={missing > 0} title={missing ? 'Pick the missing answers first' : ''}>Import all {preview.length} questions</button>
             <button className="btn btn-sm" onClick={() => setPreview(null)}>Cancel</button>
           </div>
         </div>
@@ -801,8 +785,9 @@ export function ExamTab({ session }) {
               <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>📄 Upload exam file (PDF or Word)</div>
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
-                  Upload a PDF or Word document with exam questions. The AI will extract and format them automatically.
-                  Format: numbered questions with A/B/C/D options and mark the correct answer.
+                  Upload a Word (.docx), PDF or text file. It is read here in your browser — no AI, nothing is sent anywhere.
+                  Number each question (1. 2. 3.) and letter its options (A. B. C. D.); True / False questions work too.
+                  Give the answer as "Answer: B" under the question, in an Answer Key at the end, or in bold. You can check and change every answer before importing.
                 </div>
                 <PdfQuestionUploader equipmentId={selectedEq} onImported={loadEquipmentData} />
               </div>

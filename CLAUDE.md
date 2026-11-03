@@ -2408,3 +2408,22 @@ to keep keys. **API keys go in Edge Function secrets and are used only
 server-side.** The floor plan "auto-detect zones", the booking photo
 cleanliness AI and the exam "Extract questions with AI" called Anthropic from
 the browser; they are off until rebuilt through an Edge Function.
+
+## Exam questions from a file — no AI (Nov 2026, both apps)
+
+Equipment SOP → Exam → **Upload exam file** reads .docx / .pdf / .txt IN THE
+BROWSER (`src/lib/examParser.js`): jszip for Word, pdfjs-dist for PDF, both
+lazy-loaded (both in the obfuscator's reservedStrings). Nothing is sent
+anywhere. It replaced "Extract questions with AI", which called Anthropic from
+the browser with no key and read .docx as plain text — it never worked.
+
+- `parseExamLines()` is pure and testable. Questions `1.` / `Q1)` / Word
+  auto-numbering; options `A.` / `a)` / `(A)` / Word auto-lettering;
+  `☐ True` / `☐ False` → options A / B. Answers: `Answer: B` under the
+  question, an **Answer Key** section at the end (`1. Answer: B`, `2. False`),
+  ✓ / `*` / `(correct)` on the option, an all-bold option, or ☑.
+- The preview has an answer picker per question; Import is blocked until
+  every question has one (a question with no answer used to import as A).
+- Old `.doc` is refused with "Save As .docx".
+- Symbols in its regexes are `\u` escapes on purpose.
+- Tested on `ictlab/EXAMs/AASHTO_T11_Washing_Quiz.docx` (5/5 correct).
