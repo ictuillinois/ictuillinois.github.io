@@ -2396,3 +2396,15 @@ never read as an exam that happened.
 - **Retraining due = `retrainingDueIds()` in lib/equipmentAccess.js**: last
   booking older than 3 months AND no (re)training in those 3 months. Booking
   looked at bookings only, so a logged retraining never lifted the lock.
+
+## Never store a secret in `settings` (Nov 2026)
+
+`settings` is readable signed-out (the sign-in page needs it). An
+`anthropic_api_key` row sat there from Sep 10 to Nov 2 2026, readable by
+anyone with the publishable key; it was revoked and deleted
+(`settings_secrets_lockdown.sql`). Both read policies now hide `*api_key*` /
+`*secret*` rows from everyone but the super admin — a safety net, not a place
+to keep keys. **API keys go in Edge Function secrets and are used only
+server-side.** The floor plan "auto-detect zones", the booking photo
+cleanliness AI and the exam "Extract questions with AI" called Anthropic from
+the browser; they are off until rebuilt through an Edge Function.
