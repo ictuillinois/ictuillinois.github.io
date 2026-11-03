@@ -799,6 +799,11 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   const [requestsKey, setRequestsKey] = useState(0)
   // Lab user only: instruments whose retraining is due (lib/equipmentAccess)
   const [retrainDueIds, setRetrainDueIds] = useState(new Set())
+  // Exam → training session flow (Nov 2026): instruments that have exam
+  // questions; the session whose "Skip the exam" box is open, and its reason.
+  const [examEqIds, setExamEqIds] = useState(new Set())
+  const [skipping, setSkipping] = useState(null)
+  const [skipReason, setSkipReason] = useState('')
   const [importing, setImporting] = useState(false)
   const equipImportRef = useRef(null)
   const [equipSubTab, setEquipSubTab] = useState('training')
@@ -854,7 +859,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
 
   async function load() {
     setLoading(true)
-    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas').eq('is_active', true).order('equipment_name')
+    let equipQuery = sb.from('equipment_inventory').select('id, equipment_name, nickname, category, location, lab_user_access, lab_user_hidden_areas, requires_exam').eq('is_active', true).order('equipment_name')
     if (session?.loginMode === 'solo') equipQuery = equipQuery.eq('login_mode', 'solo')
     else if (session?.organizationId) equipQuery = equipQuery.eq('organization_id', session.organizationId)
     equipQuery = forLabUsers(equipQuery, session, 'training')
@@ -881,6 +886,8 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
         .eq('user_id', session.userId).eq('status', 'confirmed')
       setRetrainDueIds(retrainingDueIds(bk || [], (rec || []).filter(r => String(r.user_id) === String(session.userId))))
     }
+    const { data: eqq } = await sb.from('equipment_exam_questions').select('equipment_id')
+    setExamEqIds(new Set((eqq || []).map(r => r.equipment_id)))
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
@@ -913,7 +920,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
         <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>Review:</span>
         {chip(!!prog?.watched_video, 'Video watched')}
         {chip(!!prog?.downloaded_sop, 'SOP downloaded')}
-        {chip(!!exam, exam ? `Exam passed (${Math.round(exam.score / exam.total * 100)}%)` : 'Exam passed')}
+        {chip(!!exam, 'Exam passed')}
         {!allDone && (
           <button onClick={async () => {
             const ids = labUsers.map(s => s.id)
@@ -1110,7 +1117,34 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     load(); onChanged?.(); toast('Record removed.')
   }
 
-  async function approveTraining({ userId, username, equipmentId, scheduleId, requestId }) {
+  // An instrument has an exam when it has questions and is not marked "exam
+  // not required". Without one, nothing can be passed, so nothing waits on it.
+  const hasExam = eq => !!eq && eq.requires_exam !== false && examEqIds.has(eq.id)
+  const sessionWhen = d => d ? new Date(d).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'date not set'
+  const firstName = u => (fullName(u) || '').split(' ')[0]
+
+  // Skip the exam: the lab user goes straight to the training session. Kept on
+  // the session (exam_skipped*); Confirm training done then saves the record as
+  // "Trained · exam skipped". Retraining still needs the exam.
+  async function skipExam(sched, u) {
+    const eq = equipment.find(e => e.id === sched.equipment_id)
+    const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
+    const patch = { exam_skipped: true, exam_skipped_by: session.username || 'Lab Manager', exam_skipped_at: new Date().toISOString(), exam_skip_reason: skipReason.trim() || null }
+    const { data, error } = await sb.from('training_schedule').update(patch).eq('id', sched.id).select('id')
+    if (error || !data?.length) {
+      toast(error && /exam_skip|schema cache/i.test(error.message) ? 'Skipping the exam needs exam_skip_setup.sql to be run in Supabase first.' : 'Could not skip the exam' + (error ? ': ' + error.message : ' — nothing was changed.'))
+      return
+    }
+    setTrainingSchedules(prev => prev.map(x => x.id === sched.id ? { ...x, ...patch } : x))
+    setSkipping(null); setSkipReason('')
+    const when = sessionWhen(sched.confirmed_date || sched.counter_date || sched.proposed_date)
+    const body = `${patch.exam_skipped_by} skipped the ${eqName} exam for you. Be at your training session on ${when}${sched.proposed_by ? ` with ${sched.proposed_by}` : ''}. After the training, it is confirmed and you can start booking.`
+    sb.from('notifications').insert({ user_id: u.id, type: 'exam_skipped', title: `Exam skipped: ${eqName}`, body, read: false })
+      .then(null, e => console.warn('[notify] insert failed:', e?.message || e))
+    toast(`Exam skipped — ${firstName(u)} goes straight to the training session`)
+  }
+
+  async function approveTraining({ userId, username, equipmentId, scheduleId, requestId, sched = null }) {
     const eq = equipment.find(e => e.id === equipmentId)
     const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
     const { error } = await sb.from('training_equipment').insert({
@@ -1118,6 +1152,10 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       trained_by: session.username || session.name || 'Lab Manager',
       trained_date: new Date().toISOString().split('T')[0],
       passed_exam: true,
+      ...(sched?.exam_skipped ? {
+        exam_waived: true, exam_waiver_kind: 'exam_skipped', exam_skip_reason: sched.exam_skip_reason || null,
+        exam_waived_by: sched.exam_skipped_by || session.username, exam_waived_at: sched.exam_skipped_at || new Date().toISOString(),
+      } : {}),
     })
     if (error) { toast('Error approving: ' + error.message); return }
     // Optimistic update — update local state immediately so the row disappears without waiting for re-fetch
@@ -1133,12 +1171,12 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     }
     sb.from('notifications').insert({
       user_id: userId, type: 'training_approved',
-      title: `Training approved: ${eqName}`,
-      body: `${session.username || 'Your lab manager'} approved your training. You can now book this equipment.`,
+      title: `Training confirmed: ${eqName}`,
+      body: `${session.username || 'Your lab manager'} confirmed your training. You can now book ${eqName}.`,
       read: false,
     }).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     setRequestsKey(k => k + 1)
-    onChanged?.(); toast(`Training approved — ${username} can now book ${eqName}`)
+    onChanged?.(); toast(`Training confirmed — ${username} can now book ${eqName}`)
     load()
   }
 
@@ -1342,12 +1380,19 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                               <td>{rec.trained_by || '—'}</td>
                               <td>
                                 {rec.exam_waived ? (
-                                  // Access given without the exam (trained outside the app) — shown as
-                                  // what it is, never as an exam that was passed.
+                                  // No exam passed — shown as what it is, never as a passed exam:
+                                  // trained outside the app, or the exam skipped before the session.
+                                  rec.exam_waiver_kind === 'exam_skipped' ? (
+                                    <span title={`Exam skipped by ${rec.exam_waived_by || 'a lab manager'}${rec.exam_skip_reason ? ` — ${rec.exam_skip_reason}` : ''}. Trained in a session; retraining will need the exam.`}
+                                      style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                      ✓ Trained · exam skipped by {rec.exam_waived_by || 'a lab manager'}
+                                    </span>
+                                  ) : (
                                   <span title={`Access given by ${rec.exam_waived_by || 'a lab manager'}${rec.exam_waived_at ? ' on ' + new Date(rec.exam_waived_at).toLocaleDateString() : ''}. No exam taken; retraining will need the exam.`}
                                     style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', padding: '2px 8px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
                                     ✓ Access given · trained before, no exam
                                   </span>
+                                  )
                                 ) : canManage ? (
                                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 0 }}>
                                     <input type="checkbox" checked={rec.passed_exam || false} onChange={() => togglePassed(rec)} style={{ width: 'auto' }} />
@@ -1407,49 +1452,92 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                       })}
                       {pendingScheds.map(sched => {
                         const eq = equipment.find(e => e.id === sched.equipment_id)
+                        const eqName = eq?.equipment_name || eq?.nickname || 'this equipment'
                         const isConfirmed = sched.status === 'confirmed'
                         const isCountered = sched.status === 'countered'
-                        const bg = isConfirmed ? '#E1F5EE' : '#e0f2fe'
-                        const color = isConfirmed ? '#085041' : '#0369a1'
-                        const label = isConfirmed ? '✓ Training confirmed' : isCountered ? '🔄 Time negotiating' : '📅 Date proposed'
-                        const dateVal = isConfirmed ? sched.confirmed_date : sched.proposed_date
+                        const dateVal = isConfirmed ? sched.confirmed_date : isCountered ? sched.counter_date : sched.proposed_date
+                        const exam = getPassedExam(u.id, sched.equipment_id)
+                        const needsExam = hasExam(eq)
+                        // passed / skipped / no exam on this instrument / still waiting
+                        const examState = exam ? 'passed' : sched.exam_skipped ? 'skipped' : !needsExam ? 'none' : 'waiting'
+                        const canConfirm = examState !== 'waiting'
+                        const tone = examState === 'waiting' ? { bg: '#fef3c7', fg: '#92400e', line: '#fcd34d' }
+                          : examState === 'skipped' ? { bg: '#e0f2fe', fg: '#0369a1', line: '#7dd3fc' }
+                          : { bg: '#E1F5EE', fg: '#085041', line: '#9FE1CB' }
+                        const sessionWord = isConfirmed ? 'session booked' : isCountered ? 'time being agreed' : 'date proposed'
+                        const label = examState === 'passed' ? `🎓 Exam passed · ${sessionWord}`
+                          : examState === 'skipped' ? `Exam skipped · ${sessionWord}`
+                          : examState === 'none' ? (isConfirmed ? '✓ Session booked' : isCountered ? '🔄 Time negotiating' : '📅 Date proposed')
+                          : '⏳ Exam not passed yet'
+                        const when = sessionWhen(dateVal)
+                        const trainer = sched.proposed_by || 'the lab manager'
                         const goToHub = () => { localStorage.setItem('selectEquipment', sched.equipment_id); setScreen('equipmenthub') }
                         return (
                           <React.Fragment key={`sched-${sched.id}`}>
-                          <tr style={{ background: bg }}>
+                          <tr style={{ background: tone.bg }}>
                             <td style={{ fontWeight: 500 }}>
                               <button onClick={goToHub} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', fontSize: 'inherit' }}>
                                 {eq?.equipment_name || eq?.nickname || '—'}
                               </button>
                             </td>
-                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? new Date(dateVal).toLocaleDateString() : '—'}</td>
+                            <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? when : '—'}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>{sched.proposed_by || '—'}</td>
                             <td>
-                              <button onClick={goToHub} style={{ fontSize: 11, background: bg, color, padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: `1px solid ${isConfirmed ? '#9FE1CB' : '#7dd3fc'}`, cursor: 'pointer' }} title="Click to open equipment page">
-                                {label} →
-                              </button>
+                              <span style={{ fontSize: 11, background: tone.bg, color: tone.fg, padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: `1px solid ${tone.line}`, whiteSpace: 'nowrap' }}>{label}</span>
                             </td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             {canManage && (
                               <td>
                                 {isConfirmed && (
-                                  <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}
-                                    onClick={() => approveTraining({ userId: u.id, username: fullName(u), equipmentId: sched.equipment_id, scheduleId: sched.id })}>
-                                    ✓ Approve
+                                  <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap', opacity: canConfirm ? 1 : 0.5 }} disabled={!canConfirm}
+                                    title={canConfirm ? 'Confirm once the training session has happened' : `${firstName(u)} has to pass the exam first, or skip it`}
+                                    onClick={() => approveTraining({ userId: u.id, username: fullName(u), equipmentId: sched.equipment_id, scheduleId: sched.id, sched })}>
+                                    ✓ Confirm training done
                                   </button>
                                 )}
                               </td>
                             )}
                           </tr>
                           {canManage && (
-                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, sched.equipment_id)}</td></tr>
+                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 14px', fontSize: 12, background: tone.bg, color: tone.fg, borderTop: '1px dashed var(--border)' }}>
+                                <span>
+                                  {examState === 'passed' && <><b>{firstName(u)} passed the exam on {new Date(exam.created_at).toLocaleDateString()}.</b> Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
+                                  {examState === 'skipped' && <><b>Exam skipped by {sched.exam_skipped_by || 'a lab manager'}{sched.exam_skip_reason ? ` (${sched.exam_skip_reason})` : ''}.</b> Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
+                                  {examState === 'none' && <>No exam for this equipment. Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
+                                  {examState === 'waiting' && <><b>Waiting for the exam.</b> {firstName(u)} has to pass the {eqName} exam before the training can be confirmed.</>}
+                                </span>
+                                {examState === 'waiting' && skipping !== sched.id && (
+                                  <button className="btn btn-sm" style={{ fontSize: 11, border: '1px solid #7dd3fc', background: '#e0f2fe', color: '#0369a1' }}
+                                    onClick={() => { setSkipping(sched.id); setSkipReason('') }}>Skip the exam → training session</button>
+                                )}
+                              </div>
+                              {skipping === sched.id && (
+                                <div style={{ background: '#e0f2fe', borderTop: '1px solid #7dd3fc', padding: '12px 14px', display: 'grid', gap: 8, fontSize: 13 }}>
+                                  <b style={{ color: '#0369a1' }}>Skip the {eqName} exam for {firstName(u)}?</b>
+                                  <span style={{ color: 'var(--text2)' }}>{firstName(u)} goes straight to the training session ({when} with {trainer}). After the session you confirm the training as usual.</span>
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--text3)', fontSize: 12 }}>Reason (optional):</span>
+                                    {['Could not pass', 'Did not attempt'].map(r => (
+                                      <button key={r} className="btn btn-sm" style={{ fontSize: 11, ...(skipReason === r ? { borderColor: '#0369a1', color: '#0369a1', fontWeight: 600 } : {}) }}
+                                        onClick={() => setSkipReason(skipReason === r ? '' : r)}>{r}</button>
+                                    ))}
+                                    <input value={['Could not pass', 'Did not attempt'].includes(skipReason) ? '' : skipReason} onChange={e => setSkipReason(e.target.value)}
+                                      placeholder="Other…" maxLength={80} style={{ width: 180, fontSize: 12, padding: '4px 8px' }} />
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="btn btn-sm btn-primary" onClick={() => skipExam(sched, u)}>Skip the exam</button>
+                                    <button className="btn btn-sm" onClick={() => setSkipping(null)}>Cancel</button>
+                                  </div>
+                                </div>
+                              )}
+                            </td></tr>
                           )}
                           </React.Fragment>
                         )
                       })}
                       {examApprovalsFiltered.map(exam => {
                         const eq = equipment.find(e => e.id === exam.equipment_id)
-                        const pct = Math.round(exam.score / exam.total * 100)
                         return (
                           <React.Fragment key={`exam-${exam.equipment_id}`}>
                           <tr style={{ background: '#E1F5EE' }}>
@@ -1458,7 +1546,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>Self</td>
                             <td>
                               <span style={{ fontSize: 11, background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: 10, fontWeight: 600, border: '1px solid #9FE1CB' }}>
-                                🎓 Exam passed ({pct}%)
+                                🎓 Exam passed
                               </span>
                             </td>
                             <td style={{ color: 'var(--text3)' }}>—</td>

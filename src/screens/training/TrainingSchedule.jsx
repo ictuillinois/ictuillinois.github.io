@@ -617,6 +617,45 @@ function PdfQuestionUploader({ equipmentId, onImported }) {
   )
 }
 
+// "Wednesday, November 5, 2026 at 10:00 AM with Greg Renshaw"
+function sessionDate(s) { return s?.confirmed_date || s?.counter_date || s?.proposed_date }
+function sessionLine(s) {
+  const d = sessionDate(s)
+  if (!d) return null
+  const t = new Date(d)
+  return `${t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} at ${t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}${s.proposed_by ? ` with ${s.proposed_by}` : ''}`
+}
+
+// After passing: when and with whom the training session is, and what happens
+// next. Without a session yet, says a date will be proposed.
+function SessionBox({ s, eqName, compact = false }) {
+  const d = sessionDate(s)
+  const t = d ? new Date(d) : null
+  const trainer = s?.proposed_by || 'your lab manager'
+  const row = (k, v) => v ? <><dt style={{ color: 'var(--text3)', fontSize: 11, letterSpacing: '.4px', textTransform: 'uppercase', paddingTop: 2 }}>{k}</dt><dd style={{ margin: 0, fontWeight: 600 }}>{v}</dd></> : null
+  return (
+    <div style={{ textAlign: 'left', maxWidth: 520, margin: compact ? 0 : '0 auto 20px', background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 12, padding: '14px 16px', display: 'grid', gap: 8, fontSize: 14, color: 'var(--text)' }}>
+      {!compact && <div style={{ fontWeight: 600, color: '#085041' }}>You passed the {eqName} exam.</div>}
+      <div style={{ fontWeight: 700, color: '#085041', fontSize: 13 }}>
+        {t ? (s.status === 'confirmed' ? 'Your training session' : 'Your training session (time still being agreed)') : 'Your training session'}
+      </div>
+      {t ? (
+        <dl style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '4px 10px', margin: 0 }}>
+          {row('Day', t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))}
+          {row('Time', t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))}
+          {row('With', s.proposed_by)}
+          {row('Where', s.notes)}
+        </dl>
+      ) : <div style={{ fontSize: 13, color: 'var(--text2)' }}>Your lab manager will propose a training date. You will be notified.</div>}
+      <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text2)' }}>
+        {t && <li>Be there on time for your training session.</li>}
+        <li>After the training, {trainer} confirms it.</li>
+        <li>You can then start booking the {eqName}.</li>
+      </ol>
+    </div>
+  )
+}
+
 export function ExamTab({ session }) {
   const { toast } = useAppStore()
   const [equipment, setEquipment] = useState([])
@@ -627,6 +666,9 @@ export function ExamTab({ session }) {
   const [examMode, setExamMode] = useState(false)
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(null)
+  // The lab user's training session for this instrument (proposed / being
+  // agreed / confirmed), shown with the congratulations after passing.
+  const [mySession, setMySession] = useState(null)
   const [editQuestion, setEditQuestion] = useState(null)
   const [newQ, setNewQ] = useState({ question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a' })
   const [progress, setProgress] = useState(null)
@@ -636,6 +678,18 @@ export function ExamTab({ session }) {
 
   useEffect(() => { loadEquipment() }, [])
   useEffect(() => { if (selectedEq) loadEquipmentData() }, [selectedEq])
+  useEffect(() => { if (selectedEq) loadMySession() }, [selectedEq])
+
+  async function loadMySession() {
+    setMySession(null)
+    if (!session?.userId || canEdit(session)) return
+    const { data } = await sb.from('training_schedule').select('*')
+      .eq('user_id', session.userId).eq('equipment_id', selectedEq)
+      .in('status', ['proposed', 'confirmed', 'countered'])
+      .order('created_at', { ascending: false }).limit(1)
+    setMySession(data?.[0] || null)
+    return data?.[0] || null
+  }
 
   async function loadEquipment() {
     setLoading(true)
@@ -719,15 +773,26 @@ export function ExamTab({ session }) {
       const orgId = session?.organizationId
       const eq = equipment.find(e => e.id === selectedEq)
       const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
+      // The session (day, time, trainer) goes into both messages. The grade
+      // does not go to managers: the lab user is told it stays private.
+      const sess = await loadMySession()
+      const when = sess ? sessionLine(sess) : null
+      const userBody = when
+        ? `Be at your training session on ${when}. After the training, ${sess.proposed_by || 'your lab manager'} confirms it and you can start booking.`
+        : 'Your lab manager will propose a training date. After the training you can start booking.'
+      sb.from('notifications').insert({ user_id: session.userId, type: 'exam_passed', title: `You passed the ${eqName} exam`, body: userBody, read: false })
+        .then(null, e => console.warn('[notify] insert failed:', e?.message || e))
+      sendTrainingEmail(session.userId, 'training_approved', `You passed the ${eqName} exam`, 'Congratulations — exam passed', userBody)
       if (orgId) {
-        const checklist = `Video watched: ${progress?.watched_video ? 'Yes' : 'No'} · SOP downloaded: ${progress?.downloaded_sop ? 'Yes' : 'No'} · Exam: Passed (${score}/${questions.length})`
         sb.from('users').select('id').eq('organization_id', orgId).in('role', ['user', 'admin']).eq('is_active', true)
           .then(({ data: managers }) => {
             if (managers?.length) {
               sb.from('notifications').insert(managers.map(m => ({
                 user_id: m.id, type: 'training_request',
                 title: `${session.username} passed the exam for ${eqName}`,
-                body: `${checklist}. Review and approve in Training Records → Equipment tab.`,
+                body: when
+                  ? `Training session ${when}. After the session, confirm the training in Training Records → Equipment.`
+                  : 'No training date yet — propose one in Training Records → Equipment, then confirm the training after the session.',
                 read: false,
               }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
             }
@@ -926,6 +991,9 @@ export function ExamTab({ session }) {
                     {latestResult.passed ? '✓ Exam passed' : '✕ Exam not passed'} — {latestResult.score}/{latestResult.total} ({Math.round(latestResult.score/latestResult.total*100)}%)
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>Taken {new Date(latestResult.created_at).toLocaleDateString()}</div>
+                  {latestResult.passed && !isAdminLabManager && mySession && (
+                    <div style={{ marginTop: 10 }}><SessionBox s={mySession} eqName={equipment.find(e => e.id === selectedEq)?.equipment_name || 'this equipment'} compact /></div>
+                  )}
                   {latestResult.passed && (
                     <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8, fontStyle: 'italic' }}>
                       Your exam grade is for your information only and is not visible to your lab manager.
@@ -964,7 +1032,7 @@ export function ExamTab({ session }) {
                 <div style={{ textAlign: 'center', padding: 32 }}>
                   <div style={{ fontSize: 56, marginBottom: 12 }}>{submitted.passed ? '🎉' : '📚'}</div>
                   <div style={{ fontWeight: 700, fontSize: 24, color: submitted.passed ? '#085041' : '#a32d2d', marginBottom: 12 }}>
-                    {submitted.passed ? 'Exam Passed!' : 'Not Passed'}
+                    {submitted.passed ? `Congratulations, ${(session.username || '').split(' ')[0]}!` : 'Not Passed'}
                   </div>
                   {/* Grade circle */}
                   <div style={{ width: 100, height: 100, borderRadius: '50%', background: submitted.passed ? '#E1F5EE' : '#fcebeb', border: `4px solid ${submitted.passed ? '#085041' : '#a32d2d'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
@@ -974,9 +1042,9 @@ export function ExamTab({ session }) {
                   <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 6 }}>
                     Pass mark: 70% · Your score: {Math.round(submitted.score/submitted.total*100)}%
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: submitted.passed ? 8 : 24 }}>
-                    {submitted.passed ? 'A lab manager will review and approve your training.' : 'Review the SOP and training materials, then try again.'}
-                  </div>
+                  {submitted.passed
+                    ? <SessionBox s={mySession} eqName={equipment.find(e => e.id === selectedEq)?.equipment_name || 'this equipment'} />
+                    : <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>Review the SOP and training materials, then try again.</div>}
                   {submitted.passed && (
                     <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', marginBottom: 24 }}>
                       Your grade is for your information only and will not be shown to your lab manager.

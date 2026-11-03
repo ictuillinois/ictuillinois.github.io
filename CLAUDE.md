@@ -2427,3 +2427,26 @@ the browser with no key and read .docx as plain text — it never worked.
 - Old `.doc` is refused with "Save As .docx".
 - Symbols in its regexes are `\u` escapes on purpose.
 - Tested on `ictlab/EXAMs/AASHTO_T11_Washing_Quiz.docx` (5/5 correct).
+
+## Exam passed → training session → confirm (Nov 2026, both apps)
+
+- **Lab user, after passing** (ExamTab, TrainingSchedule.jsx): "Congratulations,
+  {name}!" + `SessionBox` — day, time, lab manager and place of their training
+  session (their latest proposed / countered / confirmed `training_schedule`
+  row), then "be there → {manager} confirms → you can book". No session yet →
+  "your lab manager will propose a date". Bell `exam_passed` + opt-in email.
+- **Lab manager** (EquipmentTraining schedule rows): status from the exam —
+  🎓 Exam passed / Exam skipped / no exam on this instrument / ⏳ Exam not
+  passed yet — with a message line under each. **Approve is now "✓ Confirm
+  training done"**, locked while the exam is still owed.
+- **Skip the exam → training session** (optional reason) sets
+  `training_schedule.exam_skipped*`; Confirm then saves the record with
+  `exam_waived`, `exam_waiver_kind = 'exam_skipped'` → chip "Trained · exam
+  skipped by …". `exam_waiver_kind` NULL = the older "trained before" waiver.
+  Bell `exam_skipped` to the lab user. Retraining still needs the exam.
+- "Has an exam" = `requires_exam !== false` AND it has questions; without one
+  nothing waits on an exam.
+- **The grade is never shown to managers** (chips, bell) — the lab user is
+  told it is private.
+- SQL: `exam_skip_setup.sql` (both projects; guards the skip columns on
+  training_schedule, which lab users update when agreeing a time).

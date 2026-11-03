@@ -93,7 +93,9 @@ BEGIN
     ('lab_safety_progress',     'completed,approved_by,approved_at',                 '{"completed": false}'),
     ('vehicle_agreements',      'approved_by,approved_by_name,approved_at',          '{}'),
     -- exam waiver columns only (training_exam_waiver.sql adds them); passed_exam is not guarded
-    ('training_equipment',      'exam_waived,exam_waived_by,exam_waived_at',         '{"exam_waived": false}')
+    ('training_equipment',      'exam_waived,exam_waived_by,exam_waived_at,exam_waiver_kind,exam_skip_reason', '{"exam_waived": false}'),
+    -- exam skipped by a lab manager (exam_skip_setup.sql); lab users update their own sessions
+    ('training_schedule',       'exam_skipped,exam_skipped_by,exam_skipped_at,exam_skip_reason', '{"exam_skipped": false}')
   ) AS v(tbl, cols, fresh) LOOP
     IF to_regclass('public.' || g.tbl) IS NULL THEN CONTINUE; END IF;
     EXECUTE format('DROP TRIGGER IF EXISTS guard_training_approval_trg ON %I', g.tbl);

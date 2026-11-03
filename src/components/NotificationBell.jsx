@@ -105,6 +105,10 @@ export default function NotificationBell() {
       setSidebarSubTab('locker')
     } else if (['training_submitted', 'training_approved', 'training_expiring', 'safety_step_submitted', 'safety_skip_request'].includes(n.type)) {
       setScreen('training')
+    } else if (['exam_passed', 'exam_skipped'].includes(n.type)) {
+      // The lab user's own exam news: their Equipment training list
+      setScreen('training')
+      setSidebarSubTab('equipment')
     } else if (['training_request', 'training_confirmed'].includes(n.type)) {
       // A lab user asked for equipment training, accepted or countered a
       // training time, or passed an exam. The title starts with their name
@@ -160,7 +164,7 @@ export default function NotificationBell() {
               const title = n._src === 'booking' ? n.message : n.title
               const icon = n._src === 'booking'
                 ? (BOOKING_ICONS[n.type] || '📅')
-                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', backup: '💾', maintenance_reminder: '🔧', storage_moved: '📦', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️', vehicle_request: '🚗', vehicle_form: '🚗', vehicle_decision: '🚗', training_submitted: '🎓', training_approved: '✅', safety_step_submitted: '🦺', safety_skip_request: '⚠️' }[n.type] || '🔔')
+                : ({ new_message: '💬', task_comment: '💬', task_assigned: '📋', meeting_added: '📅', team_invite: '🤝', backup: '💾', maintenance_reminder: '🔧', storage_moved: '📦', locker_request: '🗄️', locker_assigned: '🗄️', locker_declined: '🗄️', vehicle_request: '🚗', vehicle_form: '🚗', vehicle_decision: '🚗', training_submitted: '🎓', training_approved: '✅', exam_passed: '🎓', exam_skipped: '⏭️', safety_step_submitted: '🦺', safety_skip_request: '⚠️' }[n.type] || '🔔')
               return (
                 <div key={`${n._src}_${n.id}`} onClick={() => handleClick(n)}
                   style={{ display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--surface2)', cursor: 'pointer', background: n.read ? 'transparent' : '#f0f4ff', transition: 'background 0.15s' }}
