@@ -52,6 +52,10 @@ function EquipmentInfo({ equipment, session }) {
   const [sop, setSop] = useState(null)
   const [loading, setLoading] = useState(true)
   const [access, setAccess] = useState(null)
+  // Lab user not trained yet but in training (a request or a session): the
+  // videos and SOP are what they must study before the exam, so they open, and
+  // a banner says what to do. { sched, examPassed, hasExam } or null.
+  const [inTraining, setInTraining] = useState(null)
   const [editDetails, setEditDetails] = useState(false)
   const [detailsForm, setDetailsForm] = useState({ photo_url: '', website_url: '', notes: '' })
   const [showVideoForm, setShowVideoForm] = useState(false)
@@ -77,11 +81,15 @@ function EquipmentInfo({ equipment, session }) {
     if (isLabUser) {
       const { data: trainRecs } = await sb.from('training_equipment').select('passed_exam').eq('user_id', session.userId).eq('equipment_id', equipment.id)
       const hasPassed = trainRecs?.some(r => r.passed_exam)
+      setInTraining(null)
       if (!hasPassed) {
         const { data: tempRec } = await sb.from('equipment_temp_access').select('*').eq('user_id', session.userId).eq('equipment_id', equipment.id).maybeSingle()
         const tempValid = tempRec && new Date(tempRec.expires_at) > new Date()
-        setAccess(tempValid)
-        if (!tempValid) { setLoading(false); return }
+        const info = await trainingInfo(session.userId, equipment.id)
+        const studying = !!info
+        setInTraining(info)
+        setAccess(tempValid || studying)
+        if (!tempValid && !studying) { setLoading(false); return }
       } else { setAccess(true) }
     } else { setAccess(true) }
 
@@ -174,6 +182,8 @@ function EquipmentInfo({ equipment, session }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+      {inTraining && !canEdit(session) && <InTrainingBanner info={inTraining} equipment={equipment} />}
+
       {/* Photo + basic info */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -225,7 +235,7 @@ function EquipmentInfo({ equipment, session }) {
         </div>
         {restrictedContent ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', color: 'var(--text3)', fontSize: 13 }}>
-            <span style={{ fontSize: 20 }}>🔒</span> Available after completing equipment training or with temporary access from ICT-RE.
+            <span style={{ fontSize: 20 }}>🔒</span> Opens when you request training for this equipment (Training Records → Equipment → Request Training), or with temporary access from ICT-RE.
           </div>
         ) : (
           <div>
@@ -269,7 +279,7 @@ function EquipmentInfo({ equipment, session }) {
         </div>
         {restrictedContent ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', color: 'var(--text3)', fontSize: 13 }}>
-            <span style={{ fontSize: 20 }}>🔒</span> Available after completing equipment training or with temporary access from ICT-RE.
+            <span style={{ fontSize: 20 }}>🔒</span> Opens when you request training for this equipment (Training Records → Equipment → Request Training), or with temporary access from ICT-RE.
           </div>
         ) : (
           <div>
@@ -362,13 +372,71 @@ function EquipmentInfo({ equipment, session }) {
       {!restrictedContent && <SOPNotes equipment={equipment} session={session} />}
 
       {/* Exam CTA */}
-      {!restrictedContent && !canEdit(session) && (
+      {!restrictedContent && !canEdit(session) && !(inTraining && (inTraining.examPassed || !inTraining.hasExam || inTraining.sched?.exam_skipped)) && (
         <div className="card" style={{ textAlign: 'center', padding: 32, background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', border: '2px solid var(--accent)' }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>📝</div>
           <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Ready to take the exam?</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Once you have watched the training videos and reviewed the SOP,<br />start the exam for <strong>{equipment.equipment_name || equipment.nickname}</strong>.</div>
           <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={() => { localStorage.setItem('examEquipment', equipment.id); useAppStore.getState().setScreen('training') }}>Start Exam →</button>
         </div>
+      )}
+    </div>
+  )
+}
+
+// A lab user's open training on this instrument: a waiting request or a
+// proposed / agreed / confirmed session. null = not in training.
+async function trainingInfo(userId, equipmentId) {
+  const [{ data: scheds }, { data: reqs }, { data: passedExam }, { data: qs }, { data: eqRow }] = await Promise.all([
+    sb.from('training_schedule').select('*').eq('user_id', userId).eq('equipment_id', equipmentId)
+      .in('status', ['proposed', 'confirmed', 'countered']).order('created_at', { ascending: false }).limit(1),
+    sb.from('retraining_requests').select('id').eq('user_id', userId).eq('equipment_id', equipmentId).eq('status', 'pending').limit(1),
+    sb.from('equipment_exam_results').select('id').eq('user_id', userId).eq('equipment_id', equipmentId).eq('passed', true).limit(1),
+    sb.from('equipment_exam_questions').select('id').eq('equipment_id', equipmentId).limit(1),
+    sb.from('equipment_inventory').select('requires_exam').eq('id', equipmentId).maybeSingle(),
+  ])
+  if (!scheds?.length && !reqs?.length) return null
+  return { sched: scheds?.[0] || null, examPassed: !!passedExam?.length, hasExam: !!qs?.length && eqRow?.requires_exam !== false }
+}
+
+// Top of the equipment page while a lab user is in training: when the session
+// is, and the order — videos, SOP, then the exam BEFORE the session.
+function InTrainingBanner({ info, equipment }) {
+  const s = info.sched
+  const d = s ? (s.confirmed_date || s.counter_date || s.proposed_date) : null
+  const when = d ? new Date(d).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
+  const examState = !info.hasExam ? 'none' : info.examPassed ? 'passed' : s?.exam_skipped ? 'skipped' : 'todo'
+  const name = equipment.equipment_name || equipment.nickname
+  const openExam = () => {
+    localStorage.setItem('examEquipment', equipment.id)
+    const st = useAppStore.getState(); st.setScreen('training'); st.setSidebarSubTab('exam')
+  }
+  const step = (n, done, text, sub) => (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <span style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
+        background: done ? '#085041' : '#fff', color: done ? '#fff' : '#085041', border: '1.5px solid #085041' }}>{done ? '✓' : n}</span>
+      <span style={{ fontSize: 14, paddingTop: 2 }}><b>{text}</b>{sub && <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)' }}>{sub}</span>}</span>
+    </div>
+  )
+  return (
+    <div className="card" style={{ border: '2px solid var(--accent)', background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', display: 'grid', gap: 12 }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 17, color: '#085041' }}>📋 Your training on {name}</div>
+        <div style={{ fontSize: 13, color: '#085041', marginTop: 2 }}>
+          {when ? <>Training session: <b>{when}</b>{s.proposed_by ? <> with <b>{s.proposed_by}</b></> : null}{s.status !== 'confirmed' ? ' (time still being agreed)' : ''}</>
+            : 'Your lab manager will propose a training date. Use the time to study.'}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {step(1, false, 'Watch the training videos', 'Below on this page')}
+        {step(2, false, 'Read the SOP', 'Below on this page')}
+        {examState !== 'none' && step(3, examState !== 'todo',
+          examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it' : 'Take the exam — before your training session',
+          examState === 'todo' ? 'You need 70% to pass and can retake it. Your training cannot be confirmed without it.' : null)}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text3)' }}>After the session, your lab manager confirms the training and you can start booking.</div>
+      {examState === 'todo' && (
+        <div><button className="btn btn-primary" style={{ fontWeight: 700, fontSize: 15, padding: '10px 24px' }} onClick={openExam}>📝 Take the exam →</button></div>
       )}
     </div>
   )

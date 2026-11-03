@@ -2450,3 +2450,15 @@ the browser with no key and read .docx as plain text — it never worked.
   told it is private.
 - SQL: `exam_skip_setup.sql` (both projects; guards the skip columns on
   training_schedule, which lab users update when agreeing a time).
+
+## Lab users in training can study before the session (Nov 2026, both apps)
+
+Equipment SOP locked the videos and SOP for any lab user without a passed
+training record (unless they had temporary access) — yet the training flow
+asks them to study those BEFORE the exam and the session. Now
+`trainingInfo()` (EquipmentHub.jsx) opens them for a lab user with a waiting
+request or a proposed / agreed / confirmed session on that instrument, and
+`InTrainingBanner` at the top says the order: videos → SOP → exam before the
+session (with **Take the exam →**), plus the session day / time / lab manager.
+The bottom "Ready to take the exam?" card hides once the exam is passed,
+skipped or not needed. The exam page's checklist has **Open the videos & SOP →**.

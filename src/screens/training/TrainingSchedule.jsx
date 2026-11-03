@@ -974,7 +974,13 @@ export function ExamTab({ session }) {
                   ) : (
                   <>
                   <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>
-                    Confirm you have reviewed all training materials for <strong>{equipment.find(e => e.id === selectedEq)?.equipment_name || equipment.find(e => e.id === selectedEq)?.nickname}</strong>.
+                    Watch the training videos and read the SOP for <strong>{equipment.find(e => e.id === selectedEq)?.equipment_name || equipment.find(e => e.id === selectedEq)?.nickname}</strong>, tick both below, then take the exam — <b>before your training session</b>.
+                  </div>
+                  <div style={{ marginTop: -8, marginBottom: 16 }}>
+                    <button className="btn btn-primary btn-sm" style={{ fontWeight: 700 }}
+                      onClick={() => { localStorage.setItem('selectEquipment', selectedEq); useAppStore.getState().setScreen('equipmenthub') }}>
+                      🎦 Open the videos & SOP →
+                    </button>
                   </div>
 
                   {/* Checklist items */}
