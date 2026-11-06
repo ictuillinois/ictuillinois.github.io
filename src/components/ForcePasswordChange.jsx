@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { sb } from '../lib/supabase'
 import { PasswordStrengthHint } from './PasswordStrengthHint'
-import { passwordError } from '../lib/passwordPolicy'
+import { passwordError, breachedPasswordError } from '../lib/passwordPolicy'
 import { IconKey, IconEye, IconEyeOff } from './Icons'
 
 export default function ForcePasswordChange() {
@@ -19,6 +19,7 @@ export default function ForcePasswordChange() {
     const perr = passwordError(next)
     if (perr)             { setError(perr); return }
     if (next !== confirm) { setError('Passwords do not match.'); return }
+    { const b = await breachedPasswordError(next); if (b) { setError(b); return } }
     setLoading(true)
 
     const { error: updateErr } = await sb.auth.updateUser({ password: next })

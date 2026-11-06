@@ -2462,3 +2462,16 @@ request or a proposed / agreed / confirmed session on that instrument, and
 session (with **Take the exam →**), plus the session day / time / lab manager.
 The bottom "Ready to take the exam?" card hides once the exam is passed,
 skipped or not needed. The exam page's checklist has **Open the videos & SOP →**.
+
+## Leaked passwords are refused — in the app (Nov 2026, both apps)
+
+Supabase's "Prevent use of leaked passwords" is Pro-plan only, so
+`breachedPasswordError()` (src/lib/passwordPolicy.js) asks Have I Been Pwned's
+range API itself: only the first 5 hex characters of the SHA-1 leave the
+browser, with padding. Called after `passwordError()` wherever a person picks
+their own password — ForcePasswordChange, ResetPassword, Profile's three
+password forms, LabHive's solo sign-up. Fails OPEN (4 s timeout): a slow or
+unreachable service never blocks a password change. Admin-set temporary
+passwords are not checked — the first-login change is. Supabase security
+advisor otherwise clean (Nov 6 2026): the SECURITY DEFINER warnings are the RLS
+helpers and caller-checked account RPCs, left on purpose.
