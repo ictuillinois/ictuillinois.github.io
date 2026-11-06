@@ -20,17 +20,20 @@ This file applies to every session working on the `labhive` project. Read it in 
 
 ### URLs & deployment
 - **Local dev:** `http://localhost:5174/` | Admin: `http://localhost:5174/admin`
-- **Production:** `https://labhive.app` | Admin: `https://labhive.app/admin`
-- **Git repo:** `https://github.com/mtt999/ilab`
+- **Production:** `https://ictlab.labhive.app` | Admin: `https://ictlab.labhive.app/admin`
+- **Git repo:** `https://github.com/ictuillinois/ictuillinois.github.io` (LabHive is a separate repo: `mtt999/labhive`)
+- Hosting: **Cloudflare Pages** project `ictlab` — `.github/workflows/deploy.yml` builds and deploys on every push to `main`. GitHub Pages also publishes `docs/` at `ictuillinois.github.io`, but the custom domain points at Cloudflare.
 - Vite base: `/` (both web and mobile — custom domain serves from root)
 - Build output: `docs/` (web) | `dist/` (mobile)
-- CNAME: `labhive.app` (recreated by post-build script on every build)
+- No CNAME file (the custom domain is set in Cloudflare Pages, not GitHub Pages)
 
 **Build & deploy (web):**
 ```bash
 npm run build   # builds to docs/, postbuild recreates docs/admin/index.html
-git add docs/ && git commit -m "..." && git push
+git add docs/ && git commit -m "..." && git push   # the push triggers the Cloudflare deploy
 ```
+Check deploys and the backup workflows with `gh run list` (gh is in `~/.local/bin`;
+its login is in the macOS keychain, so it must run outside the Bash sandbox).
 
 **Mobile build:**
 ```bash
@@ -894,9 +897,9 @@ chunk 404s after deploys — do not remove it.
 ## Making the app public — App Store deployment
 
 ### Current deployment (web)
-The app is a static SPA served from GitHub Pages:
-- Production URL: `https://mtt999.github.io/ilab/`
-- Admin URL: `https://mtt999.github.io/ilab/admin`
+The app is a static SPA served from Cloudflare Pages (see "URLs & deployment" above):
+- Production URL: `https://ictlab.labhive.app/`
+- Admin URL: `https://ictlab.labhive.app/admin`
 - All routing is handled client-side (SPA) — only `docs/index.html` and `docs/admin/index.html` are physical HTML files
 
 ### iOS App Store — recommended path: Capacitor
