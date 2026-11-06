@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { sb } from '../../lib/supabase'
-import { passwordError, breachedPasswordError } from '../../lib/passwordPolicy'
+import { passwordError } from '../../lib/passwordPolicy'
 
 // Where a password-reset link lands.
 //
@@ -24,7 +24,6 @@ export default function ResetPassword({ onDone }) {
     const perr = passwordError(pw)
     if (perr) { setError(perr); return }
     if (pw !== confirm) { setError('The two passwords do not match.'); return }
-    { const b = await breachedPasswordError(pw); if (b) { setError(b); return } }
     setSaving(true)
     const { error: err } = await sb.auth.updateUser({ password: pw })
     if (err) { setError(err.message); setSaving(false); return }

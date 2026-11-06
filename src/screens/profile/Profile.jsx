@@ -1,7 +1,7 @@
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import { PasswordStrengthHint } from '../../components/PasswordStrengthHint'
-import { passwordError, breachedPasswordError } from '../../lib/passwordPolicy'
+import { passwordError } from '../../lib/passwordPolicy'
 import { ROLE_LABELS, ROLE_ORDER, syncUserRoles, describeRoleChange } from '../../lib/userRoles'
 import { SAFETY_STEPS, requiredSafetySteps, storedSafetySteps } from '../labsafety/safetySteps'
 import { queueWelcomeEmail } from '../../lib/welcomeEmail'
@@ -156,7 +156,6 @@ function SoloProfile({ session }) {
     if (!pinForm.current) { setPinError('Enter your current password.'); return }
     { const perr = passwordError(pinForm.newPin); if (perr) { setPinError(perr); return } }
     if (pinForm.newPin !== pinForm.confirm) { setPinError('Passwords do not match.'); return }
-    { const b = await breachedPasswordError(pinForm.newPin); if (b) { setPinError(b); return } }
     const { error: reAuthErr } = await sb.auth.signInWithPassword({ email: session.email, password: pinForm.current })
     if (reAuthErr) { setPinError('Current password is incorrect.'); return }
     const { error: updateErr } = await sb.auth.updateUser({ password: pinForm.newPin })
@@ -1319,7 +1318,6 @@ function AdminSettings({ session: sessionProp, toast, isSuperAdmin = false }) {
     if (!form.newPassword) { setError('Enter a new password.'); return }
     if (form.newPassword !== form.confirmPassword) { setError('Passwords do not match.'); return }
     { const perr = passwordError(form.newPassword); if (perr) { setError(perr); return } }
-    { const b = await breachedPasswordError(form.newPassword); if (b) { setError(b); return } }
     setSaving(true)
     const email = session?.email || (await sb.auth.getUser()).data?.user?.email
     if (!email) { setError('Cannot verify identity. Sign out and back in.'); setSaving(false); return }
@@ -2485,7 +2483,6 @@ function PasswordChangePanel({ session, toast }) {
     if (!form.current) { setError('Enter your current password.'); return }
     { const perr = passwordError(form.newPin); if (perr) { setError(perr); return } }
     if (form.newPin !== form.confirm) { setError('Passwords do not match.'); return }
-    { const b = await breachedPasswordError(form.newPin); if (b) { setError(b); return } }
     setSaving(true)
     const email = session?.email || (await sb.auth.getUser()).data?.user?.email
     const { error: reAuthErr } = await sb.auth.signInWithPassword({ email, password: form.current })
