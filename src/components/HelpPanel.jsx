@@ -100,7 +100,9 @@ const HELP_CONTENT = {
     tips: [
       'Select one or more instruments on the left (Select all shows everything), then drag on the calendar to pick a time',
       'Drag across several days for a multi-day booking. Every booking needs a purpose: project, thesis or other',
-      'Day · Week · Month (top right) change the calendar. Day shows one day in full — handy when an instrument is busy. Click a weekday heading in Week to open that day',
+      'Layout (above the calendar) changes how bookings are drawn and is saved to your account: Classic (Day · Week · Month), Timeline (a row per instrument showing who booked it), Agenda (every booking in time order) or Calendar (a week with overlapping bookings grouped)',
+      'Timeline: point at a booking to see its details. Choose Day, then drag along an instrument\'s row to book it, or down across several rows to book them all at the same time',
+      'In Classic, Day · Week · Month (top right) change the calendar. Day shows one day in full — handy when an instrument is busy. Click a weekday heading in Week to open that day',
       'After booking, add it to Google Calendar or Outlook, or download an .ics file',
       'Drag your own booking to move it, or drag its top or bottom edge to change the time',
       'Cancel a booking any time before it starts. Edit it until it ends; a finished booking is locked',

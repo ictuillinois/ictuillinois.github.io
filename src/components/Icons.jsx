@@ -203,3 +203,16 @@ export const IconArrowUp = (p) => (
 export const IconTag = (p) => (
   <Icon {...p}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></Icon>
 )
+
+// Booking page layouts (Nov 2026): Classic grid, Timeline rows, Agenda list
+export const IconGrid = (p) => (
+  <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></Icon>
+)
+
+export const IconTimeline = (p) => (
+  <Icon {...p}><path d="M3 5h18M3 12h18M3 19h18"/><rect x="6" y="3" width="7" height="4" rx="1"/><rect x="11" y="10" width="8" height="4" rx="1"/><rect x="4" y="17" width="6" height="4" rx="1"/></Icon>
+)
+
+export const IconList = (p) => (
+  <Icon {...p}><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></Icon>
+)

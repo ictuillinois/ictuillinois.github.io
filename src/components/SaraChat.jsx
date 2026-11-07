@@ -56,6 +56,13 @@ const FAQ = [
     followups: ['qr', 'training', 'contact'],
   },
   {
+    id: 'booking_layout',
+    q: 'How do I see who booked which equipment?',
+    a: 'On Booking Equipment, use Layout above the calendar. It is saved to your account, so your phone and laptop match:\n• Classic — the Day / Week / Month calendar\n• Timeline — one row per instrument, each booking showing who booked it, the time and the purpose. Switch Rows to People to see what each person is using. Choose Day, then drag along a row to book that instrument, or down across rows to book several at the same time\n• Agenda — every booking of the week in time order, with a search box\n• Calendar — the week grid with overlapping bookings grouped into one block\nPoint at any booking to see its details; click it to open it.',
+    keywords: ['layout', 'booking layout', 'booking view', 'booking page', 'change layout', 'timeline', 'agenda', 'who booked', 'who has', 'view', 'classic', 'see bookings', 'which equipment', 'which instrument', 'all equipment', 'select all', 'display'],
+    followups: ['booking'],
+  },
+  {
     id: 'training',
     q: 'How does training tracking work?',
     a: 'Training Records holds everything you complete and keep current:\n• Safety — the three safety steps\n• Lab User Documents — upload certificates\n• Vehicle — vehicle forms and training\n• Equipment — training per instrument\n• Building Alarm\n• Lab User Locker — request a locker\n• Exam and SDS\nA Research Engineer approves your submissions. Your records are private: only you and the lab managers see them.',

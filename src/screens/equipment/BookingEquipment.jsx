@@ -10,6 +10,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
 import { buildEmailHtml } from '../../lib/emailTemplate'
+import { LayoutSwitch, useBookingLayout, TimelineView, AgendaView, GroupedWeekView } from './BookingLayouts'
 
 async function sendBookingEmail(userId, type, subject, title, body) {
   if (!userId) return
@@ -2228,7 +2229,7 @@ function AfterPhotoReconsiderModal({ notification, session, onClose, onDone }) {
 // ══════════════════════════════════════════════════════════════
 // TAB 1 — BOOKING CALENDAR
 // ══════════════════════════════════════════════════════════════
-function BookingCalendar({ session }) {
+function BookingCalendar({ session, tourOpen = false }) {
   const { toast, scanEquipmentId, clearScanEquipmentId, setScreen, pendingBookingNotif, setPendingBookingNotif } = useAppStore()
   const [fromQRScan] = useState(() => !!scanEquipmentId)
   const [equipment, setEquipment] = useState([])
@@ -2268,8 +2269,28 @@ function BookingCalendar({ session }) {
   const [reconsiderModal, setReconsiderModal] = useState(null)
   const [filterLabUser, setFilterLabUser] = useState(null) // { id, name } | null — manager-only labUser filter
   const [orgLabUsers, setOrgLabUsers] = useState([])
+  // Projects for the several-instruments bar's Project purpose. The bar named
+  // a `projects` list that was never loaded here, so picking Project there
+  // crashed the page (found Nov 2026).
+  const [projects, setProjects] = useState([])
+  // A Timeline drag books the instruments under it, not the whole selection:
+  // while set, the several-instruments bar works on these ids.
+  const [multiDraftIds, setMultiDraftIds] = useState(null)
+  const draftEq = multiDraftIds || selectedEq
+  // One instrument picked from a Timeline row while several are selected
+  const [bookEqId, setBookEqId] = useState(null)
+  const [flashEqId, setFlashEqId] = useState(null)
 
   useEffect(() => { loadEquipment(); loadNotifications() }, [])
+  useEffect(() => {
+    if (!session?.userId) return
+    const isSolo = session.loginMode === 'solo' || session.role === 'solo'
+    let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('project_id')
+    if (isSolo) q = q.eq('solo_owner_id', session.userId)
+    else if (session.organizationId) q = q.eq('organization_id', session.organizationId)
+    else q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`)
+    q.then(({ data }) => setProjects(data || []))
+  }, [session?.userId])
   useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, dayDate, calView, filterLabUser])
   useEffect(() => { loadBookings() }, [])
 
@@ -2630,37 +2651,62 @@ function BookingCalendar({ session }) {
     setSelectedEq(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id])
   }
 
-  function handleSlotClick(slot) {
-    if (selectedEq.length === 0) return
-    if (new Date(slot.start) < new Date()) { toast('Cannot book a time slot in the past.'); return }
-    // Check booking block
+  // The checks every way of booking goes through: not in the past, not while
+  // blocked, not on equipment due for retraining. True = stop (already told).
+  function cannotBookNow(slot, ids) {
+    if (new Date(slot.start) < new Date()) { toast('Cannot book a time slot in the past.'); return true }
     if (activeBlock) {
       const unblockDate = new Date(activeBlock.unblock_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       if (activeBlock.block_type === 'all') {
         alert(`🚫 Booking blocked\n\nYou are currently blocked from booking any equipment until ${unblockDate}.\n\nReason: ${activeBlock.reason || 'Missing after photo'}`)
-        return
+        return true
       }
-      const blockedEq = selectedEq.filter(id => id === activeBlock.equipment_id)
-      if (blockedEq.length > 0) {
+      if (ids.includes(activeBlock.equipment_id)) {
         const eqName = equipment.find(e => e.id === activeBlock.equipment_id)?.equipment_name || 'this equipment'
         alert(`🚫 Booking blocked\n\nYou are currently blocked from booking ${eqName} until ${unblockDate}.\n\nReason: ${activeBlock.reason || 'Missing after photo'}`)
-        return
+        return true
       }
     }
-    const blockedSelected = selectedEq.filter(id => retrainingBlocked.includes(id))
+    const blockedSelected = ids.filter(id => retrainingBlocked.includes(id))
     if (blockedSelected.length > 0) {
       const names = blockedSelected.map(id => equipment.find(e => e.id === id)?.equipment_name || 'equipment').join(', ')
       alert(`⚠️ Retraining required\n\n${names} requires retraining before booking. Please go to the Training Records tab and submit a retraining request.`)
+      return true
+    }
+    return false
+  }
+
+  // Timeline: a drag over one or more instrument rows. One row opens the
+  // booking form for that instrument; several open the same "Confirm N
+  // bookings" bar as Same time for all, for just those instruments.
+  function handleRangeBook({ ids, start, end, skipped }) {
+    if (skipped.length) toast(`Already booked at that time, left out: ${skipped.join(', ')}`)
+    if (!ids.length) return
+    const slot = { start: localFmt(start), end: localFmt(end) }
+    if (cannotBookNow(slot, ids)) return
+    if (ids.length === 1) {
+      setBookEqId(ids[0]); setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
       return
     }
+    setMultiDraftIds(ids)
+    setMultiDraftSlots(Object.fromEntries(ids.map(id => [id, slot])))
+    setMultiDraftIdx(ids.length)
+    setMultiDraftMode(true)
+  }
+
+  function handleSlotClick(slot) {
+    if (selectedEq.length === 0) return
+    if (cannotBookNow(slot, selectedEq)) return
     if (selectedEq.length > 1) {
       fillMultiSlot(slot)
     } else {
+      setBookEqId(null)
       setBookingDraft(slot)
-      const usePanel = !isMobile && window.innerWidth >= 1050 && isGridView
+      const usePanel = layout === 'current' && !isMobile && window.innerWidth >= 1050 && isGridView
       if (!usePanel) {
-        // Mobile + narrow desktop: show draft bar so calendar stays draggable
-        setShowBookingModal(false)
+        // Classic on mobile + narrow desktop: show draft bar so calendar stays
+        // draggable. The other layouts have no draft bar: open the form.
+        setShowBookingModal(layout !== 'current')
         setEditBooking(null)
       } else {
         // Wide desktop week view: open/keep side panel (key remount updates times)
@@ -2706,12 +2752,12 @@ function BookingCalendar({ session }) {
     if (selectedEq.length > 1) {
       fillMultiSlot(slot)
     } else {
-      setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
+      setBookEqId(null); setBookingDraft(slot); setEditBooking(null); setShowBookingModal(true)
     }
   }
 
   function exitMultiDraft() {
-    setMultiDraftMode(false); setMultiDraftSlots({}); setMultiDraftIdx(0)
+    setMultiDraftMode(false); setMultiDraftSlots({}); setMultiDraftIdx(0); setMultiDraftIds(null)
     setMultiDraftPurpose(''); setMultiDraftOther(''); setMultiDraftNotes(''); setMultiDraftProjectId('')
     setMultiResponsible(false)
   }
@@ -2721,12 +2767,12 @@ function BookingCalendar({ session }) {
   // the next one still without a time.
   function fillMultiSlot(slot) {
     const idx = multiDraftMode ? multiDraftIdx : 0
-    if (idx >= selectedEq.length) return
+    if (idx >= draftEq.length) return
     if (multiSameTime && idx === 0) {
-      setMultiDraftSlots(Object.fromEntries(selectedEq.map(id => [id, slot])))
-      setMultiDraftIdx(selectedEq.length)
+      setMultiDraftSlots(Object.fromEntries(draftEq.map(id => [id, slot])))
+      setMultiDraftIdx(draftEq.length)
     } else {
-      setMultiDraftSlots(prev => ({ ...prev, [selectedEq[idx]]: slot }))
+      setMultiDraftSlots(prev => ({ ...prev, [draftEq[idx]]: slot }))
       setMultiDraftIdx(idx + 1)
     }
     if (!multiDraftMode) setMultiDraftMode(true)
@@ -2737,7 +2783,7 @@ function BookingCalendar({ session }) {
     if (multiDraftPurpose === 'project' && projects.length > 0 && !multiDraftProjectId) { toast('Select a project.'); return }
     if (multiDraftPurpose === 'other' && !multiDraftOther.trim()) { toast('Describe the reason.'); return }
     if (!multiResponsible) { toast('Tick the box to confirm you are responsible for these bookings.'); return }
-    const allSet = selectedEq.every(id => multiDraftSlots[id])
+    const allSet = draftEq.every(id => multiDraftSlots[id])
     if (!allSet) { toast('Set a time slot for every selected equipment first.'); return }
     setMultiDraftSaving(true)
     const selectedProject = projects.find(p => p.id === multiDraftProjectId)
@@ -2749,12 +2795,12 @@ function BookingCalendar({ session }) {
     let approvalMap = {}
     try {
       const { data: settingsRows } = await sb.from('equipment_booking_settings')
-        .select('equipment_id, requires_approval').in('equipment_id', selectedEq)
+        .select('equipment_id, requires_approval').in('equipment_id', draftEq)
       ;(settingsRows || []).forEach(r => { approvalMap[r.equipment_id] = r.requires_approval })
     } catch (e) { /* default: no approval required */ }
     let failed = 0
     let firstError = null
-    for (const eqId of selectedEq) {
+    for (const eqId of draftEq) {
       const t = multiDraftSlots[eqId]
       const requiresApproval = (approvalMap[eqId] ?? false) && !isAdmin(session)
       const { error } = await sb.from('equipment_bookings').insert({
@@ -2774,7 +2820,7 @@ function BookingCalendar({ session }) {
     }
     setMultiDraftSaving(false)
     if (failed > 0) toast(`${failed} booking(s) failed — ${firstError?.message || 'check for conflicts'}`)
-    else toast(`${selectedEq.length} ${selectedEq.length === 1 ? 'booking' : 'bookings'} ${approvalMap[selectedEq[0]] && !isAdmin(session) ? 'submitted — pending approval' : 'confirmed'} ✓`)
+    else toast(`${draftEq.length} ${draftEq.length === 1 ? 'booking' : 'bookings'} ${approvalMap[draftEq[0]] && !isAdmin(session) ? 'submitted — pending approval' : 'confirmed'} ✓`)
     exitMultiDraft()
     loadBookings()
   }
@@ -2850,6 +2896,111 @@ function BookingCalendar({ session }) {
   const categories = [...new Set(equipment.map(e => e.category).filter(Boolean))].sort()
 
   const isMobile = useIsMobile()
+  // Each person's layout (BookingLayouts.jsx). The Booking tour points at
+  // Classic's calendar, so Classic shows while the tour is open.
+  const [layoutPref, setLayout] = useBookingLayout(session, isMobile)
+  const layout = tourOpen ? 'current' : layoutPref
+  // Agenda and Calendar show a week; Timeline a week or a day; only Classic has Month
+  useEffect(() => {
+    if (layout === 'agenda' || layout === 'calendar') {
+      if (calView === 'day') setWeekStart(startOfWeek(dayDate))
+      if (calView !== 'week') setCalView('week')
+    } else if (layout === 'timeline' && calView === 'month') setCalView('week')
+  }, [layout])
+  const eqById = Object.fromEntries(equipment.map(e => [e.id, e]))
+  // Timeline rows: the selected instruments, plus any with bookings on screen
+  // (a manager viewing one lab user's bookings may have none selected)
+  const timelineRows = [...new Set([...selectedEq, ...bookings.map(b => b.equipment_id)])]
+    .map(id => eqById[id]).filter(Boolean)
+    .sort((a, b) => (a.equipment_name || a.nickname || '').localeCompare(b.equipment_name || b.nickname || ''))
+  const bookEq = bookEqId ? eqById[bookEqId] : null
+
+  // The several-instruments bar: times set, purpose, notes, Confirm. Shared by
+  // every layout — Classic fills it from a drag, Timeline from a drag over rows.
+  const multiDraftPanel = multiDraftMode && (
+    <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 8 }}>
+            {multiDraftIdx < draftEq.length
+              ? `Drag on calendar to set time for: ${equipment.find(e => e.id === draftEq[multiDraftIdx])?.equipment_name || equipment.find(e => e.id === draftEq[multiDraftIdx])?.nickname} (${multiDraftIdx + 1} of ${draftEq.length})`
+              : `All ${draftEq.length} times set — fill in details below and confirm`}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {draftEq.map((id, i) => {
+              const eq = equipment.find(e => e.id === id)
+              const slot = multiDraftSlots[id]
+              const isCurrent = i === multiDraftIdx
+              return (
+                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, fontSize: 12, fontWeight: 600,
+                  background: slot ? '#E1F5EE' : isCurrent ? '#534AB7' : 'rgba(83,74,183,0.12)',
+                  color: slot ? '#0f6e56' : isCurrent ? '#fff' : '#534AB7',
+                  border: `1px solid ${slot ? '#0f6e56' : isCurrent ? '#534AB7' : '#C5C2F5'}` }}>
+                  {slot ? '✓' : isCurrent ? '→' : '○'} {eq?.equipment_name || eq?.nickname}
+                  {slot && <span style={{ fontWeight: 400, marginLeft: 4 }}>{fmtTime(slot.start)}</span>}
+                </div>
+              )
+            })}
+          </div>
+          {Object.keys(multiDraftSlots).length > 0 && multiDraftIdx < draftEq.length && (
+            <button className="btn btn-sm" style={{ fontSize: 11, marginBottom: 8 }}
+              onClick={() => {
+                const first = multiDraftSlots[draftEq[0]]
+                if (!first) return
+                const all = Object.fromEntries(draftEq.map(id => [id, first]))
+                setMultiDraftSlots(all); setMultiDraftIdx(draftEq.length)
+                toast('Time applied to all equipment ✓')
+              }}>
+              Copy first time to all
+            </button>
+          )}
+          {multiDraftIdx >= draftEq.length && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 4 }}>
+              <div className="field" style={{ margin: 0, minWidth: 200 }}>
+                <label style={{ fontSize: 11 }}>Purpose of use <span style={{ color: '#c84b2f' }}>*</span></label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  {[{ id: 'project', label: '🧪 Project' }, { id: 'thesis', label: '📚 Thesis' }, { id: 'other', label: '📝 Other' }].map(opt => (
+                    <div key={opt.id} onClick={() => setMultiDraftPurpose(opt.id)}
+                      style={{ padding: '4px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                        border: multiDraftPurpose === opt.id ? '2px solid #534AB7' : '1.5px solid var(--border)',
+                        background: multiDraftPurpose === opt.id ? '#EEEDFE' : 'var(--surface)',
+                        color: multiDraftPurpose === opt.id ? '#534AB7' : 'var(--text)' }}>
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+                {multiDraftPurpose === 'project' && (
+                  <div style={{ marginTop: 6 }}>
+                    {projects.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>No active projects found. Create one in Project &amp; Material first.</div>
+                    ) : (
+                      <select value={multiDraftProjectId} onChange={e => setMultiDraftProjectId(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
+                        <option value=''>— Select project —</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.project_id || p.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+                {multiDraftPurpose === 'other' && (
+                  <input value={multiDraftOther} onChange={e => setMultiDraftOther(e.target.value)} placeholder="Describe the reason…" style={{ marginTop: 6, fontSize: 12 }} />
+                )}
+              </div>
+              <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
+                <label style={{ fontSize: 11 }}>Notes (optional)</label>
+                <input value={multiDraftNotes} onChange={e => setMultiDraftNotes(e.target.value)} placeholder="Any notes for all bookings…" style={{ fontSize: 12 }} />
+                <ResponsibleCheck small checked={multiResponsible} onChange={setMultiResponsible} />
+              </div>
+              <button className="btn btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7', whiteSpace: 'nowrap' }}
+                onClick={bookAllFromDraft} disabled={multiDraftSaving}>
+                {multiDraftSaving ? 'Confirming…' : `Confirm ${draftEq.length} bookings`}
+              </button>
+            </div>
+          )}
+        </div>
+        <button className="btn btn-sm" onClick={exitMultiDraft} style={{ flexShrink: 0 }}>✕ Cancel</button>
+      </div>
+    </div>
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
@@ -3125,6 +3276,8 @@ function BookingCalendar({ session }) {
           </div>
         )}
 
+        {!tourOpen && <LayoutSwitch value={layout} onChange={setLayout} />}
+
         {/* Calendar toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3141,17 +3294,22 @@ function BookingCalendar({ session }) {
             <button className="btn btn-sm" onClick={() => { const t = new Date(); t.setHours(0, 0, 0, 0); setDayDate(t); setWeekStart(startOfWeek(new Date())); setMonthDate(new Date()) }} style={{ fontSize: 11 }}>Today</button>
           </div>
           <div style={{ display: 'flex', gap: 4 }}>
+            {/* Agenda and Calendar are week views; Month belongs to Classic */}
+            {(layout === 'current' || layout === 'timeline') && (
             <button className="btn btn-sm" style={{ background: calView === 'day' ? 'var(--accent-light)' : 'transparent', color: calView === 'day' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'day' ? 600 : 400 }} onClick={() => {
               // Open on today if this week holds it, else on the week's first day
               const t = new Date(); t.setHours(0, 0, 0, 0)
               if (calView === 'week') setDayDate(t >= weekStart && t < addDays(weekStart, 7) ? t : new Date(weekStart))
               setCalView('day')
             }}>Day</button>
+            )}
             <button className="btn btn-sm" style={{ background: calView === 'week' ? 'var(--accent-light)' : 'transparent', color: calView === 'week' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'week' ? 600 : 400 }} onClick={() => { if (calView === 'day') setWeekStart(startOfWeek(dayDate)); setCalView('week') }}>Week</button>
+            {layout === 'current' && (
             <button className="btn btn-sm" style={{ background: calView === 'month' ? 'var(--accent-light)' : 'transparent', color: calView === 'month' ? 'var(--accent)' : 'var(--text2)', fontWeight: calView === 'month' ? 600 : 400 }} onClick={() => setCalView('month')}>Month</button>
+            )}
             <button className="btn btn-sm btn-primary" data-tour="book" onClick={() => {
               if (selectedEq.length > 1) { setMultiSlot(null); setShowMultiModal(true) }
-              else { setBookingDraft(null); setEditBooking(null); setShowBookingModal(true) }
+              else { setBookEqId(null); setBookingDraft(null); setEditBooking(null); setShowBookingModal(true) }
             }}>+ Book</button>
           </div>
         </div>
@@ -3166,7 +3324,33 @@ function BookingCalendar({ session }) {
           ))}
         </div>
 
-        {isGridView ? (
+        {layout !== 'current' ? (
+          <div data-tour="calendar">
+            {selectedEq.length === 0 && !filterLabUser && layout !== 'timeline' && (
+              <div style={{ padding: '8px 14px', marginBottom: 8, background: '#fef3c7', border: '1px solid #f0d070', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+                Select equipment on the left to see its bookings and book it
+              </div>
+            )}
+            {multiDraftPanel && <div style={{ border: '1px solid #C5C2F5', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 12 }}>{multiDraftPanel}</div>}
+            {layout === 'timeline' && (
+              <TimelineView zoom={calView === 'day' ? 'day' : 'week'} weekStart={weekStart} dayDate={dayDate}
+                rows={timelineRows} bookings={bookings} eqById={eqById} canBook={selectedEq.length > 0}
+                isLocked={isLocked} onLockedRow={() => toast('Locked for you: training, retraining or approval is needed before booking it.')}
+                onBookingClick={b => setDetailBooking(b)} onRangeBook={handleRangeBook}
+                onOpenDay={(day, id) => { const d = new Date(day); d.setHours(0, 0, 0, 0); setDayDate(d); setCalView('day'); setFlashEqId(id) }}
+                flashId={calView === 'day' ? flashEqId : null} />
+            )}
+            {layout === 'agenda' && (
+              <AgendaView weekStart={weekStart} bookings={bookings} eqById={eqById} canBook={selectedEq.length > 0}
+                onBookingClick={b => setDetailBooking(b)} onBookDay={handleDayClick} />
+            )}
+            {layout === 'calendar' && (
+              <GroupedWeekView weekStart={weekStart} bookings={bookings} eqById={eqById} canBook={selectedEq.length > 0}
+                onBookingClick={b => setDetailBooking(b)}
+                onSlot={({ start, end }) => handleSlotClick({ start: localFmt(start), end: localFmt(end) })} />
+            )}
+          </div>
+        ) : isGridView ? (
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <div data-tour="calendar" style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               {selectedEq.length === 0 && (
@@ -3192,96 +3376,13 @@ function BookingCalendar({ session }) {
                   </div>
                 </div>
               )}
-              {multiDraftMode && (
-                <div style={{ padding: '12px 16px', background: '#EEEDFE', borderBottom: '1px solid #C5C2F5', fontSize: 13 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: '#534AB7', marginBottom: 8 }}>
-                        {multiDraftIdx < selectedEq.length
-                          ? `Drag on calendar to set time for: ${equipment.find(e => e.id === selectedEq[multiDraftIdx])?.equipment_name || equipment.find(e => e.id === selectedEq[multiDraftIdx])?.nickname} (${multiDraftIdx + 1} of ${selectedEq.length})`
-                          : `All ${selectedEq.length} times set — fill in details below and confirm`}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                        {selectedEq.map((id, i) => {
-                          const eq = equipment.find(e => e.id === id)
-                          const slot = multiDraftSlots[id]
-                          const isCurrent = i === multiDraftIdx
-                          return (
-                            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, fontSize: 12, fontWeight: 600,
-                              background: slot ? '#E1F5EE' : isCurrent ? '#534AB7' : 'rgba(83,74,183,0.12)',
-                              color: slot ? '#0f6e56' : isCurrent ? '#fff' : '#534AB7',
-                              border: `1px solid ${slot ? '#0f6e56' : isCurrent ? '#534AB7' : '#C5C2F5'}` }}>
-                              {slot ? '✓' : isCurrent ? '→' : '○'} {eq?.equipment_name || eq?.nickname}
-                              {slot && <span style={{ fontWeight: 400, marginLeft: 4 }}>{fmtTime(slot.start)}</span>}
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {Object.keys(multiDraftSlots).length > 0 && multiDraftIdx < selectedEq.length && (
-                        <button className="btn btn-sm" style={{ fontSize: 11, marginBottom: 8 }}
-                          onClick={() => {
-                            const first = multiDraftSlots[selectedEq[0]]
-                            if (!first) return
-                            const all = Object.fromEntries(selectedEq.map(id => [id, first]))
-                            setMultiDraftSlots(all); setMultiDraftIdx(selectedEq.length)
-                            toast('Time applied to all equipment ✓')
-                          }}>
-                          Copy first time to all
-                        </button>
-                      )}
-                      {multiDraftIdx >= selectedEq.length && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 4 }}>
-                          <div className="field" style={{ margin: 0, minWidth: 200 }}>
-                            <label style={{ fontSize: 11 }}>Purpose of use <span style={{ color: '#c84b2f' }}>*</span></label>
-                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                              {[{ id: 'project', label: '🧪 Project' }, { id: 'thesis', label: '📚 Thesis' }, { id: 'other', label: '📝 Other' }].map(opt => (
-                                <div key={opt.id} onClick={() => setMultiDraftPurpose(opt.id)}
-                                  style={{ padding: '4px 10px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                                    border: multiDraftPurpose === opt.id ? '2px solid #534AB7' : '1.5px solid var(--border)',
-                                    background: multiDraftPurpose === opt.id ? '#EEEDFE' : 'var(--surface)',
-                                    color: multiDraftPurpose === opt.id ? '#534AB7' : 'var(--text)' }}>
-                                  {opt.label}
-                                </div>
-                              ))}
-                            </div>
-                            {multiDraftPurpose === 'project' && (
-                              <div style={{ marginTop: 6 }}>
-                                {projects.length === 0 ? (
-                                  <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>No active projects found. Create one in Project &amp; Material first.</div>
-                                ) : (
-                                  <select value={multiDraftProjectId} onChange={e => setMultiDraftProjectId(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
-                                    <option value=''>— Select project —</option>
-                                    {projects.map(p => <option key={p.id} value={p.id}>{p.project_id || p.name}</option>)}
-                                  </select>
-                                )}
-                              </div>
-                            )}
-                            {multiDraftPurpose === 'other' && (
-                              <input value={multiDraftOther} onChange={e => setMultiDraftOther(e.target.value)} placeholder="Describe the reason…" style={{ marginTop: 6, fontSize: 12 }} />
-                            )}
-                          </div>
-                          <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
-                            <label style={{ fontSize: 11 }}>Notes (optional)</label>
-                            <input value={multiDraftNotes} onChange={e => setMultiDraftNotes(e.target.value)} placeholder="Any notes for all bookings…" style={{ fontSize: 12 }} />
-                            <ResponsibleCheck small checked={multiResponsible} onChange={setMultiResponsible} />
-                          </div>
-                          <button className="btn btn-primary" style={{ background: '#534AB7', borderColor: '#534AB7', whiteSpace: 'nowrap' }}
-                            onClick={bookAllFromDraft} disabled={multiDraftSaving}>
-                            {multiDraftSaving ? 'Confirming…' : `Confirm ${selectedEq.length} bookings`}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button className="btn btn-sm" onClick={exitMultiDraft} style={{ flexShrink: 0 }}>✕ Cancel</button>
-                  </div>
-                </div>
-              )}
+              {multiDraftPanel}
               <WeekView weekStart={calView === 'day' ? dayDate : weekStart} dayCount={calView === 'day' ? 1 : 7}
                 onDayClick={d => { const x = new Date(d); x.setHours(0, 0, 0, 0); setDayDate(x); setCalView('day') }}
                 bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
             </div>
             {/* Booking form side panel — only wide desktops (≥1050px) so calendar has room */}
-            {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && (
+            {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && layout === 'current' && (
               <div style={{ width: 320, flexShrink: 0 }}>
                 <BookingModal
                   key={bookingDraft ? `${bookingDraft.start}_${bookingDraft.end}` : 'new'}
@@ -3323,7 +3424,7 @@ function BookingCalendar({ session }) {
         />
       )}
       {/* Draft bar — stays at bottom so calendar is always draggable (mobile + narrow desktop) */}
-      {(isMobile || window.innerWidth < 1050) && bookingDraft && !showBookingModal && !editBooking && (
+      {layout === 'current' && (isMobile || window.innerWidth < 1050) && bookingDraft && !showBookingModal && !editBooking && (
         <BookingDraftBar
           draft={bookingDraft}
           equipmentName={selectedEq.length === 1 ? (equipment.find(e => e.id === selectedEq[0])?.equipment_name || equipment.find(e => e.id === selectedEq[0])?.nickname) : selectedEq.length > 1 ? `${selectedEq.length} equipment` : null}
@@ -3332,18 +3433,20 @@ function BookingCalendar({ session }) {
         />
       )}
       {/* Full overlay: edit mode, month view, narrow desktop (< 1050px), or mobile after "Book" tapped */}
-      {showBookingModal && (editBooking || (isMobile) || !isGridView || window.innerWidth < 1050) && (
+      {/* Full overlay also for every layout but Classic — they have no side panel */}
+      {showBookingModal && (editBooking || (isMobile) || !isGridView || window.innerWidth < 1050 || layout !== 'current') && (
         <BookingModal
           booking={editBooking}
-          equipmentList={selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
-          selectedEquipment={selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null}
+          equipmentList={bookEq ? [bookEq] : selectedEq.length > 0 ? equipment.filter(e => selectedEq.includes(e.id)) : equipment}
+          selectedEquipment={bookEq || (selectedEq.length === 1 ? equipment.find(e => e.id === selectedEq[0]) : null)}
           session={session}
-          onSave={() => { loadBookings(); loadNotifications(); setBookingDraft(null); setEditBooking(null) }}
+          onSave={() => { loadBookings(); loadNotifications(); setBookingDraft(null); setEditBooking(null); setBookEqId(null) }}
           onBooked={b => setCalendarPrompt(b)}
           onClose={() => {
             setShowBookingModal(false)
             setEditBooking(null)
-            if (editBooking) setBookingDraft(null)
+            setBookEqId(null)
+            if (editBooking || layout !== 'current') setBookingDraft(null)
           }}
           onAdjustTime={!editBooking ? () => { setShowBookingModal(false); setEditBooking(null) } : undefined}
           initialSlot={bookingDraft}
@@ -3357,7 +3460,7 @@ function BookingCalendar({ session }) {
           booking={detailBooking}
           equipment={equipment.find(e => e.id === detailBooking.equipment_id)}
           session={session}
-          onEdit={b => { setEditBooking(b); setDetailBooking(null); setShowBookingModal(true) }}
+          onEdit={b => { setBookEqId(null); setEditBooking(b); setDetailBooking(null); setShowBookingModal(true) }}
           onDelete={handleCancel}
           onDeny={handleDeny}
           onApprove={handleApprove}
@@ -3985,7 +4088,7 @@ export default function BookingEquipment() {
         <HelpPanel screen="booking" onTour={replayTour} />
       </div>
       {showTour && <BookingTour onShown={tourShown} supportName="ICT-RE" onClose={closeTour} />}
-      {tab === 'calendar'  && <BookingCalendar session={session} />}
+      {tab === 'calendar'  && <BookingCalendar session={session} tourOpen={showTour} />}
       {tab === 'history'   && <BookingHistory session={session} />}
       {tab === 'eq_notes'  && <EquipmentNotesTab session={session} />}
       {tab === 'settings'  && <BookingSettings session={session} />}

@@ -1830,6 +1830,7 @@ in the file has to be run on its own.
 | `locker_requests_setup.sql` | ✓ after training_privacy (same file in both) | ✓ |
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
 | `sub_projects_setup.sql` | ✓ (same file in both) | ✓ |
+| `booking_layout_setup.sql` | ✓ its own copy (users) | ✓ its own copy (users + solo_users) |
 
 As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
@@ -2465,3 +2466,36 @@ request or a proposed / agreed / confirmed session on that instrument, and
 session (with **Take the exam →**), plus the session day / time / lab manager.
 The bottom "Ready to take the exam?" card hides once the exam is passed,
 skipped or not needed. The exam page's checklist has **Open the videos & SOP →**.
+
+## Booking page layouts — Classic · Timeline · Agenda · Calendar (Nov 2026, both apps)
+
+With many instruments selected (Select all), Classic's week view split each
+day into slivers and nobody could see who had booked what. Each person now
+picks a **Layout** above the calendar (`src/screens/equipment/BookingLayouts.jsx`):
+
+| Layout | What it is |
+|---|---|
+| Classic (`current`) | the original Day / Week / Month grid — unchanged, still in BookingEquipment.jsx |
+| Timeline | a row per instrument (or per person, Rows: People). Week: a card per booking with name, time and purpose. Day: hours left to right; drag along a row to book it, down across rows to book several at once |
+| Agenda | the week's bookings in time order, one line each, with search |
+| Calendar | the week grid with overlapping bookings grouped ("+N more") and multi-day bookings in a top band |
+
+- **Saved per person** to `users.booking_layout` (LabHive also `solo_users`)
+  and to localStorage (`<app>_booking_layout_<userId>`). No choice yet:
+  Timeline on a computer, Agenda on a phone. SQL: `booking_layout_setup.sql`
+  (BOTH projects); before it runs the choice stays in the browser.
+- **Booking is never reimplemented in the layouts.** They hand a time back to
+  BookingCalendar: one Timeline row → the normal BookingModal for that
+  instrument (`bookEqId`); several rows → the same "Confirm N bookings" bar as
+  Same time for all, limited to those rows (`multiDraftIds` / `draftEq`).
+  Every path runs `cannotBookNow()` (past time, booking block, retraining).
+- The several-instruments bar is the shared `multiDraftPanel` constant —
+  Classic and the new layouts render the same one. It needs `projects`, which
+  BookingCalendar now loads (it was never loaded there: picking Project in
+  that bar crashed the page).
+- Hover shows a details card at once (`HoverCard`, portal) — the native
+  `title` tooltip took a second and showed one line. Click opens BookingDetail.
+- Agenda and Calendar are week views (Day/Month buttons hidden); Timeline has
+  Week and Day; only Classic has Month.
+- The Booking tour points at Classic's calendar, so Classic shows while the
+  tour is open (`tourOpen`) — the saved choice is not changed.
