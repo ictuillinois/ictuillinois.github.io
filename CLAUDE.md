@@ -2499,3 +2499,8 @@ picks a **Layout** above the calendar (`src/screens/equipment/BookingLayouts.jsx
   Week and Day; only Classic has Month.
 - The Booking tour points at Classic's calendar, so Classic shows while the
   tour is open (`tourOpen`) — the saved choice is not changed.
+- **Pinned while scrolling** (new layouts only): the toolbar + legend are a
+  `.sticky-tools`, measured into `--bk-top`; the day / hour headings
+  (`.bkl-stick`) pin just below it and sit OUTSIDE the sideways-scrolling
+  `.bkl-scroll`, following it via `useHeadSync`. `.bkl` is `overflow: clip`,
+  never `hidden` — hidden makes it a scroll container and nothing inside sticks.
