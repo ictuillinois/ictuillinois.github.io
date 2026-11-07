@@ -641,7 +641,12 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .bkl-seg.small button { padding: 4px 10px; font-size: 12px; font-weight: 500; }
 .bkl-seg.small button.on { font-weight: 600; }
 
-.bkl { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.bkl { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: clip; }
+/* Pinned while the page scrolls: column headings sit right under the pinned
+   toolbar, whose height BookingCalendar measures into --bk-top. .bkl uses
+   overflow: clip, not hidden — hidden would make it a scroll container and
+   nothing inside could stick to the page. */
+.bkl-stick { position: sticky; top: var(--bk-top, 0px); z-index: 20; overflow: hidden; background: var(--surface); box-shadow: 0 2px 4px rgba(16, 40, 30, 0.06); }
 .bkl-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .bkl-bar-label { font-size: 12px; color: var(--text3); }
 .bkl-bar-tip { font-size: 12px; color: #085041; flex: 1; min-width: 200px; }
@@ -716,7 +721,7 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .bkl-hover-foot { margin-top: 8px; font-size: 11px; color: var(--text3); }
 
 /* Agenda */
-.bkl-ag-day { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 14px; background: #e0f2fe; color: #075985; font-size: 13px; font-weight: 700; }
+.bkl-ag-day { position: sticky; top: var(--bk-top, 0px); z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 14px; background: #e0f2fe; color: #075985; font-size: 13px; font-weight: 700; }
 .bkl-ag-day small { font-weight: 500; font-size: 12px; margin-left: 8px; }
 .bkl-ag-day .bkl-link { color: inherit; }
 .bkl-ag-day.today { background: var(--accent-light); color: #085041; }

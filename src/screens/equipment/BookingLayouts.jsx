@@ -130,6 +130,14 @@ export function LayoutSwitch({ value, onChange }) {
   )
 }
 
+// Pinned column headings live outside the sideways-scrolling body; this keeps
+// them lined up with it when it scrolls sideways.
+function useHeadSync() {
+  const headRef = useRef(null)
+  const syncHead = e => { if (headRef.current) headRef.current.scrollLeft = e.currentTarget.scrollLeft }
+  return [headRef, syncHead]
+}
+
 // ── hover card: the full details the moment the pointer is on a booking ──
 function useBookingHover() {
   const [hover, setHover] = useState(null)
@@ -214,6 +222,7 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
   })
   const [showIdle, setShowIdle] = useState(false)
   const [hover, bind, clearHover] = useBookingHover()
+  const [headRef, syncHead] = useHeadSync()
   const [drag, setDrag] = useState(null)
   const dragRef = useRef(null)
   const trackRefs = useRef([])
@@ -379,7 +388,11 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
             : `No bookings ${isDay ? 'on this day' : 'this week'}.`}
         </div>
       ) : (
-        <div className="bkl-scroll">
+        <>
+        {/* Column headings stay pinned under the page toolbar. They sit outside
+            the sideways-scrolling box — a sticky element cannot stick past a
+            scrolling ancestor — and follow its sideways scroll (syncHead). */}
+        <div className="bkl-stick" ref={headRef}>
           {!isDay ? (
             <div className="bkl-week">
               <div className="bkl-week-row bkl-week-head">
@@ -389,6 +402,23 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
                   return <div key={d} className={sameDay(day, new Date()) ? 'today' : ''}>{fmtDay(day)}{sameDay(day, new Date()) ? ' · today' : ''}</div>
                 })}
               </div>
+            </div>
+          ) : (
+            <div className="bkl-day">
+              <div className="bkl-day-row bkl-day-head">
+                <div>{group === 'eq' ? 'Equipment' : 'Person'}</div>
+                <div className="bkl-axis">
+                  {Array.from({ length: h1 - h0 }, (_, i) => (
+                    <div key={i} className="bkl-tick" style={{ left: `${pct(r0 + i * HOUR)}%` }}>{hourLabel(h0 + i)}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="bkl-scroll" onScroll={syncHead}>
+          {!isDay ? (
+            <div className="bkl-week">
               {rowList.map((row, ri) => {
                 const locked = group === 'eq' && isLocked?.(row.key)
                 const multi = row.items.filter(isMulti).map(b => ({
@@ -443,14 +473,6 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
             </div>
           ) : (
             <div className="bkl-day">
-              <div className="bkl-day-row bkl-day-head">
-                <div>{group === 'eq' ? 'Equipment' : 'Person'}</div>
-                <div className="bkl-axis">
-                  {Array.from({ length: h1 - h0 }, (_, i) => (
-                    <div key={i} className="bkl-tick" style={{ left: `${pct(r0 + i * HOUR)}%` }}>{hourLabel(h0 + i)}</div>
-                  ))}
-                </div>
-              </div>
               {rowList.map((row, ri) => {
                 const locked = group === 'eq' && isLocked?.(row.key)
                 const items = row.items.map(b => ({ b, vs: Math.max(+new Date(b.start_time), r0), ve: Math.min(+new Date(b.end_time), r1) }))
@@ -494,6 +516,7 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
             </div>
           )}
         </div>
+        </>
       )}
 
       {group === 'eq' && idleCount > 0 && (
@@ -579,6 +602,7 @@ const PX = 44   // pixels per hour
 
 export function GroupedWeekView({ weekStart, bookings, eqById, canBook, onBookingClick, onSlot }) {
   const [hover, bind, clearHover] = useBookingHover()
+  const [headRef, syncHead] = useHeadSync()
   const [open, setOpen] = useState(null)
   const [drag, setDrag] = useState(null)
   const dragRef = useRef(null)
@@ -654,7 +678,8 @@ export function GroupedWeekView({ weekStart, bookings, eqById, canBook, onBookin
           Bookings at the same time are grouped — click "+ more" to see everyone. Point at a name for its details.
         </span>
       </div>
-      <div className="bkl-scroll">
+      {/* Day headings pinned under the page toolbar (see TimelineView) */}
+      <div className="bkl-stick" ref={headRef}>
         <div className="bkl-cal">
           <div className="bkl-cal-grid bkl-cal-head">
             <div />
@@ -664,6 +689,10 @@ export function GroupedWeekView({ weekStart, bookings, eqById, canBook, onBookin
               </div>
             ))}
           </div>
+        </div>
+      </div>
+      <div className="bkl-scroll" onScroll={syncHead}>
+        <div className="bkl-cal">
           <div className="bkl-cal-grid bkl-cal-band">
             <div className="bkl-cal-band-l">Multi-day</div>
             <div className="bkl-cal-band-area" style={{ height: Math.max(1, bandLanes) * 32 + 4 }}>

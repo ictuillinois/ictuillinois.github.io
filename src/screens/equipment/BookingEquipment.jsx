@@ -2914,6 +2914,18 @@ function BookingCalendar({ session, tourOpen = false }) {
     .map(id => eqById[id]).filter(Boolean)
     .sort((a, b) => (a.equipment_name || a.nickname || '').localeCompare(b.equipment_name || b.nickname || ''))
   const bookEq = bookEqId ? eqById[bookEqId] : null
+  // The new layouts pin the toolbar; their column headings pin just below it,
+  // so its height (it wraps on narrow screens) is measured into --bk-top.
+  const pinTools = layout !== 'current'
+  const toolsRef = useRef(null)
+  const [toolsH, setToolsH] = useState(0)
+  useEffect(() => {
+    const el = toolsRef.current
+    if (!pinTools || !el) { setToolsH(0); return }
+    const ro = new ResizeObserver(() => setToolsH(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [pinTools])
 
   // The several-instruments bar: times set, purpose, notes, Confirm. Shared by
   // every layout — Classic fills it from a drag, Timeline from a drag over rows.
@@ -3251,7 +3263,7 @@ function BookingCalendar({ session, tourOpen = false }) {
       })()}
 
       {/* ── Calendar (full width on desktop, below selector on mobile) ── */}
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', '--bk-top': `${toolsH}px` }}>
 
         {/* Manager labUser filter — only for lab managers / org admins */}
         {canEdit(session) && orgLabUsers.length > 0 && (
@@ -3278,6 +3290,9 @@ function BookingCalendar({ session, tourOpen = false }) {
 
         {!tourOpen && <LayoutSwitch value={layout} onChange={setLayout} />}
 
+        {/* Toolbar + legend. Pinned to the top of the page in the three new
+            layouts, so the dates stay in view while the bookings scroll. */}
+        <div ref={pinTools ? toolsRef : null} className={pinTools ? 'sticky-tools' : undefined}>
         {/* Calendar toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3322,6 +3337,7 @@ function BookingCalendar({ session, tourOpen = false }) {
               {s.charAt(0).toUpperCase() + s.slice(1)}
             </div>
           ))}
+        </div>
         </div>
 
         {layout !== 'current' ? (
