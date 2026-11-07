@@ -10,7 +10,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
 import { buildEmailHtml } from '../../lib/emailTemplate'
-import { LayoutSwitch, useBookingLayout, TimelineView, AgendaView, GroupedWeekView } from './BookingLayouts'
+import { LayoutSwitch, useBookingLayout, TimelineView, AgendaView, HoverCard, useBookingHover } from './BookingLayouts'
 
 async function sendBookingEmail(userId, type, subject, title, body) {
   if (!userId) return
@@ -503,7 +503,7 @@ function localFmt(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, onBookingClick, canBook, selectedSlot, onBookingReschedule, canReschedule }) {
+function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, onBookingClick, canBook, selectedSlot, onBookingReschedule, canReschedule, eqById = {} }) {
   const [drag, setDrag] = useState(null)
   const [bookingDrag, setBookingDrag] = useState(null)
   const bookingDragRef = useRef(null)
@@ -511,6 +511,29 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
   // Week view: 7 columns from the week's start. Day view: one column, wider.
   const days = Array.from({ length: dayCount }, (_, i) => addDays(weekStart, i))
   const today = new Date()
+
+  // Merged in from the old "Calendar" layout (Nov 2026). Multi-day bookings
+  // sit in a band under the day headings instead of filling whole day columns
+  // ("↑ cont."), and when too many bookings overlap to read side by side they
+  // become one block listing each person and instrument ("+N more").
+  const [openGroup, setOpenGroup] = useState(null)
+  const [hover, bindHover] = useBookingHover()
+  const isMultiDay = b => !sameDay(new Date(b.start_time), new Date(new Date(b.end_time) - 1))
+  const rangeStart = new Date(days[0]); rangeStart.setHours(0, 0, 0, 0)
+  const rangeEnd = new Date(days[days.length - 1]); rangeEnd.setHours(24, 0, 0, 0)
+  const band = bookings.filter(isMultiDay)
+    .map(b => ({ b, s: Math.max(+new Date(b.start_time), +rangeStart), e: Math.min(+new Date(b.end_time), +rangeEnd) }))
+    .filter(x => x.e > x.s).sort((a, b) => a.s - b.s)
+  const bandEnds = []
+  band.forEach(x => {
+    let l = bandEnds.findIndex(end => end <= x.s)
+    if (l < 0) { l = bandEnds.length; bandEnds.push(0) }
+    bandEnds[l] = x.e; x.lane = l
+  })
+  const bandPct = t => ((t - rangeStart) / (rangeEnd - rangeStart)) * 100
+  // Side by side up to this many at once; more than that become one block
+  const GROUP_AFTER = days.length === 1 ? 6 : 3
+  const eqLabel = id => eqById[id]?.nickname || eqById[id]?.equipment_name || ''
 
   function yToSlot(y) {
     return Math.max(0, Math.min(47, Math.floor(y / SLOT_H)))
@@ -746,6 +769,23 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
         ))}
       </div>
 
+      {/* Multi-day bookings — pinned under the day headings (40px + 2px border) */}
+      {band.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minWidth: 500, position: 'sticky', top: 42, zIndex: 19, background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ position: 'sticky', left: 0, zIndex: 1, background: 'var(--surface2)', fontSize: 10, color: 'var(--text3)', padding: '4px 6px', lineHeight: 1.2 }}>Multi-day</div>
+          <div style={{ gridColumn: '2 / -1', height: Math.min(bandEnds.length, 3) * 26 + 4, overflowY: bandEnds.length > 3 ? 'auto' : 'hidden' }}>
+            <div style={{ position: 'relative', height: bandEnds.length * 26 + 4 }}>
+              {band.map(({ b, s, e, lane }) => (
+                <div key={b.id} onClick={() => onBookingClick(b)} {...bindHover(b)}
+                  style={{ position: 'absolute', top: 4 + lane * 26, height: 22, left: `calc(${bandPct(s)}% + 2px)`, width: `calc(${bandPct(e) - bandPct(s)}% - 4px)`, background: statusBg[b.status], border: `1px solid ${statusColor[b.status]}50`, borderLeft: `3px solid ${statusColor[b.status]}`, borderRadius: 4, padding: '2px 6px', fontSize: 11, color: statusColor[b.status], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>
+                  <b>{b.booked_on_behalf_of || b.user_name}</b> · {eqLabel(b.equipment_id)} · {fmtDateTime(b.start_time)} → {fmtDateTime(b.end_time)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grid body */}
       <div style={{ display: 'grid', gridTemplateColumns: `56px repeat(${days.length}, 1fr)`, minWidth: 500, position: 'relative' }}>
         {/* Time labels column — sticky left on horizontal scroll */}
@@ -832,9 +872,10 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
             {(() => {
               const dayStart = new Date(days[di]); dayStart.setHours(0, 0, 0, 0)
               const dayEnd   = new Date(days[di]); dayEnd.setHours(24, 0, 0, 0)
-              // All bookings that touch this day, sorted by start
+              // All bookings that touch this day, sorted by start (multi-day
+              // ones are drawn in the band above, not in the column)
               const visible = bookings
-                .filter(b => new Date(b.end_time) > dayStart && new Date(b.start_time) < dayEnd)
+                .filter(b => !isMultiDay(b) && new Date(b.end_time) > dayStart && new Date(b.start_time) < dayEnd)
                 .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
               // Greedy lane assignment: find first lane whose last booking ends before this one starts
               const laneOf = new Map()
@@ -860,7 +901,50 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
                 }
                 totalOf.set(b.id, maxLane + 1)
               }
-              return bookings.map(b => {
+              // Overlap clusters (bookings chained by overlapping times). One
+              // needing more than GROUP_AFTER lanes is drawn as a single block.
+              const clusterOf = new Map()
+              const clusters = []
+              let cur = null
+              for (const b of visible) {
+                const s = +new Date(b.start_time), e = +new Date(b.end_time)
+                if (cur && s < cur.e) { cur.items.push(b); cur.e = Math.max(cur.e, e) }
+                else { cur = { s, e, items: [b] }; clusters.push(cur) }
+                clusterOf.set(b.id, cur)
+              }
+              clusters.forEach(c => { c.lanes = Math.max(...c.items.map(b => laneOf.get(b.id))) + 1 })
+              const wide = days.length > 1
+              const last = di === days.length - 1
+              const groupBlocks = clusters.filter(c => c.lanes > GROUP_AFTER).map(c => {
+                const key = `${di}-${c.s}`
+                const isOpen = openGroup === key
+                const s = Math.max(c.s, +dayStart), e = Math.min(c.e, +dayEnd)
+                const top = ((s - dayStart) / 1800000) * SLOT_H
+                const h = Math.max(44, ((e - s) / 1800000) * SLOT_H - 2)
+                const fit = Math.max(1, Math.floor((h - 18) / 14) - 1)
+                const shown = isOpen ? c.items : c.items.slice(0, fit)
+                const rest = c.items.length - shown.length
+                const linkBtn = { border: 'none', background: 'none', padding: 0, marginTop: 2, color: 'var(--accent)', fontWeight: 700, fontSize: 10, cursor: 'pointer', display: 'block' }
+                return (
+                  <div key={`g-${key}`} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
+                    style={{ position: 'absolute', top: top + 1, left: isOpen && wide && last ? -120 : 2, right: isOpen && wide && !last ? -120 : 2, height: isOpen ? 'auto' : h, minHeight: h, zIndex: isOpen ? 8 : 4, background: 'var(--surface)', border: '1.5px solid var(--accent)', borderRadius: 4, padding: '2px 4px', fontSize: 10, overflow: 'hidden', boxShadow: isOpen ? '0 8px 24px rgba(16,40,30,0.18)' : 'none' }}>
+                    <div style={{ fontWeight: 700, color: '#085041', display: 'flex', justifyContent: 'space-between', gap: 4, whiteSpace: 'nowrap' }}>
+                      <span>{c.items.length} bookings</span><span style={{ fontWeight: 500 }}>{fmtTime(c.s)}</span>
+                    </div>
+                    {shown.map(b => (
+                      <div key={b.id} onClick={ev => { ev.stopPropagation(); onBookingClick(b) }} {...bindHover(b)}
+                        style={{ marginTop: 2, cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: statusColor[b.status] }}>
+                        <b>{b.booked_on_behalf_of || b.user_name}</b> · {eqLabel(b.equipment_id)}{isOpen ? ` · ${fmtTime(b.start_time)}–${fmtTime(b.end_time)}` : ''}
+                      </div>
+                    ))}
+                    {rest > 0 && <button onClick={ev => { ev.stopPropagation(); setOpenGroup(key) }} style={linkBtn}>+{rest} more</button>}
+                    {isOpen && <button onClick={ev => { ev.stopPropagation(); setOpenGroup(null) }} style={linkBtn}>Show less</button>}
+                  </div>
+                )
+              })
+              return [...groupBlocks, ...bookings.map(b => {
+                if (isMultiDay(b)) return null
+                if ((clusterOf.get(b.id)?.lanes || 0) > GROUP_AFTER) return null
                 const seg = getBookingSegment(b, di)
                 if (!seg) return null
                 const lane  = laneOf.get(b.id) ?? 0
@@ -915,11 +999,12 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
                     )}
                   </div>
                 )
-              })
+              })]
             })()}
           </div>
         )})}
       </div>
+      <HoverCard hover={hover} eqById={eqById} />
     </div>
   )
 }
@@ -2898,11 +2983,11 @@ function BookingCalendar({ session, tourOpen = false }) {
   const isMobile = useIsMobile()
   // Each person's layout (BookingLayouts.jsx). The Booking tour points at
   // Classic's calendar, so Classic shows while the tour is open.
-  const [layoutPref, setLayout] = useBookingLayout(session, isMobile)
+  const [layoutPref, setLayout] = useBookingLayout(session)
   const layout = tourOpen ? 'current' : layoutPref
-  // Agenda and Calendar show a week; Timeline a week or a day; only Classic has Month
+  // Agenda shows a week; Timeline a week or a day; only Classic has Month
   useEffect(() => {
-    if (layout === 'agenda' || layout === 'calendar') {
+    if (layout === 'agenda') {
       if (calView === 'day') setWeekStart(startOfWeek(dayDate))
       if (calView !== 'week') setCalView('week')
     } else if (layout === 'timeline' && calView === 'month') setCalView('week')
@@ -3342,7 +3427,7 @@ function BookingCalendar({ session, tourOpen = false }) {
 
         {layout !== 'current' ? (
           <div data-tour="calendar">
-            {selectedEq.length === 0 && !filterLabUser && layout !== 'timeline' && (
+            {selectedEq.length === 0 && !filterLabUser && layout === 'agenda' && (
               <div style={{ padding: '8px 14px', marginBottom: 8, background: '#fef3c7', border: '1px solid #f0d070', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
                 Select equipment on the left to see its bookings and book it
               </div>
@@ -3354,16 +3439,11 @@ function BookingCalendar({ session, tourOpen = false }) {
                 isLocked={isLocked} onLockedRow={() => toast('Locked for you: training, retraining or approval is needed before booking it.')}
                 onBookingClick={b => setDetailBooking(b)} onRangeBook={handleRangeBook}
                 onOpenDay={(day, id) => { const d = new Date(day); d.setHours(0, 0, 0, 0); setDayDate(d); setCalView('day'); setFlashEqId(id) }}
-                flashId={calView === 'day' ? flashEqId : null} />
+                flashId={calView === 'day' ? flashEqId : null} canSeePeople={canEdit(session)} />
             )}
             {layout === 'agenda' && (
               <AgendaView weekStart={weekStart} bookings={bookings} eqById={eqById} canBook={selectedEq.length > 0}
                 onBookingClick={b => setDetailBooking(b)} onBookDay={handleDayClick} />
-            )}
-            {layout === 'calendar' && (
-              <GroupedWeekView weekStart={weekStart} bookings={bookings} eqById={eqById} canBook={selectedEq.length > 0}
-                onBookingClick={b => setDetailBooking(b)}
-                onSlot={({ start, end }) => handleSlotClick({ start: localFmt(start), end: localFmt(end) })} />
             )}
           </div>
         ) : isGridView ? (
@@ -3395,7 +3475,7 @@ function BookingCalendar({ session, tourOpen = false }) {
               {multiDraftPanel}
               <WeekView weekStart={calView === 'day' ? dayDate : weekStart} dayCount={calView === 'day' ? 1 : 7}
                 onDayClick={d => { const x = new Date(d); x.setHours(0, 0, 0, 0); setDayDate(x); setCalView('day') }}
-                bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} />
+                bookings={bookings} onSlotClick={handleSlotClick} onBookingClick={b => setDetailBooking(b)} canBook={selectedEq.length > 0} selectedSlot={bookingDraft && !editBooking ? bookingDraft : null} onBookingReschedule={handleBookingReschedule} canReschedule={canRescheduleBooking} eqById={eqById} />
             </div>
             {/* Booking form side panel — only wide desktops (≥1050px) so calendar has room */}
             {showBookingModal && !editBooking && !isMobile && window.innerWidth >= 1050 && layout === 'current' && (

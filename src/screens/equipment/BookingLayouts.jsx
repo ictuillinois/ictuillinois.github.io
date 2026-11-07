@@ -1,9 +1,10 @@
 // Booking page layouts (Nov 2026). Each person picks how the Booking page
-// draws bookings: Classic (the original Day / Week / Month grid, still in
-// BookingEquipment.jsx), Timeline, Agenda or Calendar. With many instruments
-// selected, Classic split each day into slivers and nobody could read who had
-// booked what — the three layouts here show the person, time and purpose on
-// every booking at first look.
+// draws bookings: Classic (the Day / Week / Month grid in BookingEquipment.jsx,
+// everyone's default), Timeline or Agenda. With many instruments selected,
+// Classic split each day into slivers and nobody could read who had booked
+// what — the two layouts here show the person, time and purpose on every
+// booking at first look. (A third, "Calendar", was a week grid with overlaps
+// grouped; it was merged into Classic's WeekView instead.)
 //
 // Booking itself is NOT reimplemented here: every view hands a time (and, for
 // Timeline, the instruments) back to BookingCalendar, which opens the same
@@ -11,7 +12,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { IconGrid, IconTimeline, IconList, IconCalendar } from '../../components/Icons'
+import { IconGrid, IconTimeline, IconList } from '../../components/Icons'
 
 const APP = 'ictlab'
 const DAY = 86400000
@@ -22,7 +23,6 @@ export const LAYOUTS = [
   { key: 'current',  label: 'Classic',  Icon: IconGrid,     hint: 'Day, Week and Month calendar' },
   { key: 'timeline', label: 'Timeline', Icon: IconTimeline, hint: 'One row per instrument — who has it, and when' },
   { key: 'agenda',   label: 'Agenda',   Icon: IconList,     hint: 'Every booking in time order' },
-  { key: 'calendar', label: 'Calendar', Icon: IconCalendar, hint: 'Week grid with overlapping bookings grouped' },
 ]
 const LAYOUT_KEYS = LAYOUTS.map(l => l.key)
 
@@ -76,11 +76,11 @@ const midnight = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x 
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 
 // ── the per-person layout choice ──────────────────────────────
-// Saved to the person's account (users.booking_layout) so phone and laptop
-// match, and to this browser so the page opens in it before the row loads.
-// Before booking_layout_setup.sql runs, the column is missing: the choice then
-// lives in this browser only (the read and the save both report the error).
-export function useBookingLayout(session, isMobile) {
+// Everyone starts on Classic. Once a person picks a layout it is saved to
+// their account (users.booking_layout) and follows them to every computer;
+// the account value always wins over this browser's copy, which only lets the
+// page open in the right layout before the row loads.
+export function useBookingLayout(session) {
   const key = `${APP}_booking_layout_${session?.userId || 'x'}`
   const table = session?.loginMode === 'solo' ? 'solo_users' : 'users'
   const [layout, setLayoutState] = useState(() => {
@@ -98,7 +98,13 @@ export function useBookingLayout(session, isMobile) {
         if (LAYOUT_KEYS.includes(v)) {
           setLayoutState(v)
           try { localStorage.setItem(key, v) } catch { /* ignore */ }
+          return
         }
+        // Nothing on the account (or a layout that no longer exists): the
+        // browser's copy is stale — e.g. "calendar", merged into Classic.
+        // Fall back to Classic rather than keep a choice the account lacks.
+        setLayoutState(null)
+        try { localStorage.removeItem(key) } catch { /* ignore */ }
       })
     return () => { off = true }
   }, [session?.userId])
@@ -109,8 +115,8 @@ export function useBookingLayout(session, isMobile) {
     const { data, error } = await sb.from(table).update({ booking_layout: v }).eq('id', session.userId).select('id')
     if (error || !data?.length) console.warn('[booking layout] not saved to the account:', error?.message || 'no row matched')
   }
-  // No choice yet: Timeline on a computer, Agenda on a phone
-  return [layout || (isMobile ? 'agenda' : 'timeline'), setLayout]
+  // No choice yet: Classic, the layout everyone already knows
+  return [layout || 'current', setLayout]
 }
 
 export function LayoutSwitch({ value, onChange }) {
@@ -139,7 +145,7 @@ function useHeadSync() {
 }
 
 // ── hover card: the full details the moment the pointer is on a booking ──
-function useBookingHover() {
+export function useBookingHover() {
   const [hover, setHover] = useState(null)
   useEffect(() => {
     if (!hover) return
@@ -154,7 +160,7 @@ function useBookingHover() {
   return [hover, bind, () => setHover(null)]
 }
 
-function HoverCard({ hover, eqById }) {
+export function HoverCard({ hover, eqById }) {
   const ref = useRef(null)
   const [pos, setPos] = useState(null)
   useLayoutEffect(() => {
@@ -216,10 +222,13 @@ function laneUp(items, startOf, endOf) {
 // Day zoom: hours left to right; drag along a row to book that instrument,
 // down across rows to book several at the same time.
 // ══════════════════════════════════════════════════════════════
-export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById, canBook, isLocked, onBookingClick, onRangeBook, onOpenDay, onLockedRow, flashId }) {
-  const [group, setGroup] = useState(() => {
+export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById, canBook, isLocked, onBookingClick, onRangeBook, onOpenDay, onLockedRow, flashId, canSeePeople = false }) {
+  const [groupPick, setGroup] = useState(() => {
     try { return localStorage.getItem(`${APP}_booking_tl_rows`) === 'people' ? 'people' : 'eq' } catch { return 'eq' }
   })
+  // Rows: People (what each person is using) is for lab managers and admins
+  // only; everyone else always sees one row per instrument.
+  const group = canSeePeople ? groupPick : 'eq'
   const [showIdle, setShowIdle] = useState(false)
   const [hover, bind, clearHover] = useBookingHover()
   const [headRef, syncHead] = useHeadSync()
@@ -367,11 +376,13 @@ export function TimelineView({ zoom, weekStart, dayDate, rows, bookings, eqById,
   return (
     <div className="bkl">
       <div className="bkl-bar">
-        <span className="bkl-bar-label">Rows</span>
-        <div className="bkl-seg small">
-          <button type="button" className={group === 'eq' ? 'on' : ''} onClick={() => pickGroup('eq')}>Equipment</button>
-          <button type="button" className={group === 'people' ? 'on' : ''} onClick={() => pickGroup('people')}>People</button>
-        </div>
+        {canSeePeople && (<>
+          <span className="bkl-bar-label">Rows</span>
+          <div className="bkl-seg small">
+            <button type="button" className={group === 'eq' ? 'on' : ''} onClick={() => pickGroup('eq')}>Equipment</button>
+            <button type="button" className={group === 'people' ? 'on' : ''} onClick={() => pickGroup('people')}>People</button>
+          </div>
+        </>)}
         <span className="bkl-bar-tip">
           {isDay
             ? (group === 'eq'
@@ -589,180 +600,6 @@ export function AgendaView({ weekStart, bookings, eqById, onBookingClick, onBook
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════
-// CALENDAR — the week grid, but readable: bookings that overlap become one
-// block listing each person and instrument, and multi-day bookings sit in a
-// band at the top instead of filling whole day columns. Drag in a day to book.
-// ══════════════════════════════════════════════════════════════
-const PX = 44   // pixels per hour
-
-export function GroupedWeekView({ weekStart, bookings, eqById, canBook, onBookingClick, onSlot }) {
-  const [hover, bind, clearHover] = useBookingHover()
-  const [headRef, syncHead] = useHeadSync()
-  const [open, setOpen] = useState(null)
-  const [drag, setDrag] = useState(null)
-  const dragRef = useRef(null)
-  const colRefs = useRef([])
-  const from = midnight(weekStart)
-  const days = Array.from({ length: 7 }, (_, d) => addDays(from, d))
-  const single = bookings.filter(b => !isMulti(b))
-  const multi = bookings.filter(isMulti)
-
-  let H0 = 7, H1 = 19
-  days.forEach(d => { const [a, b] = hourRange(single.filter(x => sameDay(x.start_time, d)), d); H0 = Math.min(H0, a); H1 = Math.max(H1, b) })
-  const height = (H1 - H0) * PX
-
-  const band = multi.map(b => ({ b, vs: Math.max(+new Date(b.start_time), +from), ve: Math.min(+new Date(b.end_time), +addDays(from, 7)) }))
-    .filter(it => it.ve > it.vs).sort((a, b) => a.vs - b.vs)
-  const bandLanes = band.length ? laneUp(band, it => it.vs, it => it.ve) : 0
-  const wpct = t => ((t - from) / (7 * DAY)) * 100
-
-  function clusters(list) {
-    const out = []
-    list.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)).forEach(b => {
-      const last = out[out.length - 1], s = +new Date(b.start_time), e = +new Date(b.end_time)
-      if (last && s < last.e) { last.items.push(b); last.e = Math.max(last.e, e) }
-      else out.push({ s, e, items: [b] })
-    })
-    return out
-  }
-
-  const slotAt = (y, di) => {
-    const r = colRefs.current[di].getBoundingClientRect()
-    return Math.max(0, Math.min((H1 - H0) * 2 - 1, Math.floor((y - r.top) / (PX / 2))))
-  }
-  function onColDown(e, di) {
-    if (!canBook || e.button > 0 || e.target.closest('[data-bk]')) return
-    const s = slotAt(e.clientY, di)
-    const d = { di, a: s, b: s }
-    dragRef.current = d; setDrag(d); clearHover()
-    e.preventDefault()
-  }
-  useEffect(() => {
-    if (!drag) return
-    function move(e) {
-      const d = dragRef.current
-      if (!d) return
-      const n = { ...d, b: slotAt(e.clientY, d.di) }
-      dragRef.current = n; setDrag(n)
-    }
-    function up() {
-      const d = dragRef.current
-      dragRef.current = null; setDrag(null)
-      if (!d) return
-      const lo = Math.min(d.a, d.b), hi = Math.max(d.a, d.b)
-      const start = new Date(+days[d.di] + H0 * HOUR + lo * SNAP)
-      const end = new Date(+days[d.di] + H0 * HOUR + (hi + 1) * SNAP)
-      onSlot({ start, end })
-    }
-    function cancel() { dragRef.current = null; setDrag(null) }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', cancel)
-    return () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', cancel)
-    }
-  }, [!!drag])
-
-  return (
-    <div className="bkl">
-      <div className="bkl-bar">
-        <span className="bkl-bar-tip">
-          {canBook ? 'Drag down in a day to book. ' : 'Select equipment on the left to book. '}
-          Bookings at the same time are grouped — click "+ more" to see everyone. Point at a name for its details.
-        </span>
-      </div>
-      {/* Day headings pinned under the page toolbar (see TimelineView) */}
-      <div className="bkl-stick" ref={headRef}>
-        <div className="bkl-cal">
-          <div className="bkl-cal-grid bkl-cal-head">
-            <div />
-            {days.map((d, i) => (
-              <div key={i} className={sameDay(d, new Date()) ? 'today' : ''}>
-                {d.toLocaleDateString('en-US', { weekday: 'short' })}<b>{d.getDate()}</b>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="bkl-scroll" onScroll={syncHead}>
-        <div className="bkl-cal">
-          <div className="bkl-cal-grid bkl-cal-band">
-            <div className="bkl-cal-band-l">Multi-day</div>
-            <div className="bkl-cal-band-area" style={{ height: Math.max(1, bandLanes) * 32 + 4 }}>
-              {band.map(it => (
-                <button key={it.b.id} type="button" data-bk className="bkl-span abs"
-                  style={{ ...shape(it.b), left: `${wpct(it.vs)}%`, width: `${wpct(it.ve) - wpct(it.vs)}%`, top: 4 + it.lane * 32 }}
-                  onClick={() => onBookingClick(it.b)} {...bind(it.b)}>
-                  <Avatar b={it.b} />
-                  <span className="bkl-ell"><b>{personName(it.b)}</b> · {eqName(eqById[it.b.equipment_id])} · {whenText(it.b)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="bkl-cal-grid">
-            <div className="bkl-cal-hours" style={{ height }}>
-              {Array.from({ length: H1 - H0 - 1 }, (_, i) => (
-                <div key={i} style={{ top: (i + 1) * PX }}>{hourLabel(H0 + i + 1)}</div>
-              ))}
-            </div>
-            {days.map((day, di) => {
-              const cl = clusters(single.filter(b => sameDay(b.start_time, day)))
-              const g = drag && drag.di === di ? { lo: Math.min(drag.a, drag.b), hi: Math.max(drag.a, drag.b) } : null
-              return (
-                <div key={di} ref={el => { colRefs.current[di] = el }}
-                  className={`bkl-cal-col ${sameDay(day, new Date()) ? 'today' : ''} ${canBook ? 'can' : ''}`}
-                  style={{ height }} onPointerDown={e => onColDown(e, di)}>
-                  {Array.from({ length: H1 - H0 - 1 }, (_, i) => <div key={i} className="bkl-cal-line" style={{ top: (i + 1) * PX }} />)}
-                  {cl.map((c, ci) => {
-                    const top = ((c.s - day) / HOUR - H0) * PX
-                    const ht = Math.max(((c.e - c.s) / HOUR) * PX - 2, 44)
-                    const key = `${di}-${ci}`, isOpen = open === key
-                    if (c.items.length === 1) {
-                      const b = c.items[0]
-                      return (
-                        <button key={key} type="button" data-bk className="bkl-cl" style={{ ...shape(b), top, height: ht }}
-                          onClick={() => onBookingClick(b)} {...bind(b)}>
-                          <span className="bkl-cl-ln"><Avatar b={b} size={18} /><b className="bkl-ell">{personName(b)}</b></span>
-                          <span className="bkl-cl-ln bkl-ell">{eqName(eqById[b.equipment_id])}</span>
-                          <span className="bkl-cl-ln bkl-mono">{fmtT(b.start_time)}–{fmtT(b.end_time)}</span>
-                        </button>
-                      )
-                    }
-                    const fit = Math.max(1, Math.floor((ht - 28) / 22))
-                    const shown = isOpen ? c.items : c.items.slice(0, fit)
-                    const rest = c.items.length - shown.length
-                    return (
-                      <div key={key} data-bk className={`bkl-cl group ${isOpen ? 'open' : ''}`} style={{ top, height: isOpen ? 'auto' : ht }}>
-                        <div className="bkl-cl-hd"><span>{c.items.length} bookings</span><span className="bkl-mono">{fmtT(c.s)}</span></div>
-                        {shown.map(b => (
-                          <button key={b.id} type="button" className="bkl-cl-ln item" style={{ color: statusOf(b).fg }}
-                            onClick={() => onBookingClick(b)} {...bind(b)}>
-                            <Avatar b={b} size={18} />
-                            <span className="bkl-ell"><b>{personName(b).split(' ')[0]}</b> · {eqById[b.equipment_id]?.nickname || eqName(eqById[b.equipment_id])}{isOpen ? ` · ${fmtT(b.start_time)}–${fmtT(b.end_time)}` : ''}</span>
-                          </button>
-                        ))}
-                        {rest > 0 && <button type="button" className="bkl-more" onClick={() => setOpen(key)}>+{rest} more</button>}
-                        {isOpen && <button type="button" className="bkl-more" onClick={() => setOpen(null)}>Show less</button>}
-                      </div>
-                    )
-                  })}
-                  {g && <div className="bkl-ghost col" style={{ top: g.lo * (PX / 2), height: (g.hi - g.lo + 1) * (PX / 2) }}>
-                    {fmtT(new Date(+day + H0 * HOUR + g.lo * SNAP))} – {fmtT(new Date(+day + H0 * HOUR + (g.hi + 1) * SNAP))}
-                  </div>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-      <HoverCard hover={hover} eqById={eqById} />
     </div>
   )
 }
