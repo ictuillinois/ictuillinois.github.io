@@ -4,6 +4,8 @@ import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { buildEmailHtml } from '../../lib/emailTemplate'
 import { readExamFile } from '../../lib/examParser'
+import TestPills from '../../components/TestPills'
+import { GENERAL, groupKey, loadTests, loadExamGroups, testEntries, entryKey, testLabel, examStatus, passedKeys, namesOf } from '../../lib/equipmentTests'
 
 async function sendTrainingEmail(userId, prefKey, subject, title, body) {
   if (!userId) return
@@ -53,6 +55,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
   const [grantDate, setGrantDate] = useState('')
   const [grantBy, setGrantBy] = useState('')
   const [trainedPairs, setTrainedPairs] = useState(new Set())
+  const [tests, setTests] = useState([])
 
   useEffect(() => { load() }, [refreshKey])
 
@@ -66,10 +69,12 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
     let schedQ = sb.from('training_schedule').select('*').order('created_at', { ascending: false })
     let eqQ = sb.from('equipment_inventory').select('id, equipment_name, nickname, requires_exam').eq('is_active', true)
     if (orgId) { retQ = retQ.eq('organization_id', orgId); schedQ = schedQ.eq('organization_id', orgId); eqQ = eqQ.eq('organization_id', orgId) }
-    const [{ data: reqs }, { data: sched }, { data: eq }, { data: examRows }] = await Promise.all([
+    const [{ data: reqs }, { data: sched }, { data: eq }, { data: examRows }, t] = await Promise.all([
       retQ, schedQ, eqQ,
       sb.from('equipment_exam_questions').select('equipment_id'),
+      loadTests(),
     ])
+    setTests(t)
     const uids = [...new Set((reqs || []).filter(r => r.status === 'pending').map(r => r.user_id))]
     const { data: te } = uids.length
       ? await sb.from('training_equipment').select('user_id, equipment_id').in('user_id', uids)
@@ -133,6 +138,8 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
       status: 'proposed', notes: proposeNotes || null,
       updated_at: new Date().toISOString(),
       organization_id: session?.organizationId || null,
+      // The request is deleted below; the tests it asked for live on here.
+      ...(req.test_ids?.length ? { test_ids: req.test_ids } : {}),
     }
     let schedErr
     if (sched) {
@@ -198,6 +205,7 @@ export function TrainingRequestsPanel({ session, forUserId = null, compact = fal
                       {eq?.equipment_name || req.equipment_name}{req.requested_at ? ` · Requested ${new Date(req.requested_at).toLocaleDateString()}` : ''}
                       {req.notes && <span> · "{req.notes}"</span>}
                     </div>
+                    {req.test_ids?.length > 0 && <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>Tests: <b>{namesOf(req.test_ids, tests)}</b></div>}
                   </div>
                   <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>Pending</span>
                 </div>
@@ -333,23 +341,26 @@ export function UserTrainingSchedule({ session }) {
   const [counterDate, setCounterDate] = useState({})
   // For the confirmed-session banner: which exams this lab user has passed and
   // which instruments have an exam at all (requires_exam + questions).
-  const [passedEqIds, setPassedEqIds] = useState(new Set())
-  const [examEqIds, setExamEqIds] = useState(new Set())
+  const [passedRows, setPassedRows] = useState([])
+  const [groupsByEq, setGroupsByEq] = useState(new Map())
+  const [tests, setTests] = useState([])
   const [dismissed, setDismissed] = useState(() => new Set(JSON.parse(localStorage.getItem(`ilab_dismissed_sched_${session?.userId}`) || '[]')))
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const [{ data: sched }, { data: reqs }, { data: eq }, { data: passed }, { data: qs }] = await Promise.all([
+    const [{ data: sched }, { data: reqs }, { data: eq }, { data: passed }, groups, t] = await Promise.all([
       sb.from('training_schedule').select('*').eq('user_id', session.userId).order('created_at', { ascending: false }),
       sb.from('retraining_requests').select('*').eq('user_id', session.userId).eq('status', 'pending').order('requested_at', { ascending: false }),
       sb.from('equipment_inventory').select('id, equipment_name, nickname, requires_exam').eq('is_active', true),
-      sb.from('equipment_exam_results').select('equipment_id').eq('user_id', session.userId).eq('passed', true),
-      sb.from('equipment_exam_questions').select('equipment_id'),
+      sb.from('equipment_exam_results').select('*').eq('user_id', session.userId).eq('passed', true),
+      loadExamGroups(),
+      loadTests(),
     ])
-    setPassedEqIds(new Set((passed || []).map(r => r.equipment_id)))
-    setExamEqIds(new Set((qs || []).map(r => r.equipment_id)))
+    setPassedRows(passed || [])
+    setGroupsByEq(groups)
+    setTests(t)
     setSchedules(sched || [])
     setRequests(reqs || [])
     setEquipment(eq || [])
@@ -496,13 +507,14 @@ export function UserTrainingSchedule({ session }) {
         // and never mentioned the exam they must pass.
         const eq = equipment.find(e => e.id === sched.equipment_id)
         const eqName = eq?.equipment_name || eq?.nickname || 'this equipment'
-        const hasExam = !!eq && eq.requires_exam !== false && examEqIds.has(eq.id)
-        const examDone = passedEqIds.has(sched.equipment_id)
-        const examState = !hasExam ? 'none' : examDone ? 'passed' : sched.exam_skipped ? 'skipped' : 'todo'
+        const st = examStatus({ groups: eq?.requires_exam === false ? null : groupsByEq.get(sched.equipment_id), testIds: sched.test_ids, passed: passedKeys(passedRows, session.userId, sched.equipment_id) })
+        const examState = st.state === 'none' ? 'none' : st.state === 'passed' ? 'passed' : sched.exam_skipped ? 'skipped' : 'todo'
+        const owedNames = sched.test_ids?.length ? namesOf(st.owed, tests) : ''
         const openMaterials = () => { localStorage.setItem('selectEquipment', sched.equipment_id); useAppStore.getState().setScreen('equipmenthub') }
         const openExam = () => {
           localStorage.setItem('examEquipment', sched.equipment_id)
-          const st = useAppStore.getState(); st.setScreen('training'); st.setSidebarSubTab('exam')
+          if (st.owed[0]) localStorage.setItem('examTest', st.owed[0])
+          const app = useAppStore.getState(); app.setScreen('training'); app.setSidebarSubTab('exam')
         }
         const step = (n, done, text, note) => (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -524,7 +536,7 @@ export function UserTrainingSchedule({ session }) {
               <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: '#085041' }}>Before your session</div>
               {step(1, false, 'Watch the training video and read the SOP')}
               {examState !== 'none' && step(2, examState !== 'todo',
-                examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it' : 'Take the exam and pass it',
+                examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it' : `Take the ${owedNames ? `${owedNames} ` : ''}exam and pass it`,
                 examState === 'todo' ? 'You need 70% to pass and can retake it. Without it the training cannot be confirmed.' : null)}
               <div style={{ fontSize: 12, color: 'var(--text3)' }}>After the session, your lab manager confirms the training and you can start booking.</div>
             </div>
@@ -547,7 +559,7 @@ export function UserTrainingSchedule({ session }) {
 // EXAM SYSTEM
 // ══════════════════════════════════════════════════════════════
 // ── PDF/Word Question Uploader — read in the browser, no AI (lib/examParser) ──
-function PdfQuestionUploader({ equipmentId, onImported }) {
+function PdfQuestionUploader({ equipmentId, testId = null, onImported }) {
   const { toast } = useAppStore()
   const [file, setFile] = useState(null)
   const [extracting, setExtracting] = useState(false)
@@ -580,13 +592,16 @@ function PdfQuestionUploader({ equipmentId, onImported }) {
     for (let i = 0; i < preview.length; i++) {
       const q = preview[i]
       if (!q.question) continue
-      await sb.from('equipment_exam_questions').insert({
+      const { error } = await sb.from('equipment_exam_questions').insert({
         equipment_id: equipmentId,
         question: q.question, option_a: q.option_a||'', option_b: q.option_b||'',
         option_c: q.option_c||'', option_d: q.option_d||'',
         correct_answer: (q.correct_answer||'a').toLowerCase().charAt(0),
         order_num: i,
+        ...(testId ? { test_id: testId } : {}),
+        ...(q.explanation ? { explanation: q.explanation } : {}),
       })
+      if (error) { toast(`Stopped after ${count} of ${preview.length} questions: ${error.message}`); onImported(); return }
       count++
     }
     toast(`${count} questions imported ✓`)
@@ -639,6 +654,7 @@ function PdfQuestionUploader({ equipmentId, onImported }) {
                     </div>
                   ))}
                 </div>
+                {q.explanation && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Explanation: {q.explanation}</div>}
               </div>
             ))}
           </div>
@@ -691,12 +707,22 @@ function SessionBox({ s, eqName, compact = false }) {
   )
 }
 
+const EMPTY_Q = { question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a', explanation: '' }
+
 export function ExamTab({ session }) {
   const { toast } = useAppStore()
   const [equipment, setEquipment] = useState([])
   const [selectedEq, setSelectedEq] = useState(null)
-  const [questions, setQuestions] = useState([])
-  const [results, setResults] = useState([])
+  // Everything on the instrument; questions / results below are the selected
+  // test's. One exam per test (lib/equipmentTests.js).
+  const [allQuestions, setAllQuestions] = useState([])
+  const [allResults, setAllResults] = useState([])
+  const [tests, setTests] = useState([])
+  const [testSel, setTestSel] = useState(GENERAL)
+  const [askedIds, setAskedIds] = useState([])   // tests this lab user asked for
+  const [qIdx, setQIdx] = useState(0)            // the question on screen
+  const [finishing, setFinishing] = useState(false)
+  const openFresh = useRef(true)                 // an instrument was just opened
   const [loading, setLoading] = useState(true)
   const [examMode, setExamMode] = useState(false)
   const [answers, setAnswers] = useState({})
@@ -705,11 +731,26 @@ export function ExamTab({ session }) {
   // agreed / confirmed), shown with the congratulations after passing.
   const [mySession, setMySession] = useState(null)
   const [editQuestion, setEditQuestion] = useState(null)
-  const [newQ, setNewQ] = useState({ question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a' })
+  const [newQ, setNewQ] = useState(EMPTY_Q)
   const [progress, setProgress] = useState(null)
   const [requiresExam, setRequiresExam] = useState(null)
 
   const isAdminLabManager = canEdit(session)
+  const inGroup = x => groupKey(x.test_id) === testSel
+  const questions = allQuestions.filter(inGroup)
+  const results = allResults.filter(inGroup)
+  const selTest = tests.find(t => t.id === testSel) || null
+  const entries = testEntries(tests, allQuestions.some(q => !q.test_id))
+  const groups = new Set(allQuestions.map(q => groupKey(q.test_id)))
+  const myPassed = new Set(allResults.filter(r => r.passed && r.user_id === session.userId).map(r => groupKey(r.test_id)))
+  // After passing one test: the other tests they asked for that are still owed
+  const stillOwed = askedIds.length ? examStatus({ groups, testIds: askedIds, passed: myPassed }).owed.filter(k => k !== testSel) : []
+
+  function pickTest(k) {
+    setTestSel(k); setExamMode(false); setSubmitted(null); setAnswers({}); setQIdx(0)
+    setEditQuestion(null); setNewQ(EMPTY_Q)
+  }
+  function startExam() { setAnswers({}); setQIdx(0); setSubmitted(null); setExamMode(true) }
 
   useEffect(() => { loadEquipment() }, [])
   useEffect(() => { if (selectedEq) loadEquipmentData() }, [selectedEq])
@@ -744,16 +785,34 @@ export function ExamTab({ session }) {
   }
 
   async function loadEquipmentData() {
-    const [{ data: q }, { data: r }, { data: p }, { data: eqInfo }] = await Promise.all([
+    const mine = !isAdminLabManager && session?.userId
+    const [{ data: q }, { data: r }, { data: p }, { data: eqInfo }, t, { data: sch }, { data: req }] = await Promise.all([
       sb.from('equipment_exam_questions').select('*').eq('equipment_id', selectedEq).order('order_num'),
       sb.from('equipment_exam_results').select('*, users(name)').eq('equipment_id', selectedEq).order('created_at', { ascending: false }),
       session.userId ? sb.from('equipment_material_progress').select('*').eq('user_id', session.userId).eq('equipment_id', selectedEq).maybeSingle() : { data: null },
       sb.from('equipment_inventory').select('requires_exam').eq('id', selectedEq).maybeSingle(),
+      loadTests(selectedEq),
+      mine ? sb.from('training_schedule').select('*').eq('user_id', session.userId).eq('equipment_id', selectedEq).in('status', ['proposed', 'confirmed', 'countered']).order('created_at', { ascending: false }).limit(1) : { data: [] },
+      mine ? sb.from('retraining_requests').select('*').eq('user_id', session.userId).eq('equipment_id', selectedEq).eq('status', 'pending').limit(1) : { data: [] },
     ])
-    setQuestions(q || [])
-    setResults(r || [])
+    setAllQuestions(q || [])
+    setAllResults(r || [])
+    setTests(t)
     setProgress(p || null)
     setRequiresExam(eqInfo?.requires_exam ?? null)
+    const asked = sch?.[0]?.test_ids || req?.[0]?.test_ids || []
+    setAskedIds(asked)
+    // Open on: the test the SOP page sent them to, else the first one they
+    // asked for and have not passed, else the first with questions.
+    const keys = testEntries(t, (q || []).some(x => !x.test_id)).map(entryKey)
+    const wanted = localStorage.getItem('examTest')
+    localStorage.removeItem('examTest')
+    const passed = new Set((r || []).filter(x => x.passed && x.user_id === session.userId).map(x => groupKey(x.test_id)))
+    const hasQs = k => (q || []).some(x => groupKey(x.test_id) === k)
+    const first = asked.find(k => keys.includes(k) && !passed.has(k)) || keys.find(hasQs) || keys[0]
+    const fresh = openFresh.current
+    openFresh.current = false
+    setTestSel(k => wanted && keys.includes(wanted) ? wanted : !fresh && keys.includes(k) ? k : first)
   }
 
   async function saveRequiresExam(val) {
@@ -764,12 +823,12 @@ export function ExamTab({ session }) {
 
   async function saveQuestion() {
     if (!newQ.question.trim()) { toast('Question required.'); return }
-    if (editQuestion) {
-      await sb.from('equipment_exam_questions').update({ ...newQ, order_num: editQuestion.order_num }).eq('id', editQuestion.id)
-    } else {
-      await sb.from('equipment_exam_questions').insert({ ...newQ, equipment_id: selectedEq, order_num: questions.length })
-    }
-    setNewQ({ question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a' })
+    const row = { ...newQ, explanation: newQ.explanation.trim() || null }
+    const { error } = editQuestion
+      ? await sb.from('equipment_exam_questions').update({ ...row, order_num: editQuestion.order_num }).eq('id', editQuestion.id)
+      : await sb.from('equipment_exam_questions').insert({ ...row, equipment_id: selectedEq, order_num: questions.length, ...(selTest ? { test_id: selTest.id } : {}) })
+    if (error) { toast('Could not save the question: ' + error.message); return }
+    setNewQ(EMPTY_Q)
     setEditQuestion(null); loadEquipmentData(); toast('Question saved.')
   }
 
@@ -793,6 +852,7 @@ export function ExamTab({ session }) {
       user_id: session.userId, equipment_id: selectedEq,
       score, total: questions.length, passed, answers,
       organization_id: session?.organizationId || null,
+      ...(selTest ? { test_id: selTest.id } : {}),
     })
     if (examErr) { toast('Error saving exam result: ' + examErr.message); return }
     // Mark progress
@@ -807,7 +867,7 @@ export function ExamTab({ session }) {
     if (passed) {
       const orgId = session?.organizationId
       const eq = equipment.find(e => e.id === selectedEq)
-      const eqName = eq?.equipment_name || eq?.nickname || 'equipment'
+      const eqName = (eq?.equipment_name || eq?.nickname || 'equipment') + (selTest ? ` (${testLabel(selTest)})` : '')
       // The session (day, time, trainer) goes into both messages. The grade
       // does not go to managers: the lab user is told it stays private.
       const sess = await loadMySession()
@@ -846,7 +906,7 @@ export function ExamTab({ session }) {
       {/* Equipment selector */}
       <div className="field" style={{ maxWidth: 400, marginBottom: 20 }}>
         <label>Select Equipment</label>
-        <select value={selectedEq || ''} onChange={e => { setSelectedEq(e.target.value); setExamMode(false); setSubmitted(null); setAnswers({}) }}>
+        <select value={selectedEq || ''} onChange={e => { openFresh.current = true; setSelectedEq(e.target.value); pickTest(GENERAL) }}>
           <option value="">— Select —</option>
           {equipment.map(e => <option key={e.id} value={e.id}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}</option>)}
         </select>
@@ -854,6 +914,14 @@ export function ExamTab({ session }) {
 
       {selectedEq && (
         <div>
+          <TestPills equipmentId={selectedEq} entries={entries} selected={testSel} onSelect={pickTest}
+            canManage={isAdminLabManager} onChanged={id => { if (id) pickTest(id); loadEquipmentData() }} label="Test"
+            badge={k => {
+              const n = allQuestions.filter(q => groupKey(q.test_id) === k).length
+              if (isAdminLabManager) return { text: `${n} question${n !== 1 ? 's' : ''}`, bg: 'var(--surface2)', fg: 'var(--text3)' }
+              if (myPassed.has(k)) return { text: '✓ passed', bg: '#E1F5EE', fg: '#085041' }
+              return askedIds.includes(k) && n ? { text: 'exam to do', bg: '#fef3c7', fg: '#92400e' } : null
+            }} />
           {/* Admin: manage questions + see all results */}
           {isAdminLabManager && (
             <div>
@@ -887,9 +955,10 @@ export function ExamTab({ session }) {
                 <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12 }}>
                   Upload a Word (.docx), PDF or text file. It is read here in your browser — no AI, nothing is sent anywhere.
                   Number each question (1. 2. 3.) and letter its options (A. B. C. D.); True / False questions work too.
-                  Give the answer as "Answer: B" under the question, in an Answer Key at the end, or in bold. You can check and change every answer before importing.
+                  Give the answer as "Answer: B" under the question, in an Answer Key at the end, or in bold; an "Explanation:" line is kept and shown after the lab user answers. You can check and change every answer before importing.
+                  {selTest && <> These questions go on <b>{testLabel(selTest)}</b>.</>}
                 </div>
-                <PdfQuestionUploader equipmentId={selectedEq} onImported={loadEquipmentData} />
+                <PdfQuestionUploader equipmentId={selectedEq} testId={selTest?.id || null} onImported={loadEquipmentData} />
               </div>
 
               {/* Add/Edit question manually */}
@@ -908,9 +977,10 @@ export function ExamTab({ session }) {
                     <option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option>
                   </select>
                 </div>
+                <div className="field"><label>Explanation <span style={{ fontWeight: 400, color: 'var(--text3)' }}>(shown to the lab user after they answer)</span></label><textarea rows={2} value={newQ.explanation} onChange={e => setNewQ(f => ({ ...f, explanation: e.target.value }))} style={{ resize: 'vertical' }} /></div>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button className="btn btn-primary btn-sm" onClick={saveQuestion}>Save question</button>
-                  {editQuestion && <button className="btn btn-sm" onClick={() => { setEditQuestion(null); setNewQ({ question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'a' }) }}>Cancel</button>}
+                  {editQuestion && <button className="btn btn-sm" onClick={() => { setEditQuestion(null); setNewQ(EMPTY_Q) }}>Cancel</button>}
                 </div>
               </div>
 
@@ -920,7 +990,7 @@ export function ExamTab({ session }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>Q{i+1}: {q.question}</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => { setEditQuestion(q); setNewQ({ question: q.question, option_a: q.option_a||'', option_b: q.option_b||'', option_c: q.option_c||'', option_d: q.option_d||'', correct_answer: q.correct_answer||'a' }) }}>Edit</button>
+                      <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => { setEditQuestion(q); setNewQ({ question: q.question, option_a: q.option_a||'', option_b: q.option_b||'', option_c: q.option_c||'', option_d: q.option_d||'', correct_answer: q.correct_answer||'a', explanation: q.explanation||'' }) }}>Edit</button>
                       <button className="btn btn-sm btn-danger" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => deleteQuestion(q.id)}>✕</button>
                     </div>
                   </div>
@@ -931,6 +1001,7 @@ export function ExamTab({ session }) {
                       </div>
                     ))}
                   </div>
+                  {q.explanation && <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>Explanation: {q.explanation}</div>}
                 </div>
               ))}
 
@@ -1007,7 +1078,7 @@ export function ExamTab({ session }) {
                     questions.length > 0 ? (
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 13, color: '#085041', marginBottom: 12 }}>✓ All materials reviewed — you are ready!</div>
-                        <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={() => setExamMode(true)}>
+                        <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={startExam}>
                           📝 Start Exam ({questions.length} questions)
                         </button>
                         <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8 }}>Passing score: 70%</div>
@@ -1040,33 +1111,60 @@ export function ExamTab({ session }) {
                       Your exam grade is for your information only and is not visible to your lab manager.
                     </div>
                   )}
-                  {!latestResult.passed && questions.length > 0 && <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }} onClick={() => { setExamMode(true); setAnswers({}) }}>Retake exam</button>}
+                  {!latestResult.passed && questions.length > 0 && <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }} onClick={startExam}>Retake exam</button>}
+                  {latestResult.passed && stillOwed.length > 0 && <div style={{ fontSize: 13, color: '#92400e', marginTop: 8, fontWeight: 600 }}>Still to pass for your training: {namesOf(stillOwed, tests)}</div>}
                 </div>
               )}
 
-              {/* Exam questions */}
-              {examMode && !submitted && (
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>📝 Exam — {equipment.find(e => e.id === selectedEq)?.equipment_name}</div>
-                  {questions.map((q, i) => (
-                    <div key={q.id} className="card" style={{ marginBottom: 12 }}>
-                      <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 12 }}>Q{i+1}: {q.question}</div>
-                      {['a','b','c','d'].map(opt => q[`option_${opt}`] && (
-                        <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 6, background: answers[q.id] === opt ? 'var(--accent-light)' : 'var(--surface2)', border: `1px solid ${answers[q.id] === opt ? 'var(--accent)' : 'var(--border)'}` }}>
-                          <input type="radio" name={q.id} value={opt} checked={answers[q.id] === opt} onChange={() => setAnswers(a => ({ ...a, [q.id]: opt }))} style={{ width: 'auto' }} />
-                          <span style={{ fontSize: 13 }}><strong>{opt.toUpperCase()}.</strong> {q[`option_${opt}`]}</span>
-                        </label>
-                      ))}
+              {/* One question at a time: picking an option locks it, then the
+                  right answer and the explanation show, whether right or wrong. */}
+              {examMode && !submitted && questions[qIdx] && (() => {
+                const q = questions[qIdx]
+                const picked = answers[q.id]
+                const done = picked !== undefined
+                const right = picked === q.correct_answer
+                const last = qIdx === questions.length - 1
+                const correctText = q[`option_${q.correct_answer}`]
+                const finish = async () => { setFinishing(true); await submitExam(); setFinishing(false) }
+                return (
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>📝 Exam — {equipment.find(e => e.id === selectedEq)?.equipment_name}{selTest ? ` · ${testLabel(selTest)}` : ''}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 8 }}>Question {qIdx + 1} of {questions.length}</div>
+                    <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', marginBottom: 16 }}>
+                      <div style={{ height: '100%', background: 'var(--accent)', width: `${((qIdx + (done ? 1 : 0)) / questions.length) * 100}%`, transition: 'width 0.3s' }} />
                     </div>
-                  ))}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button className="btn btn-primary" onClick={submitExam} disabled={Object.keys(answers).length < questions.length}>
-                      Submit exam ({Object.keys(answers).length}/{questions.length} answered)
-                    </button>
-                    <button className="btn" onClick={() => setExamMode(false)}>Cancel</button>
+                    <div className="card" style={{ marginBottom: 12 }}>
+                      <div style={{ fontWeight: 500, fontSize: 15, marginBottom: 12 }}>{q.question}</div>
+                      {['a','b','c','d'].map(opt => {
+                        if (!q[`option_${opt}`]) return null
+                        const isRight = done && opt === q.correct_answer
+                        const isWrong = done && opt === picked && !right
+                        return (
+                          <button key={opt} type="button" disabled={done} onClick={() => setAnswers(a => ({ ...a, [q.id]: opt }))}
+                            style={{ display: 'flex', width: '100%', textAlign: 'left', gap: 10, padding: '10px 12px', borderRadius: 6, cursor: done ? 'default' : 'pointer', marginBottom: 6, fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--text)',
+                              background: isRight ? 'var(--accent-light)' : isWrong ? '#fcebeb' : 'var(--surface2)', border: `1px solid ${isRight ? 'var(--accent)' : isWrong ? '#f09595' : 'var(--border)'}` }}>
+                            <strong>{opt.toUpperCase()}.</strong> <span>{q[`option_${opt}`]}</span>
+                          </button>
+                        )
+                      })}
+                      {done && (
+                        <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 8, fontSize: 14, lineHeight: 1.55, background: right ? '#E1F5EE' : '#fcebeb', border: `1px solid ${right ? '#9FE1CB' : '#f09595'}` }}>
+                          <div style={{ fontWeight: 700, color: right ? '#085041' : '#a32d2d', marginBottom: q.explanation ? 4 : 0 }}>
+                            {right ? '✓ Correct' : `✕ Not quite — the answer is ${q.correct_answer.toUpperCase()}. ${correctText}`}
+                          </div>
+                          {q.explanation}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                      <button className="btn" onClick={() => setExamMode(false)}>Cancel</button>
+                      {last
+                        ? <button className="btn btn-primary" onClick={finish} disabled={!done || finishing}>{finishing ? 'Saving…' : 'See result →'}</button>
+                        : <button className="btn btn-primary" onClick={() => setQIdx(i => i + 1)} disabled={!done}>Next →</button>}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* Result after submit */}
               {submitted && (
@@ -1086,6 +1184,7 @@ export function ExamTab({ session }) {
                   {submitted.passed
                     ? <SessionBox s={mySession} eqName={equipment.find(e => e.id === selectedEq)?.equipment_name || 'this equipment'} />
                     : <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>Review the SOP and training materials, then try again.</div>}
+                  {submitted.passed && stillOwed.length > 0 && <div style={{ fontSize: 14, color: '#92400e', fontWeight: 600, marginBottom: 12 }}>Still to pass for your training: {namesOf(stillOwed, tests)}</div>}
                   {submitted.passed && (
                     <div style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic', marginBottom: 24 }}>
                       Your grade is for your information only and will not be shown to your lab manager.
@@ -1093,7 +1192,7 @@ export function ExamTab({ session }) {
                   )}
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                     <button className="btn btn-primary" onClick={() => setSubmitted(null)}>Done</button>
-                    {!submitted.passed && <button className="btn" onClick={() => { setSubmitted(null); setExamMode(true); setAnswers({}) }}>Retake exam</button>}
+                    {!submitted.passed && <button className="btn" onClick={startExam}>Retake exam</button>}
                   </div>
                 </div>
               )}

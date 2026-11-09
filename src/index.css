@@ -214,6 +214,9 @@ main > * { animation: screen-fade 0.16s ease-out; }
 .filter-btn { padding: 4px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text2); transition: all 0.15s; }
 .filter-btn:hover { border-color: var(--accent3); color: var(--accent3); }
 .filter-btn.active { background: var(--accent3); color: #fff; border-color: var(--accent3); }
+/* Tests on an instrument (TestPills) — equipment screens are teal */
+.filter-btn.test-pill:hover { border-color: var(--accent); color: var(--accent); }
+.filter-btn.test-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* ── Supply rows ── */
 .supply-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--surface2); }

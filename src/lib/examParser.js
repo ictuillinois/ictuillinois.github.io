@@ -11,7 +11,11 @@
 //   "Answer: B" under the question · an "Answer Key" section at the end
 //   ("1. Answer: B" or "1. B") · ✓ / * / "(correct)" on the option ·
 //   the option in bold (Word) · a ticked box ☑ / ☒ (True / False).
+// Also: a "Question 1   Multiple choice" heading with the question on the next
+// line, and an "Explanation: …" line, kept and shown after the user answers.
 
+const QHEAD_RE  = /^question\s+(\d{1,3})\s*(?:[-–:.)]\s*)?(?:multiple\s*choice|true\s*\/\s*false|t\s*\/\s*f)?\s*$/i
+const EXPL_RE   = /^explanation\s*[:.\-–]\s*(.+)$/i
 const Q_RE      = /^(?:q(?:uestion)?\s*)?(\d{1,3})\s*[.)]\s*(.+)$/i
 const OPT_RE    = /^\(?([a-d])[.)]\s*(.+)$/i
 const TF_RE     = /^([\u2610\u2611\u2612\u25a1\u25a0\u2713\u2714]?)\s*(true|false)\s*([\u2713\u2714*]?)\s*$/i
@@ -57,15 +61,26 @@ export function parseExamLines(input) {
       continue   // explanations under each key line are not needed
     }
 
+    // a heading on its own line; the question text follows (the "wrapped" case below)
+    const head = t.match(QHEAD_RE)
+    if (head) {
+      close()
+      cur = { num: Number(head[1]), question: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' }
+      continue
+    }
+
     // a new question: "1. …" or a Word auto-numbered top-level paragraph
     const q = line.auto === 'q' ? [null, String(++autoQ), t] : t.match(Q_RE)
     if (q && !(cur && OPT_RE.test(t) && line.auto !== 'q')) {
       close()
       if (line.auto !== 'q') autoQ = Number(q[1])
-      cur = { num: Number(q[1]), question: q[2].replace(TYPE_TAG, '').trim(), option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '' }
+      cur = { num: Number(q[1]), question: q[2].replace(TYPE_TAG, '').trim(), option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: '', explanation: '' }
       continue
     }
     if (!cur) continue   // title, name / date lines, instructions
+
+    const expl = t.match(EXPL_RE)
+    if (expl) { cur.explanation = expl[1].trim(); continue }
 
     const ans = t.match(ANS_RE)
     if (ans) { cur.correct_answer = letterOf(ans[1]); continue }
@@ -88,7 +103,7 @@ export function parseExamLines(input) {
     }
 
     // anything else: the question wrapped onto another line (before options)
-    if (!cur.option_a) cur.question += ' ' + t
+    if (!cur.option_a) cur.question = (cur.question + ' ' + t).trim()
   }
   close()
 

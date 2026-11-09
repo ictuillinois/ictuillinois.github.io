@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
 import { requiredSafetySteps } from '../labsafety/safetySteps'
 import { forLabUsers, labUserEquipment, retrainingDueIds } from '../../lib/equipmentAccess'
+import { loadTests, loadExamGroups, examStatus, passedKeys, namesOf, testLabel } from '../../lib/equipmentTests'
 import VehicleAgreement from './VehicleAgreement'
 import { AvatarDisplay } from '../../components/Avatars'
 import { useAppStore } from '../../store/useAppStore'
@@ -801,7 +802,8 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   const [retrainDueIds, setRetrainDueIds] = useState(new Set())
   // Exam → training session flow (Nov 2026): instruments that have exam
   // questions; the session whose "Skip the exam" box is open, and its reason.
-  const [examEqIds, setExamEqIds] = useState(new Set())
+  const [examGroups, setExamGroups] = useState(new Map())
+  const [tests, setTests] = useState([])
   const [skipping, setSkipping] = useState(null)
   const [skipReason, setSkipReason] = useState('')
   const [importing, setImporting] = useState(false)
@@ -886,8 +888,9 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
         .eq('user_id', session.userId).eq('status', 'confirmed')
       setRetrainDueIds(retrainingDueIds(bk || [], (rec || []).filter(r => String(r.user_id) === String(session.userId))))
     }
-    const { data: eqq } = await sb.from('equipment_exam_questions').select('equipment_id')
-    setExamEqIds(new Set((eqq || []).map(r => r.equipment_id)))
+    const [groups, t] = await Promise.all([loadExamGroups(), loadTests()])
+    setExamGroups(groups)
+    setTests(t)
     setEquipment(eq || [])
     setRecords(rec || [])
     setPendingRetraining(retrainReqs || [])
@@ -905,10 +908,15 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   function getPassedExam(userId, equipmentId) {
     return passedExams.find(e => String(e.user_id) === String(userId) && e.equipment_id === equipmentId)
   }
+  // Which exams this person still owes on this instrument (lib/equipmentTests)
+  function examFor(userId, equipmentId, testIds) {
+    const eq = equipment.find(e => e.id === equipmentId)
+    return examStatus({ groups: eq?.requires_exam === false ? null : examGroups.get(equipmentId), testIds, passed: passedKeys(passedExams, userId, equipmentId) })
+  }
   // Manager review checklist shown under each pending training row
-  function reviewChecklist(userId, equipmentId) {
+  function reviewChecklist(userId, equipmentId, testIds) {
     const prog = getProgress(userId, equipmentId)
-    const exam = getPassedExam(userId, equipmentId)
+    const exam = examFor(userId, equipmentId, testIds).state === 'passed'
     const chip = (ok, label) => (
       <span key={label} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: ok ? '#E1F5EE' : '#fef2f2', color: ok ? '#085041' : '#b91c1c', border: `1px solid ${ok ? '#9FE1CB' : '#fecaca'}` }}>
         {ok ? '✓' : '✗'} {label}
@@ -920,7 +928,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
         <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>Review:</span>
         {chip(!!prog?.watched_video, 'Video watched')}
         {chip(!!prog?.downloaded_sop, 'SOP downloaded')}
-        {chip(!!exam, 'Exam passed')}
+        {chip(exam, testIds?.length ? `Exam passed: ${namesOf(testIds, tests)}` : 'Exam passed')}
         {!allDone && (
           <button onClick={async () => {
             const ids = labUsers.map(s => s.id)
@@ -1020,7 +1028,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     return pendingRetraining.find(r => r.user_id === userId && r.equipment_id === equipmentId) || null
   }
 
-  async function submitRetrainingRequest(userId, userName, equipmentId) {
+  async function submitRetrainingRequest(userId, userName, equipmentId, testIds = []) {
     const eq = equipment.find(e => e.id === equipmentId)
     const { data: existing } = await sb.from('retraining_requests')
       .select('id').eq('user_id', userId).eq('equipment_id', equipmentId).eq('status', 'pending').maybeSingle()
@@ -1032,6 +1040,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       status: 'pending',
       requested_at: new Date().toISOString(),
       organization_id: session?.organizationId || null,
+      ...(testIds.length ? { test_ids: testIds } : {}),
     })
     if (error) { toast('Error: ' + error.message); return }
     toast('Training request submitted ✓')
@@ -1045,7 +1054,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
             sb.from('notifications').insert(managers.map(m => ({
               user_id: m.id, type: 'training_request',
               title: `${userName} requested equipment training`,
-              body: `${eq?.equipment_name || eq?.nickname || 'Equipment'} — review in Training Records → Equipment.`,
+              body: `${eq?.equipment_name || eq?.nickname || 'Equipment'}${testIds.length ? ` (${namesOf(testIds, tests)})` : ''} — review in Training Records → Equipment.`,
               read: false,
             }))).then(null, e => console.warn('[notify] insert failed:', e?.message || e))
           }
@@ -1119,7 +1128,6 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
 
   // An instrument has an exam when it has questions and is not marked "exam
   // not required". Without one, nothing can be passed, so nothing waits on it.
-  const hasExam = eq => !!eq && eq.requires_exam !== false && examEqIds.has(eq.id)
   const sessionWhen = d => d ? new Date(d).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'date not set'
   const firstName = u => (fullName(u) || '').split(' ')[0]
 
@@ -1265,7 +1273,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
       {(hideChrome || equipSubTab === 'training') && (
         <div>
           {!canEdit(session) && (
-            <RetrainingRequestPanel session={session} equipment={equipment} pendingRetraining={pendingRetraining} onSubmit={submitRetrainingRequest} myRecords={getLatest(session.userId)} retrainDueIds={retrainDueIds} />
+            <RetrainingRequestPanel session={session} equipment={equipment} pendingRetraining={pendingRetraining} onSubmit={submitRetrainingRequest} tests={tests} myRecords={getLatest(session.userId)} retrainDueIds={retrainDueIds} />
           )}
           {/* Managers: request queue lives here now (sidebar Requests tab removed) —
               per-user in the hub panel, full org queue in All-users audit mode */}
@@ -1430,7 +1438,9 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                         return (
                           <React.Fragment key={`req-${req.id}`}>
                           <tr style={{ background: '#fef3c7' }}>
-                            <td style={{ fontWeight: 500 }}>{eq?.equipment_name || eq?.equipment_name || req.equipment_name}</td>
+                            <td style={{ fontWeight: 500 }}>{eq?.equipment_name || eq?.equipment_name || req.equipment_name}
+                              {req.test_ids?.length > 0 && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{namesOf(req.test_ids, tests)}</div>}
+                            </td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             <td><span style={{ fontSize: 11, background: '#fde68a', color: '#92400e', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>⏳ Awaiting date</span></td>
@@ -1445,7 +1455,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                             )}
                           </tr>
                           {canManage && (
-                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, req.equipment_id)}</td></tr>
+                            <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>{reviewChecklist(u.id, req.equipment_id, req.test_ids)}</td></tr>
                           )}
                           </React.Fragment>
                         )
@@ -1457,9 +1467,11 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                         const isCountered = sched.status === 'countered'
                         const dateVal = isConfirmed ? sched.confirmed_date : isCountered ? sched.counter_date : sched.proposed_date
                         const exam = getPassedExam(u.id, sched.equipment_id)
-                        const needsExam = hasExam(eq)
+                        const st = examFor(u.id, sched.equipment_id, sched.test_ids)
                         // passed / skipped / no exam on this instrument / still waiting
-                        const examState = exam ? 'passed' : sched.exam_skipped ? 'skipped' : !needsExam ? 'none' : 'waiting'
+                        const examState = st.state === 'passed' ? 'passed' : st.state === 'none' ? 'none' : sched.exam_skipped ? 'skipped' : 'waiting'
+                        const askedNames = sched.test_ids?.length ? namesOf(sched.test_ids, tests) : ''
+                        const owedNames = sched.test_ids?.length ? namesOf(st.owed, tests) : ''
                         const canConfirm = examState !== 'waiting'
                         const tone = examState === 'waiting' ? { bg: '#fef3c7', fg: '#92400e', line: '#fcd34d' }
                           : examState === 'skipped' ? { bg: '#e0f2fe', fg: '#0369a1', line: '#7dd3fc' }
@@ -1479,6 +1491,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                               <button onClick={goToHub} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationStyle: 'dotted', fontSize: 'inherit' }}>
                                 {eq?.equipment_name || eq?.nickname || '—'}
                               </button>
+                              {askedNames && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text3)' }}>{askedNames}</div>}
                             </td>
                             <td style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{dateVal ? when : '—'}</td>
                             <td style={{ fontSize: 12, color: 'var(--text3)' }}>{sched.proposed_by || '—'}</td>
@@ -1502,10 +1515,10 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                             <tr><td colSpan={cols} style={{ padding: 0, border: 'none' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 14px', fontSize: 12, background: tone.bg, color: tone.fg, borderTop: '1px dashed var(--border)' }}>
                                 <span>
-                                  {examState === 'passed' && <><b>{firstName(u)} passed the exam on {new Date(exam.created_at).toLocaleDateString()}.</b> Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
+                                  {examState === 'passed' && <><b>{firstName(u)} passed the {askedNames ? `${askedNames} ` : ''}exam{askedNames && sched.test_ids.length > 1 ? 's' : ''}{exam ? ` on ${new Date(exam.created_at).toLocaleDateString()}` : ''}.</b> Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
                                   {examState === 'skipped' && <><b>Exam skipped by {sched.exam_skipped_by || 'a lab manager'}{sched.exam_skip_reason ? ` (${sched.exam_skip_reason})` : ''}.</b> Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
                                   {examState === 'none' && <>No exam for this equipment. Training session {when} with {trainer}. After the session, confirm it to give booking access.</>}
-                                  {examState === 'waiting' && <><b>Waiting for the exam.</b> {firstName(u)} has to pass the {eqName} exam before the training can be confirmed.</>}
+                                  {examState === 'waiting' && <><b>Waiting for the exam.</b> {firstName(u)} has to pass the {owedNames || eqName} exam before the training can be confirmed.</>}
                                 </span>
                                 {examState === 'waiting' && skipping !== sched.id && (
                                   <button className="btn btn-sm" style={{ fontSize: 11, border: '1px solid #7dd3fc', background: '#e0f2fe', color: '#0369a1' }}
@@ -1583,16 +1596,22 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   )
 }
 
-function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmit, myRecords = [], retrainDueIds = new Set() }) {
+function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmit, tests = [], myRecords = [], retrainDueIds = new Set() }) {
   const [selectedEq, setSelectedEq] = useState('')
+  const [pickedTests, setPickedTests] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useAppStore()
+  // Only a machine that runs several tests asks which one: the exams of the
+  // tests picked here are the ones owed before the training can be confirmed.
+  const eqTests = tests.filter(t => t.equipment_id === selectedEq)
+  const mustPick = eqTests.length > 1
 
   async function submit() {
     if (!selectedEq) { toast('Select equipment.'); return }
+    if (mustPick && !pickedTests.length) { toast('Tick the test you need training for.'); return }
     setSubmitting(true)
-    await onSubmit(session.userId, session.username, selectedEq)
-    setSelectedEq('')
+    await onSubmit(session.userId, session.username, selectedEq, mustPick ? pickedTests : [])
+    setSelectedEq(''); setPickedTests([])
     setSubmitting(false)
   }
 
@@ -1616,7 +1635,7 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#0369a1' }}>📋 Request Training</div>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12 }}>Select the equipment you need training on. Your request will be sent to the lab manager.</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={selectedEq} onChange={e => setSelectedEq(e.target.value)} style={{ flex: 1, minWidth: 200 }}>
+          <select value={selectedEq} onChange={e => { setSelectedEq(e.target.value); setPickedTests([]) }} style={{ flex: 1, minWidth: 200 }}>
             <option value="">— Select equipment —</option>
             {equipment.map(e => (
               <option key={e.id} value={e.id} disabled={pendingIds.has(e.id) || why(e) === 'trained'}>{e.equipment_name || e.nickname}{e.nickname && e.nickname !== e.equipment_name ? ` (${e.nickname})` : ''}{pendingIds.has(e.id) ? ' (pending)' : why(e) ? ` (${why(e)})` : ''}</option>
@@ -1624,6 +1643,18 @@ function RetrainingRequestPanel({ session, equipment, pendingRetraining, onSubmi
           </select>
           <button className="btn btn-primary btn-sm" onClick={submit} disabled={submitting || !selectedEq}>{submitting ? 'Submitting…' : 'Submit request'}</button>
         </div>
+        {mustPick && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Which test do you need?</div>
+            {eqTests.map(t => (
+              <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4, cursor: 'pointer' }}>
+                <input type="checkbox" style={{ width: 'auto', margin: 0 }} checked={pickedTests.includes(t.id)}
+                  onChange={e => setPickedTests(p => e.target.checked ? [...p, t.id] : p.filter(x => x !== t.id))} />
+                {testLabel(t)}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
       {myPending.map(req => {
         const eq = equipment.find(e => e.id === req.equipment_id)

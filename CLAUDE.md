@@ -1831,6 +1831,7 @@ in the file has to be run on its own.
 | `support_messages_manage.sql` | ✓ (same file in both) | ✓ |
 | `sub_projects_setup.sql` | ✓ (same file in both) | ✓ |
 | `booking_layout_setup.sql` | ✓ its own copy (users) — applied Nov 6 2026 | ✓ its own copy (users + solo_users) — applied Nov 6 2026 |
+| `equipment_tests_setup.sql` | ✓ its own copy | ✓ its own copy (solo in the policy) |
 
 As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
@@ -2516,3 +2517,29 @@ a **Layout** above the calendar (`src/screens/equipment/BookingLayouts.jsx`):
   (`.bkl-stick`) pin just below it and sit OUTSIDE the sideways-scrolling
   `.bkl-scroll`, following it via `useHeadSync`. `.bkl` is `overflow: clip`,
   never `hidden` — hidden makes it a scroll container and nothing inside sticks.
+
+## Several tests on one instrument (Nov 2026, both apps)
+
+One machine can run several standard tests (TA - DHR: DSR + MSCR), each with
+its OWN SOP and exam. `src/lib/equipmentTests.js` owns the rules;
+`src/components/TestPills.jsx` is the pill row (Equipment SOP card, Exam tab,
+QR-scan page). SQL: `equipment_tests_setup.sql` (each app has its OWN copy —
+LabHive's policy also covers solo equipment).
+
+- `equipment_tests` (standard, name). `test_id` on `equipment_sop`,
+  `equipment_exam_questions`, `equipment_exam_results`. **NULL test_id = the
+  instrument's own SOP / exam**, shown as "General" beside any tests, so nothing
+  older is lost. `equipment_sop` can now hold several rows per instrument:
+  **never `.maybeSingle()` it**.
+- **Which exams are owed (`examStatus`) = the tests they asked for.** Request
+  Training asks only when the machine has 2+ tests; `test_ids` goes on
+  `retraining_requests` and is copied to `training_schedule` when a date is
+  proposed (the request row is deleted then). No test named (a one-test
+  machine, an older request) = any one passed exam counts, as before.
+  Booking is untouched: it still opens from the record made by Confirm
+  training done, which is what the exam status locks.
+- **Exam page is one question at a time.** Picking locks the answer, then the
+  right answer and `explanation` show, right or wrong. Same 70% pass mark.
+- `examParser.js` also reads a "Question 1   Multiple choice" heading with the
+  question on the next line, and an "Explanation:" line.
+- Read `equipment_exam_questions` for "has an exam" through `loadExamGroups()`.

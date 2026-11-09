@@ -5,6 +5,8 @@ import { sb } from '../../lib/supabase'
 import { forLabUsers } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import ScrollTabs from '../../components/ScrollTabs'
+import TestPills from '../../components/TestPills'
+import { GENERAL, groupKey, loadTests, testEntries, entryKey, testLabel, loadExamGroups, examStatus, passedKeys, namesOf } from '../../lib/equipmentTests'
 
 function canEdit(s) { return s?.role === 'admin' || s?.role === 'user' }
 
@@ -49,7 +51,11 @@ function EquipmentInfo({ equipment, session }) {
   const { toast } = useAppStore()
   const [details, setDetails] = useState(null)
   const [videos, setVideos] = useState([])
-  const [sop, setSop] = useState(null)
+  // Every SOP of this instrument: one per test (equipment_sop.test_id), or a
+  // single one with no test. sop = the one for the selected test pill.
+  const [sops, setSops] = useState([])
+  const [tests, setTests] = useState([])
+  const [testSel, setTestSel] = useState(GENERAL)
   const [loading, setLoading] = useState(true)
   const [access, setAccess] = useState(null)
   // Lab user not trained yet but in training (a request or a session): the
@@ -78,6 +84,7 @@ function EquipmentInfo({ equipment, session }) {
   async function load() {
     setLoading(true)
     const isLabUser = session?.role === 'lab_user'
+    let askedFirst = null   // a lab user in training opens on the test they asked for
     if (isLabUser) {
       const { data: trainRecs } = await sb.from('training_equipment').select('passed_exam').eq('user_id', session.userId).eq('equipment_id', equipment.id)
       const hasPassed = trainRecs?.some(r => r.passed_exam)
@@ -87,25 +94,38 @@ function EquipmentInfo({ equipment, session }) {
         const tempValid = tempRec && new Date(tempRec.expires_at) > new Date()
         const info = await trainingInfo(session.userId, equipment.id)
         const studying = !!info
+        askedFirst = info?.asked?.[0] || null
         setInTraining(info)
         setAccess(tempValid || studying)
         if (!tempValid && !studying) { setLoading(false); return }
       } else { setAccess(true) }
     } else { setAccess(true) }
 
-    const [{ data: det }, { data: vid }, { data: s }] = await Promise.all([
+    const [{ data: det }, { data: vid }, { data: s }, t] = await Promise.all([
       sb.from('equipment_details').select('*').eq('equipment_id', equipment.id).maybeSingle(),
       sb.from('equipment_videos').select('*').eq('equipment_id', equipment.id).order('created_at'),
-      sb.from('equipment_sop').select('*').eq('equipment_id', equipment.id).maybeSingle(),
+      sb.from('equipment_sop').select('*').eq('equipment_id', equipment.id),
+      loadTests(equipment.id),
     ])
-    setDetails(det || null); setVideos(vid || []); setSop(s || null)
+    setDetails(det || null); setVideos(vid || []); setSops(s || []); setTests(t)
+    const keys = testEntries(t, (s || []).some(x => !x.test_id)).map(entryKey)
+    setTestSel(k => askedFirst && keys.includes(askedFirst) ? askedFirst : keys.includes(k) ? k : keys[0])
     // Always reset, also when this equipment has nothing saved yet: with
     // `if (det)` the forms kept the PREVIOUS equipment's photo, website,
     // notes and SOP, and saving would have copied them onto this one.
     setDetailsForm({ photo_url: det?.photo_url || '', website_url: det?.website_url || '', notes: det?.notes || '' })
-    setSopForm({ title: s?.title || '', pdf_url: s?.pdf_url || '', steps: s?.steps || [] })
     setLoading(false)
   }
+
+  const sop = sops.find(x => groupKey(x.test_id) === testSel) || null
+  const entries = testEntries(tests, sops.some(x => !x.test_id))
+  const selTest = tests.find(t => t.id === testSel) || null
+  // Always reset with the test, also when it has no SOP yet: the form must not
+  // carry the previous test's SOP onto this one (same rule as the details form).
+  useEffect(() => {
+    setShowSopForm(false); setNewStep('')
+    setSopForm({ title: sop?.title || '', pdf_url: sop?.pdf_url || '', steps: sop?.steps || [] })
+  }, [testSel, sop?.id])
 
   async function saveDetails() {
     const payload = { equipment_id: equipment.id, ...detailsForm, updated_at: new Date().toISOString() }
@@ -156,9 +176,11 @@ function EquipmentInfo({ equipment, session }) {
   }
 
   async function saveSop() {
-    const payload = { equipment_id: equipment.id, ...sopForm, updated_at: new Date().toISOString() }
-    if (sop) await sb.from('equipment_sop').update(payload).eq('id', sop.id)
-    else await sb.from('equipment_sop').insert(payload)
+    const payload = { equipment_id: equipment.id, ...sopForm, updated_at: new Date().toISOString(), ...(selTest ? { test_id: selTest.id } : {}) }
+    const { error } = sop
+      ? await sb.from('equipment_sop').update(payload).eq('id', sop.id)
+      : await sb.from('equipment_sop').insert(payload)
+    if (error) { toast('Could not save the SOP: ' + error.message); return }
     toast('SOP saved ✓'); setShowSopForm(false); load()
   }
 
@@ -275,7 +297,7 @@ function EquipmentInfo({ equipment, session }) {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>📋 Standard Operating Procedure (SOP)</div>
-          {canEdit(session) && <button className="btn btn-sm btn-primary" onClick={() => { setSopForm(sop ? { title: sop.title||'', pdf_url: sop.pdf_url||'', steps: sop.steps||[] } : { title: '', pdf_url: '', steps: [] }); setShowSopForm(true) }}>{sop ? '✏️ Edit SOP' : '+ Add SOP'}</button>}
+          {canEdit(session) && !restrictedContent && <button className="btn btn-sm btn-primary" onClick={() => { setSopForm(sop ? { title: sop.title||'', pdf_url: sop.pdf_url||'', steps: sop.steps||[] } : { title: '', pdf_url: '', steps: [] }); setShowSopForm(true) }}>{sop ? '✏️ Edit SOP' : '+ Add SOP'}</button>}
         </div>
         {restrictedContent ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', color: 'var(--text3)', fontSize: 13 }}>
@@ -283,8 +305,12 @@ function EquipmentInfo({ equipment, session }) {
           </div>
         ) : (
           <div>
+            <TestPills equipmentId={equipment.id} entries={entries} selected={testSel} onSelect={setTestSel}
+              canManage={canEdit(session)} onChanged={id => { if (id) setTestSel(id); load() }}
+              badge={k => inTraining?.asked?.includes(k) ? { text: 'your training', bg: '#fef3c7', fg: '#92400e' } : null} />
             {showSopForm && (
               <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 14 }}>
+                {selTest && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>SOP for <b>{testLabel(selTest)}</b></div>}
                 <div className="field"><label>SOP Title</label><input value={sopForm.title} onChange={e => setSopForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Gyratory Compactor Operation Procedure" /></div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>SOP PDF Document</div>
@@ -315,9 +341,10 @@ function EquipmentInfo({ equipment, session }) {
               </div>
             )}
             {!sop ? (
-              <div style={{ fontSize: 13, color: 'var(--text3)', fontStyle: 'italic' }}>No SOP added yet.</div>
+              <div style={{ fontSize: 13, color: 'var(--text3)', fontStyle: 'italic' }}>No SOP added yet{selTest ? ` for ${testLabel(selTest)}` : ''}.</div>
             ) : (
               <div>
+                {selTest && entries.length < 2 && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>{testLabel(selTest)}</div>}
                 {sop.title && <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{sop.title}</div>}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                   {sop.pdf_url && <a href={sop.pdf_url} target="_blank" rel="noopener" className="btn btn-sm"
@@ -375,9 +402,9 @@ function EquipmentInfo({ equipment, session }) {
       {!restrictedContent && !canEdit(session) && !(inTraining && (inTraining.examPassed || !inTraining.hasExam || inTraining.sched?.exam_skipped)) && (
         <div className="card" style={{ textAlign: 'center', padding: 32, background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', border: '2px solid var(--accent)' }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>📝</div>
-          <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Ready to take the exam?</div>
+          <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Ready to take the {selTest ? `${testLabel(selTest)} ` : ''}exam?</div>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20, lineHeight: 1.6 }}>Once you have watched the training videos and reviewed the SOP,<br />start the exam for <strong>{equipment.equipment_name || equipment.nickname}</strong>.</div>
-          <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={() => { localStorage.setItem('examEquipment', equipment.id); useAppStore.getState().setScreen('training') }}>Start Exam →</button>
+          <button className="btn btn-primary" style={{ fontSize: 15, padding: '10px 32px' }} onClick={() => { localStorage.setItem('examEquipment', equipment.id); localStorage.setItem('examTest', testSel); useAppStore.getState().setScreen('training') }}>Start Exam →</button>
         </div>
       )}
     </div>
@@ -387,16 +414,21 @@ function EquipmentInfo({ equipment, session }) {
 // A lab user's open training on this instrument: a waiting request or a
 // proposed / agreed / confirmed session. null = not in training.
 async function trainingInfo(userId, equipmentId) {
-  const [{ data: scheds }, { data: reqs }, { data: passedExam }, { data: qs }, { data: eqRow }] = await Promise.all([
+  const [{ data: scheds }, { data: reqs }, { data: results }, groups, { data: eqRow }, tests] = await Promise.all([
     sb.from('training_schedule').select('*').eq('user_id', userId).eq('equipment_id', equipmentId)
       .in('status', ['proposed', 'confirmed', 'countered']).order('created_at', { ascending: false }).limit(1),
-    sb.from('retraining_requests').select('id').eq('user_id', userId).eq('equipment_id', equipmentId).eq('status', 'pending').limit(1),
-    sb.from('equipment_exam_results').select('id').eq('user_id', userId).eq('equipment_id', equipmentId).eq('passed', true).limit(1),
-    sb.from('equipment_exam_questions').select('id').eq('equipment_id', equipmentId).limit(1),
+    sb.from('retraining_requests').select('*').eq('user_id', userId).eq('equipment_id', equipmentId).eq('status', 'pending').limit(1),
+    sb.from('equipment_exam_results').select('*').eq('user_id', userId).eq('equipment_id', equipmentId).eq('passed', true),
+    loadExamGroups(equipmentId),
     sb.from('equipment_inventory').select('requires_exam').eq('id', equipmentId).maybeSingle(),
+    loadTests(equipmentId),
   ])
   if (!scheds?.length && !reqs?.length) return null
-  return { sched: scheds?.[0] || null, examPassed: !!passedExam?.length, hasExam: !!qs?.length && eqRow?.requires_exam !== false }
+  const sched = scheds?.[0] || null
+  // The tests they asked for travel from the request to the session (test_ids).
+  const asked = sched?.test_ids || reqs?.[0]?.test_ids || []
+  const st = examStatus({ groups: eqRow?.requires_exam === false ? null : groups.get(equipmentId), testIds: asked, passed: passedKeys(results, userId, equipmentId) })
+  return { sched, asked, tests, owed: st.owed, examPassed: st.state === 'passed', hasExam: st.state !== 'none' }
 }
 
 // Top of the equipment page while a lab user is in training: when the session
@@ -407,8 +439,12 @@ function InTrainingBanner({ info, equipment }) {
   const when = d ? new Date(d).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
   const examState = !info.hasExam ? 'none' : info.examPassed ? 'passed' : s?.exam_skipped ? 'skipped' : 'todo'
   const name = equipment.equipment_name || equipment.nickname
+  // The tests asked for, and the exams still owed ("the T 315 · DSR exam")
+  const askedNames = namesOf(info.asked, info.tests)
+  const owedNames = namesOf(info.owed, info.tests)
   const openExam = () => {
     localStorage.setItem('examEquipment', equipment.id)
+    if (info.owed?.[0]) localStorage.setItem('examTest', info.owed[0])
     const st = useAppStore.getState(); st.setScreen('training'); st.setSidebarSubTab('exam')
   }
   const step = (n, done, text, sub) => (
@@ -422,6 +458,7 @@ function InTrainingBanner({ info, equipment }) {
     <div className="card" style={{ border: '2px solid var(--accent)', background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', display: 'grid', gap: 12 }}>
       <div>
         <div style={{ fontWeight: 700, fontSize: 17, color: '#085041' }}>📋 Your training on {name}</div>
+        {askedNames && <div style={{ fontSize: 13, color: '#085041' }}>Tests: <b>{askedNames}</b></div>}
         <div style={{ fontSize: 13, color: '#085041', marginTop: 2 }}>
           {when ? <>Training session: <b>{when}</b>{s.proposed_by ? <> with <b>{s.proposed_by}</b></> : null}{s.status !== 'confirmed' ? ' (time still being agreed)' : ''}</>
             : 'Your lab manager will propose a training date. Use the time to study.'}
@@ -431,7 +468,8 @@ function InTrainingBanner({ info, equipment }) {
         {step(1, false, 'Watch the training videos', 'Below on this page')}
         {step(2, false, 'Read the SOP', 'Below on this page')}
         {examState !== 'none' && step(3, examState !== 'todo',
-          examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it' : 'Take the exam — before your training session',
+          examState === 'passed' ? 'Exam passed' : examState === 'skipped' ? 'Exam not needed this time — your lab manager skipped it'
+            : `Take the ${askedNames && owedNames ? `${owedNames} ` : ''}exam — before your training session`,
           examState === 'todo' ? 'You need 70% to pass and can retake it. Your training cannot be confirmed without it.' : null)}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text3)' }}>After the session, your lab manager confirms the training and you can start booking.</div>

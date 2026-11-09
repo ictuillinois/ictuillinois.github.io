@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { sb } from '../../lib/supabase'
 import { LAB_USER_AREAS, isLabUserSession, labUserCan } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
+import TestPills from '../../components/TestPills'
+import { groupKey, loadTests, testEntries, entryKey } from '../../lib/equipmentTests'
 
 
 const OPTION_META = [
@@ -113,8 +115,12 @@ function MaterialInfoSection({ name, type, project, pid, mtype, sampled, barcode
   )
 }
 
-function HowToSection({ videos, sop, onClose }) {
+function HowToSection({ videos, sops, tests, onClose }) {
   const [tab, setTab] = useState('video')
+  // One SOP per test (lib/equipmentTests.js); opens on the first test that has one.
+  const entries = testEntries(tests, sops.some(x => !x.test_id))
+  const [sel, setSel] = useState(() => entries.map(entryKey).find(k => sops.some(x => groupKey(x.test_id) === k)) || entryKey(entries[0]))
+  const sop = sops.find(x => groupKey(x.test_id) === sel) || null
 
   return (
     <SectionCard title="📖 How to work with this equipment" onClose={onClose}>
@@ -125,6 +131,8 @@ function HowToSection({ videos, sop, onClose }) {
           </button>
         ))}
       </div>
+
+      {tab !== 'video' && <TestPills entries={entries} selected={sel} onSelect={setSel} />}
 
       {tab === 'video' && (
         videos.length === 0 ? (
@@ -171,7 +179,7 @@ function HowToSection({ videos, sop, onClose }) {
                 {sop.steps.map((step, i) => (
                   <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, alignItems: 'flex-start' }}>
                     <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0369a1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{step}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{step?.text ?? step}</div>
                   </div>
                 ))}
               </div>
@@ -196,7 +204,7 @@ function HowToSection({ videos, sop, onClose }) {
                   <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>
                     {i === 0 && <span style={{ fontWeight: 700, color: '#1D9E75' }}>START: </span>}
                     {i === sop.steps.length - 1 && <span style={{ fontWeight: 700, color: '#92400e' }}>SHUTDOWN: </span>}
-                    {step}
+                    {step?.text ?? step}
                   </div>
                 </div>
               ))}
@@ -296,7 +304,8 @@ export default function EquipmentScan() {
   const { scanEquipmentId, setScreen, session, setScanEquipmentId } = useAppStore()
   const [equipment, setEquipment] = useState(null)
   const [videos, setVideos] = useState([])
-  const [sop, setSop] = useState(null)
+  const [sops, setSops] = useState([])
+  const [tests, setTests] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState(null)
   const isLabManager = session?.role === 'admin' || session?.role === 'user'
@@ -316,10 +325,11 @@ export default function EquipmentScan() {
   async function loadData(id) {
     setLoading(true)
     try {
-      const [eqRes, vidRes, sopRes] = await Promise.all([
+      const [eqRes, vidRes, sopRes, testRows] = await Promise.all([
         sb.from('equipment_inventory').select('*').eq('id', id).maybeSingle(),
         sb.from('equipment_videos').select('*').eq('equipment_id', id).order('created_at'),
-        sb.from('equipment_sop').select('*').eq('equipment_id', id).maybeSingle(),
+        sb.from('equipment_sop').select('*').eq('equipment_id', id),
+        loadTests(id),
       ])
       // A lab-only item is not found as far as a lab user is concerned —
       // otherwise its QR label would offer them booking and the SOP.
@@ -327,7 +337,8 @@ export default function EquipmentScan() {
       const hidden = eq && isLabUserSession(session) && !LAB_USER_AREAS.some(a => labUserCan(eq, a.key))
       setEquipment(hidden ? null : eq)
       setVideos(vidRes?.data || [])
-      setSop(sopRes?.data || null)
+      setSops(sopRes?.data || [])
+      setTests(testRows)
     } catch(e) {}
     setLoading(false)
   }
@@ -506,7 +517,7 @@ export default function EquipmentScan() {
               )}
               {isActive && opt.id === 'sop' && (
                 session
-                  ? <HowToSection videos={videos} sop={sop} onClose={() => setActiveSection(null)} />
+                  ? <HowToSection videos={videos} sops={sops} tests={tests} onClose={() => setActiveSection(null)} />
                   : <SectionCard title="📖 Standard Operating Procedure" onClose={() => setActiveSection(null)}>
                       <div style={{ textAlign: 'center', padding: '24px 0' }}>
                         <div style={{ fontSize: 36, marginBottom: 10 }}>🔑</div>

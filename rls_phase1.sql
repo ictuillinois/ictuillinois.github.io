@@ -359,7 +359,7 @@ DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'equipment_sop','equipment_videos','equipment_standards',
-    'equipment_exam_questions',
+    'equipment_exam_questions','equipment_tests',
     'equipment_calibration','equipment_temp_access',
     'equipment_material_progress','equipment_details'
   ]

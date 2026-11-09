@@ -56,6 +56,12 @@ const FAQ = [
     followups: ['qr', 'training', 'contact'],
   },
   {
+    id: 'equipment_tests',
+    q: 'How do SOPs and exams work when one instrument runs several tests?',
+    a: 'An instrument that runs more than one test shows a pill per test on Equipment SOP and on the Exam tab, and each test has its own SOP and its own exam. Lab managers add one with + Add test, then add its SOP and upload or type its questions. When you ask for training on such an instrument, Request Training asks which tests you need: you pass the exams for those tests, your lab manager confirms the session, and booking opens. In the exam you answer one question at a time and see the right answer and an explanation straight after each one.',
+    keywords: ['several tests', 'multiple tests', 'more than one test', 'test on equipment', 'add test', 'which test', 'multiple sop', 'several sops', 'two sops', 'explanation', 'why wrong', 'exam explanation', 'exam for each test'],
+  },
+  {
     id: 'booking_layout',
     q: 'How do I see who booked which equipment?',
     a: 'On Booking Equipment, use Layout above the calendar. Everyone starts on Classic; once you pick another it is saved to your account and follows you to any computer:\n• Classic — the Day / Week / Month calendar. Bookings over several days sit in the Multi-day band under the dates, and when many bookings overlap they are listed in one block (click + more)\n• Timeline — one row per instrument, each booking showing who booked it, the time and the purpose. Choose Day, then drag along a row to book that instrument, or down across rows to book several at the same time. Lab managers can switch Rows to People to see what each person is using\n• Agenda — every booking of the week in time order, with a search box\nPoint at any booking to see its details; click it to open it.',
