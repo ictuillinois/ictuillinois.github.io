@@ -257,8 +257,8 @@ export default function ProjectMaterialsPage() {
             {project.pi_name && <><dt>PI</dt><dd>{project.pi_name}</dd></>}
             {project.project_group && <><dt>Group</dt><dd>{project.project_group}</dd></>}
             {!!project.lab_user_ids?.length && <><dt>Lab users</dt><dd>{project.lab_user_ids.length} assigned</dd></>}
-            {project.sampling_date && <><dt>Sampled</dt><dd>{project.sampling_date}</dd></>}
-            {project.storage_date && <><dt>Stored</dt><dd>{project.storage_date}</dd></>}
+            {project.start_date && <><dt>Start</dt><dd>{project.start_date}</dd></>}
+            {project.end_date && <><dt>End</dt><dd>{project.end_date}</dd></>}
           </dl>
           <div className="pmt-totals">
             <div><b>{roots.length}</b><span>material{roots.length !== 1 ? 's' : ''}</span></div>

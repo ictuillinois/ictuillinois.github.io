@@ -1832,6 +1832,7 @@ in the file has to be run on its own.
 | `sub_projects_setup.sql` | ✓ (same file in both) | ✓ |
 | `booking_layout_setup.sql` | ✓ its own copy (users) — applied Nov 6 2026 | ✓ its own copy (users + solo_users) — applied Nov 6 2026 |
 | `equipment_tests_setup.sql` | ✓ its own copy | ✓ its own copy (solo in the policy) |
+| `project_dates_setup.sql` | ✓ (same file in both) — applied Nov 13 2026 | ✓ — applied Nov 13 2026 |
 
 As of Oct 12 2026 every row above has been run where marked, in both databases (security_hardening, locker_requests_setup and support_messages_manage confirmed by the check results).
 
@@ -2543,3 +2544,19 @@ LabHive's policy also covers solo equipment).
 - `examParser.js` also reads a "Question 1   Multiple choice" heading with the
   question on the next line, and an "Explanation:" line.
 - Read `equipment_exam_questions` for "has an exam" through `loadExamGroups()`.
+
+## Projects: PI + start / end dates, not sampling / storage (Nov 2026, both apps)
+
+New project and Edit project info (`NewProjectModal` / `ProjectInfo` in
+ProjectMaterial.jsx) ask **Project PI, Project Start Date, Project End Date**
+— team and solo. The project's sampling and storage dates are gone from both
+forms, the Project Info view and the Project Materials page; a sample's dates
+belong to the MATERIAL, which still asks for them.
+- `projects.start_date` / `end_date` (`project_dates_setup.sql`).
+  `sampling_date` / `storage_date` stay on projects — existing rows keep their
+  values, nothing reads them in the forms. Do not drop them: TestedLabels
+  still puts an older project's sampling date on a tested label.
+- End before start is refused on save. PI is optional, max 30 (`pi_name`).
+- `PiSelect`: solo (no organization, no supervisor list) gets a text box.
+  "Other…" keeps the name box open (`typing`) — with value '' it used to read
+  as "no PI" and close the box the moment it was picked.

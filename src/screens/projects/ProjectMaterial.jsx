@@ -85,13 +85,13 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     cfop: project.cfop || '', status: project.status || 'active',
     project_group: project.project_group || '',
     pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [],
-    sampling_date: project.sampling_date || '', storage_date: project.storage_date || '',
+    start_date: project.start_date || '', end_date: project.end_date || '',
     notes: project.notes || '',
     created_by: project.created_by || '',
   })
 
   useEffect(() => {
-    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [], sampling_date: project.sampling_date || '', storage_date: project.storage_date || '', notes: project.notes || '' , created_by: project.created_by || '' })
+    setForm({ name: project.name || '', project_id: project.project_id || '', cfop: project.cfop || '', status: project.status || 'active', project_group: project.project_group || '', pi_user_id: project.pi_user_id || '', pi_name: project.pi_name || '', lab_user_ids: project.lab_user_ids || [], start_date: project.start_date || '', end_date: project.end_date || '', notes: project.notes || '' , created_by: project.created_by || '' })
     setEditing(false)
   }, [project.id])
 
@@ -107,7 +107,10 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
     const nameTooLong = overLimit('Project name', form.name, FIELD_LIMITS.project_name)
     if (nameTooLong) { toast(nameTooLong); return }
     if (!form.project_id.trim()) { toast('Project title is required.'); return }
-    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name || null, lab_user_ids: form.lab_user_ids, sampling_date: form.sampling_date || null, storage_date: form.storage_date || null, notes: form.notes.trim() || null }
+    const piTooLong = overLimit('Project PI', form.pi_name, FIELD_LIMITS.pi_name)
+    if (piTooLong) { toast(piTooLong); return }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) { toast('The end date is before the start date.'); return }
+    const payload = { name: form.name.trim(), project_id: form.project_id.trim(), cfop: form.cfop.trim() || null, status: form.status, project_group: form.project_group || null, pi_user_id: form.pi_user_id || null, pi_name: form.pi_name.trim() || null, lab_user_ids: form.lab_user_ids, start_date: form.start_date || null, end_date: form.end_date || null, notes: form.notes.trim() || null }
     // created_by is only written by an admin. Merging it unconditionally
     // would let any other editor blank it just by saving the form.
     if (isAdmin) payload.created_by = form.created_by || null
@@ -139,7 +142,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
           </select>
         </div>
       </div>
-      {!isSolo && <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} required={false} />}
+      <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} required={false} />}
       {!isSolo && isAdmin && (
         <div className="field">
           <label>Created by</label>
@@ -156,8 +159,8 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         </div>
       )}
       <div className="grid-2">
-        <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
-        <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
+        <div className="field"><label>Project Start Date</label><input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+        <div className="field"><label>Project End Date</label><input type="date" value={form.end_date} min={form.start_date || undefined} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
       </div>
       <div className="field"><label>Notes</label><textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} /></div>
     </div>
@@ -183,9 +186,9 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
         {/* Projects made before this column existed have no creator recorded,
             so they say so rather than showing an empty cell. */}
         <InfoCell label="Created by" icon={IconUser} value={project.created_by} emptyText="Not recorded" />
-        {!isSolo && <InfoCell label="Project PI" icon={IconUser} value={project.pi_name} emptyText="Not assigned" />}
-        <InfoCell label="Sampling Date" icon={IconCalendar} value={project.sampling_date} />
-        <InfoCell label="Storage Date" icon={IconCalendar} value={project.storage_date} />
+        <InfoCell label="Project PI" icon={IconUser} value={project.pi_name} emptyText="Not assigned" />}
+        <InfoCell label="Start Date" icon={IconCalendar} value={project.start_date} />
+        <InfoCell label="End Date" icon={IconCalendar} value={project.end_date} />
       </div>
       {project.notes && (
         <div>
@@ -200,7 +203,7 @@ function ProjectInfo({ project, users, onSaved, isSolo, readOnly }) {
 // ── New Project Modal ──────────────────────────────────────────
 export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated }) {
   const { session, toast } = useAppStore()
-  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', lab_user_ids: [], sampling_date: '', storage_date: '', notes: '' })
+  const [form, setForm] = useState({ name: '', project_id: '', cfop: '', status: 'active', project_group: '', pi_user_id: '', lab_user_ids: [], pi_name: '', start_date: '', end_date: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState('')
 
@@ -214,6 +217,9 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
     const nameTooLong = overLimit('Project name', form.name, FIELD_LIMITS.project_name)
     if (nameTooLong) { setErrMsg(nameTooLong); return }
     if (!form.project_id.trim()) { setErrMsg('Project title is required.'); return }
+    const piTooLong = overLimit('Project PI', form.pi_name, FIELD_LIMITS.pi_name)
+    if (piTooLong) { setErrMsg(piTooLong); return }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) { setErrMsg('The end date is before the start date.'); return }
     setSaving(true)
     const payload = {
       name: form.name.trim(),
@@ -223,8 +229,9 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
       project_group: form.project_group || null,
       pi_user_id: form.pi_user_id || null,
       lab_user_ids: form.lab_user_ids,
-      sampling_date: form.sampling_date || null,
-      storage_date: form.storage_date || null,
+      pi_name: form.pi_name.trim() || null,
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
       notes: form.notes.trim() || null,
       solo_owner_id: soloOwnerId || null,
       organization_id: isSolo ? null : (session?.organizationId || null),
@@ -255,9 +262,10 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
           </select>
         </div>
       </div>
+      <PiSelect value={form.pi_name} onChange={v => setForm(f => ({ ...f, pi_name: v }))} required={false} />
       <div className="grid-2">
-        <div className="field"><label>Sampling Date</label><input type="date" value={form.sampling_date} onChange={e => setForm(f => ({ ...f, sampling_date: e.target.value }))} /></div>
-        <div className="field"><label>Storage Date</label><input type="date" value={form.storage_date} onChange={e => setForm(f => ({ ...f, storage_date: e.target.value }))} /></div>
+        <div className="field"><label>Project Start Date</label><input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+        <div className="field"><label>Project End Date</label><input type="date" value={form.end_date} min={form.start_date || undefined} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
       </div>
       <div className="field"><label>Notes</label><textarea rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} /></div>
       {errMsg && (
@@ -272,7 +280,7 @@ export function NewProjectModal({ users, isSolo, soloOwnerId, onClose, onCreated
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 12, color: 'var(--text3)', textAlign: 'center', lineHeight: 1.5 }}>
-        ℹ️ Additional details (members, dates, notes) can be filled in after the project is created.
+        ℹ️ Everything except the name and title can be filled in after the project is created.
       </div>
     </Modal>
   )

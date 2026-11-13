@@ -369,22 +369,33 @@ function MaterialTypeForm({ form, setForm, orgTypes }) {
 export function PiSelect({ value, onChange, required = true }) {
   const { session } = useAppStore()
   const [supervisors, setSupervisors] = useState([])
+  // "Other…" with nothing typed yet leaves value '' — the same as no PI — so
+  // without this flag the name box closed the moment it was asked for.
+  const [typing, setTyping] = useState(false)
   useEffect(() => {
     if (!session?.organizationId) return
     sb.from('organizations').select('supervisors').eq('id', session.organizationId).single()
       .then(({ data }) => setSupervisors(data?.supervisors || []))
   }, [session?.organizationId])
-  const isKnown = !value || supervisors.includes(value)
+  const label = <label>Project PI {required && <span style={{ color: '#c84b2f' }}>*</span>}</label>
+  // A solo workspace has no organization, so no supervisor list to pick from.
+  if (!session?.organizationId) return (
+    <div className="field">
+      {label}
+      <input maxLength={FIELD_LIMITS.pi_name} value={value || ''} onChange={e => onChange(e.target.value)} placeholder="PI name…" />
+    </div>
+  )
+  const isKnown = !typing && (!value || supervisors.includes(value))
   return (
     <div className="field">
-      <label>Project PI {required && <span style={{ color: '#c84b2f' }}>*</span>}</label>
-      <select value={isKnown ? (value || '') : 'Other'} onChange={e => onChange(e.target.value === 'Other' ? '' : e.target.value)}>
+      {label}
+      <select value={isKnown ? (value || '') : 'Other'} onChange={e => { setTyping(e.target.value === 'Other'); onChange(e.target.value === 'Other' ? '' : e.target.value) }}>
         <option value="">— Select PI —</option>
         {supervisors.map(s => <option key={s} value={s}>{s}</option>)}
         <option value="Other">Other…</option>
       </select>
       {!isKnown && (
-        <input style={{ marginTop: 8 }} value={value || ''} onChange={e => onChange(e.target.value)} placeholder="Enter PI name…" />
+        <input style={{ marginTop: 8 }} maxLength={FIELD_LIMITS.pi_name} value={value || ''} onChange={e => onChange(e.target.value)} placeholder="Enter PI name…" autoFocus={typing} />
       )}
     </div>
   )
