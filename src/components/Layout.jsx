@@ -230,11 +230,17 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
     const isManager = session?.role === 'admin' || session?.role === 'user'
     const orgId = session?.organizationId
     if (isManager) {
+      // Certificates count only for people with an active account here: a
+      // deleted user's upload is shown nowhere and cannot be approved, so
+      // counting it kept the Documents dot on for good.
       Promise.all([
         sb.from('retraining_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending').eq('organization_id', orgId),
-        sb.from('training_fresh').select('id', { count: 'exact', head: true }).eq('admin_approved', false).not('certificate_url', 'is', null),
-      ]).then(([{ count: eqCount }, { count: freshCount }]) => {
-        setTrainingBadges({ equipment: eqCount || 0, fresh: freshCount || 0 })
+        sb.from('training_fresh').select('user_id').eq('admin_approved', false).not('certificate_url', 'is', null),
+        sb.from('users').select('id').eq('organization_id', orgId).eq('is_active', true),
+      ]).then(([{ count: eqCount }, { data: waiting }, { data: people }]) => {
+        const ids = new Set((people || []).map(u => String(u.id)))
+        const freshCount = (waiting || []).filter(r => ids.has(String(r.user_id))).length
+        setTrainingBadges({ equipment: eqCount || 0, fresh: freshCount })
       }).catch(() => {})
     } else {
       Promise.all([
@@ -245,7 +251,7 @@ function Sidebar({ session, screen, activeModules, sidebarSubTab, setSidebarSubT
         setTrainingBadges({ equipment: (reqCount || 0) + (schedCount || 0), fresh: freshCount || 0 })
       }).catch(() => {})
     }
-  }, [screen, session?.userId, session?.role, session?.organizationId])
+  }, [screen, sidebarSubTab, session?.userId, session?.role, session?.organizationId])
 
   useEffect(() => {
     const keys = ['mileage_url', 'labsafety_url']

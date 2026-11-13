@@ -103,7 +103,20 @@ export default function NotificationBell() {
     } else if (['locker_request', 'locker_assigned', 'locker_declined'].includes(n.type)) {
       setScreen('training')
       setSidebarSubTab('locker')
-    } else if (['training_submitted', 'training_approved', 'training_expiring', 'safety_step_submitted', 'safety_skip_request'].includes(n.type)) {
+    } else if (['safety_step_submitted', 'safety_skip_request'].includes(n.type)) {
+      // "<name> submitted Step 2" / "<name> skipped safety training": open
+      // that person on the Safety tab, not just the list of everyone.
+      setScreen('training')
+      setSidebarSubTab('safety')
+      const who = (n.title || '').match(/^(.+?) (submitted|skipped)\b/)?.[1]
+      if (who) setPendingTrainingUser(who)
+    } else if (n.type === 'training_submitted') {
+      // "<name> uploaded a new certificate": open that person's Documents
+      setScreen('training')
+      setSidebarSubTab('fresh')
+      const who = (n.title || '').match(/^(.+?) uploaded\b/)?.[1]
+      if (who) setPendingTrainingUser(who)
+    } else if (['training_approved', 'training_expiring'].includes(n.type)) {
       setScreen('training')
     } else if (['exam_passed', 'exam_skipped'].includes(n.type)) {
       // The lab user's own exam news: their Equipment training list

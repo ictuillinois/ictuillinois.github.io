@@ -2426,12 +2426,14 @@ function UserTrainingHub({ labUsers, session, subTab, setSubTab }) {
   // stable single-element array so child useEffect([labUsers]) doesn't loop
   const selectedArr = useMemo(() => selectedUser ? [selectedUser] : [], [selectedUser?.id])
 
-  // Arriving from a training-request notification: open that lab user
+  // Arriving from a notification that names a lab user (training request,
+  // certificate, safety step): open them. The name is whatever the sender's
+  // session called them — the name field or the full name — so match either.
   const { pendingTrainingUser, setPendingTrainingUser } = useAppStore()
   useEffect(() => {
     if (!pendingTrainingUser || !labUsers.length) return
     const key = v => (v || '').trim().toLowerCase()
-    const hit = labUsers.filter(u => key(u.name) === key(pendingTrainingUser))
+    const hit = labUsers.filter(u => [u.name, fullName(u)].some(n => key(n) === key(pendingTrainingUser)))
     if (hit.length === 1) { setViewMode('user'); setSelectedUserId(hit[0].id) }
     setPendingTrainingUser(null)
   }, [pendingTrainingUser, labUsers])

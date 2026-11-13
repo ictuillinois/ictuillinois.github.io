@@ -2560,3 +2560,18 @@ belong to the MATERIAL, which still asks for them.
 - `PiSelect`: solo (no organization, no supervisor list) gets a text box.
   "Other…" keeps the name box open (`typing`) — with value '' it used to read
   as "no PI" and close the box the moment it was picked.
+
+## Training alerts open the person; the Documents dot counts real people (Nov 2026, both apps)
+
+- The bell opens the NAMED lab user, not just Training Records: certificate
+  uploaded → their Documents (`fresh`); ICT-Lab safety step submitted /
+  "skipped safety training" → their Safety tab. The name is read from the
+  title ("<name> uploaded / submitted / skipped …") into
+  `pendingTrainingUser`; the hub matches it against `name` OR the full name
+  (senders use either). Two people with that name → nobody is opened.
+- "skipped safety training" = the lab user pressed "I'll do this later" on
+  the sign-in Safety Training Required box. Nothing was bypassed.
+- Sidebar dots (Layout.jsx `trainingBadges`): Documents counts waiting
+  certificates of ACTIVE users of the org only — uploads by deleted users
+  (3 in each DB in Nov 2026) are shown nowhere and kept the dot on for good.
+  Equipment = pending `retraining_requests`. Re-checked on every sub-tab switch.
