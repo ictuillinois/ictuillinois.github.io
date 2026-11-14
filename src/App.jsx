@@ -276,6 +276,9 @@ export default function App() {
 
   // Set when init() restores a saved sign-in, read once by the session effect
   const restoredOnLoad = useRef(false)
+  // The screen a restored sign-in is opening from the address; the address
+  // effect waits for it (see there)
+  const openingScreen = useRef(null)
 
   useEffect(() => {
     async function init() {
@@ -313,7 +316,7 @@ export default function App() {
       const restored = restoredOnLoad.current
       restoredOnLoad.current = false
       const deepScreen = new URLSearchParams(window.location.search).get('screen')
-      if (restored && deepScreen && INTERNAL.has(deepScreen)) setScreen(deepScreen)
+      if (restored && deepScreen && INTERNAL.has(deepScreen)) { openingScreen.current = deepScreen; setScreen(deepScreen) }
     } else if (!session) {
       localStorage.removeItem('ictlab_login_mode')
       setShowIconPicker(null)
@@ -327,7 +330,14 @@ export default function App() {
   // address used to stay after leaving the page, so every refresh reopened
   // it. Signed out, the address is left alone — the sign-in URL stays clean.
   useEffect(() => {
-    if (!session?.loginMode || screen === 'projectmaterials') return
+    if (!session?.loginMode) return
+    // A restored sign-in is about to open the page named in the address.
+    // Rewriting the address for the screen still showing (the dashboard)
+    // deleted ?project= and ?material=, so a refresh of the Project
+    // Materials page said "This link does not name a project".
+    if (restoredOnLoad.current) return
+    if (openingScreen.current) { if (screen !== openingScreen.current) return; openingScreen.current = null }
+    if (screen === 'projectmaterials') return
     try {
       const url = new URL(window.location.href)
       const want = screen === 'dashboard' ? null : screen
