@@ -2249,6 +2249,10 @@ Admin users list, QR Labels records. A sticky box sticks only inside its own
 parent, and any ancestor with `overflow` set becomes its scroller — keep the
 wrapper in the block that holds the list, directly under `<main>`'s plain
 divs. Table header rows are NOT pinned: each table sits in an overflow-x box.
+Exception (Nov 2026): the Lab Users list heading pins under its toolbar on
+computers — `.lu-table-box` drops the sideways scroll at ≥769px and the th
+sticks at `--lu-top` (the toolbar height, measured by a ResizeObserver). On
+phones the box still scrolls sideways and the heading scrolls with the rows.
 
 ## Never name state in a hook's dependency list above its useState (Oct 2026)
 

@@ -556,6 +556,18 @@ main > * { animation: screen-fade 0.16s ease-out; }
    Tables keep their headers unpinned: each sits in an overflow-x box. */
 .sticky-tools { position: sticky; top: 0; z-index: 30; background: var(--bg); padding-top: 8px; padding-bottom: 2px; }
 .sticky-tools.on-card { background: var(--surface); padding-top: 16px; }
+/* Lab Users list (Profile.jsx): the heading row pins just under the toolbar
+   (--lu-top = the toolbar's measured height). A sticky cell sticks only inside
+   its scroll box, so on computers the table's box does not scroll sideways —
+   it never needs to there. On phones it does, and the headings scroll away. */
+.lu-table-box { overflow-x: auto; }
+@media (min-width: 769px) {
+  .lu-table-box { overflow: visible; }
+  /* the bottom rule is a shadow: a collapsed border stays behind when the cell sticks */
+  .lu-table-box th { position: sticky; top: var(--lu-top, 0px); z-index: 20; background: var(--surface); border-bottom: none !important; box-shadow: inset 0 -1px 0 var(--border); }
+  .lu-table-box th:first-child { border-top-left-radius: 10px; }
+  .lu-table-box th:last-child { border-top-right-radius: 10px; }
+}
 
 .pmt-page { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start; }
 .pmt-info { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: grid; gap: 12px; position: sticky; top: 12px; }

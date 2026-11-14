@@ -1677,6 +1677,18 @@ export function LabUsersPanel({ toast, session }) {
     </>
   )
   async function clearPhotoFlag(s) { await sb.from('users').update({ photo_denial_flagged: false }).eq('id', s.id); load(); toast('Photo flag cleared.') }
+  // The list's heading row pins under the toolbar, whose height changes with
+  // the window and the filter line — measured here into --lu-top.
+  const toolsRef = useRef(null)
+  const [toolsH, setToolsH] = useState(0)
+  useEffect(() => {
+    const el = toolsRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setToolsH(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   async function deleteLabUser(id) {
     setDeleting(true)
     const err = await deleteUserRow(id)
@@ -1686,7 +1698,7 @@ export function LabUsersPanel({ toast, session }) {
 
   return (
     <div>
-      <div className="sticky-tools">
+      <div className="sticky-tools" ref={toolsRef}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 14, color: 'var(--text2)' }}>{labUsers.length} lab user{labUsers.length !== 1 ? 's' : ''}</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1725,7 +1737,7 @@ export function LabUsersPanel({ toast, session }) {
       {loading ? <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">👥</div>{search || advisor ? 'No lab users match.' : 'No lab users yet.'}</div>
         : effectiveView === 'list' ? (
-        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+        <div className="lu-table-box" style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)', '--lu-top': toolsH + 'px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
