@@ -14,9 +14,9 @@ import { loadSubprojects, linkMap, sharedColours } from '../../lib/subprojects'
 // "All projects" returns to the workspace with this project reopened.
 //
 // Materials are folders; each reduction branches off the folder it came from
-// (project_materials.parent_material_id), as deep as the reductions go. Only
-// the picked material's branches open — the other materials stay listed but
-// folded, so the page shows one material at a time without hiding the rest.
+// (project_materials.parent_material_id), as deep as the reductions go. Every
+// folder's reductions show; clicking a folder that has reductions folds them
+// (and clicking again opens them), like the project and sub project boxes.
 //
 // Picking any folder shows its details below, using the SAME components as
 // the project's material list (MaterialDetail → MaterialCard / ReductionRow).
@@ -58,7 +58,7 @@ export default function ProjectMaterialsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [subs, setSubs] = useState([])
   const [links, setLinks] = useState([])
-  const [folded, setFolded] = useState(() => new Set())   // project / sub project nodes closed by a click
+  const [folded, setFolded] = useState(() => new Set())   // project / sub project nodes and folders closed by a click
   const topRef = useRef(null)
   const detailRef = useRef(null)
   // Set by a click on a folder; the effect below then scrolls to its
@@ -137,8 +137,8 @@ export default function ProjectMaterialsPage() {
   const roots = materials.filter(m => !m.parent_material_id || !byId[m.parent_material_id])
   const countAll = id => (kidsOf[id] || []).reduce((s, k) => s + 1 + countAll(k.id), 0)
 
-  // The picked folder and every folder above it: those are the ones whose
-  // branches are open.
+  // The picked folder and every folder above it. Those stay open even if
+  // folded, so Back / Forward to a reduction never lands on a hidden one.
   const onPath = useMemo(() => {
     const ids = new Set()
     let n = selected ? byId[selected] : null
@@ -172,7 +172,7 @@ export default function ProjectMaterialsPage() {
   function folder(m, depth, underSub = null, colour = null) {
     const kids = kidsOf[m.id] || []
     const isSel = m.id === selected
-    const open = kids.length > 0 && onPath.has(m.id)
+    const open = kids.length > 0 && (!folded.has(m.id) || (onPath.has(m.id) && !isSel))
     const total = countAll(m.id)
     const c = depth === 0 ? colours[m.id] || null : colour
     const others = depth === 0 && c ? (map[m.id] || []).filter(id => id !== underSub).map(subName).filter(Boolean) : []
@@ -181,15 +181,19 @@ export default function ProjectMaterialsPage() {
         <button type="button" className={'pmt-folder' + (isSel ? ' sel' : onPath.has(m.id) ? ' onpath' : '')}
           style={c ? { borderColor: c.bd, background: c.bg, borderWidth: 2 } : undefined}
           aria-pressed={isSel} aria-expanded={kids.length ? open : undefined}
-          // Clicking the open material again folds it; a reduction stays picked
-          onClick={() => { scrollToDetail.current = true; pick(isSel && depth === 0 ? null : m.id) }}>
+          // Shows this folder's details; a folder with reductions also folds
+          // or opens them. Folded by material, so every copy of a shared one follows.
+          onClick={() => {
+            if (kids.length) setFolded(f => { const n = new Set(f); open ? n.add(m.id) : n.delete(m.id); return n })
+            if (!isSel) { scrollToDetail.current = true; pick(m.id) }
+          }}>
           <span className={'pmt-fi lvl' + Math.min(depth, 2)}>
             {depth === 0 ? <MaterialIcon type={m.material_type} size={22} /> : <IconSieve size={18} />}
           </span>
           <b title={m.name || ''}>{m.name || typeLabel(m.material_type)}</b>
           <small>{depth === 0 ? [typeLabel(m.material_type), m.container_type].filter(Boolean).join(' · ') : reductionCaption(m)}</small>
           {others.length > 0 && <span className="pmt-also" style={{ color: c.ink }}>Also in {others.join(', ')}</span>}
-          {total > 0 && <span className="pmt-cnt">{total} reduction{total !== 1 ? 's' : ''}</span>}
+          {total > 0 && <span className="pmt-cnt" title={open ? 'Click to fold the reductions' : 'Click to show the reductions'}>{open ? '▾' : '▸'} {total} reduction{total !== 1 ? 's' : ''}</span>}
         </button>
         {open && (
           <div className="pmt-kids">

@@ -1584,8 +1584,10 @@ beside "2 · Project Materials" via `lib/projectMaterialsTab.js`
   materials tab (sessionStorage `ictlab_reopen_project`, read once).
   Both screens listen for popstate so Back/Forward keep screen and URL in step.
 - Materials are folders; reductions branch off their parent
-  (`parent_material_id`), recursively. Only the picked material's branches
-  open; the rest stay listed, folded.
+  (`parent_material_id`), recursively. Every folder's reductions show
+  (Nov 2026 — it used to open only the picked one's); clicking a folder with
+  reductions folds / opens them (`folded`, keyed by material id). Folders
+  above the picked one stay open, so Back / Forward never lands on a hidden one.
 - Picking any folder shows its details below using `MaterialDetail`, which is
   the SAME `MaterialCard` / `ReductionRow` the project's material list uses.
   Do not give this page its own copy of the card.
