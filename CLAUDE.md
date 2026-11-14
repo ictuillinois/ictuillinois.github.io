@@ -2303,6 +2303,15 @@ were on. The Project Materials page still writes its own address
 address used to stay after leaving the page, so every refresh reopened it.
 Leaving it now replaces it. Sidebar sub-tabs are not in the address.
 
+**Sign-in always opens the home page (Nov 2026).** Only a session RESTORED on
+page load (`restoredOnLoad` in App.jsx — a refresh, or an email link opened
+while signed in) opens the page in the address. A sign-in from the sign-in
+page starts on the dashboard: the address (or the browser suggesting it)
+held the page used before signing out, and every sign-in reopened it.
+`clearSession` also strips `screen`/`project`/`material`/`tab` from the
+address. QR scans (`?eq=` / `?item=`) still open their page after sign-in. An
+email link opened while signed OUT lands on the home page after sign-in.
+
 ## Equipment maintenance reminders (Oct 2026, both apps)
 
 Sent by the **daily-reminders** Edge Function (7am local, with the task

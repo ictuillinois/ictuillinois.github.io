@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense, Component } from 'react'
+import { useEffect, useState, useRef, lazy, Suspense, Component } from 'react'
 import { useAppStore } from './store/useAppStore'
 import { sb } from './lib/supabase'
 import { logAdminError } from './lib/logAdminError'
@@ -274,6 +274,9 @@ export default function App() {
     if (SCAN_EQ_ID) setScanEquipmentId(SCAN_EQ_ID)
   }, [])
 
+  // Set when init() restores a saved sign-in, read once by the session effect
+  const restoredOnLoad = useRef(false)
+
   useEffect(() => {
     async function init() {
       try {
@@ -282,7 +285,10 @@ export default function App() {
           sb.from('settings').select('value').eq('key', 'maintenance_mode').maybeSingle(),
         ])
         if (maintResult?.data?.value === 'true') setMaintenanceMode(true)
-        if (authResult?.data?.session?.user) await restoreSessionFromAuth(authResult.data.session.user)
+        if (authResult?.data?.session?.user) {
+          restoredOnLoad.current = true
+          await restoreSessionFromAuth(authResult.data.session.user)
+        }
         const timeout = new Promise(resolve => setTimeout(resolve, 8000))
         await Promise.race([refreshCache(), timeout])
       } catch (e) {
@@ -299,8 +305,15 @@ export default function App() {
       localStorage.setItem('ictlab_login_mode', session.loginMode)
       refreshCache()
       if (SCAN_EQ_ID || SCAN_ITEM_QR) { setScreen('equipmentscan'); return }
+      // Only a session restored on page load (a refresh, or an email link
+      // opened while already signed in) opens the page named in the address.
+      // A sign-in from the sign-in page always starts on the home page: the
+      // address — or the browser's suggestion of it — still holds the page
+      // used before signing out, and that page used to reopen.
+      const restored = restoredOnLoad.current
+      restoredOnLoad.current = false
       const deepScreen = new URLSearchParams(window.location.search).get('screen')
-      if (deepScreen && INTERNAL.has(deepScreen)) setScreen(deepScreen)
+      if (restored && deepScreen && INTERNAL.has(deepScreen)) setScreen(deepScreen)
     } else if (!session) {
       localStorage.removeItem('ictlab_login_mode')
       setShowIconPicker(null)

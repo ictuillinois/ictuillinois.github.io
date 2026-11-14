@@ -9,6 +9,13 @@ export const useAppStore = create((set, get) => ({
     sb.auth.signOut()
     localStorage.removeItem('ictlab_login_mode')
     localStorage.removeItem('ictlab_active_user_id')
+    // Signed out, the address must not keep the last page (?screen=…): the
+    // next sign-in, or the browser suggesting this address, would reopen it.
+    try {
+      const u = new URL(window.location.href)
+      ;['screen', 'project', 'material', 'tab'].forEach(k => u.searchParams.delete(k))
+      window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash)
+    } catch { /* an address we cannot parse: leave it */ }
     set({ session: null, loginMode: null, activeModules: null, labUserAllowedPool: null, currentProjectId: null, sidebarSubTab: null, screen: 'dashboard' })
   },
 
