@@ -1935,7 +1935,7 @@ function Team({ orgId, isSolo, userId, isAdmin, userName }) {
                       </div>
                       {task.deadline && (
                         <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>
-                          📅 {new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          📅 {new Date(task.deadline + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                       )}
                     </div>
@@ -2032,7 +2032,7 @@ function LabUserTeamView({ userId, groupId, orgId }) {
                             <span style={{ fontSize: 11, fontWeight: 700, color: progressColor(task.progress||0) }}>{task.progress||0}%</span>
                           </div>
                         </div>
-                        {task.deadline && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>📅 {new Date(task.deadline).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>}
+                        {task.deadline && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>📅 {new Date(task.deadline + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>}
                       </div>
                     ))
                   }
