@@ -1031,7 +1031,13 @@ function MonthView({ monthDate, bookings, onDayClick, onBookingClick }) {
         {days.map((day, i) => {
           const isCurrentMonth = day.getMonth() === monthDate.getMonth()
           const isToday = sameDay(day, today)
-          const dayBookings = bookings.filter(b => sameDay(new Date(b.start_time), day))
+          // Every booking that covers part of this day — a multi-day booking
+          // shows on each of its days ("cont." after the first), not only on
+          // the day it starts
+          const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0)
+          const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+          const dayBookings = bookings.filter(b => new Date(b.start_time) < dayEnd && new Date(b.end_time) > dayStart)
+            .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
           return (
             <div key={i} onClick={() => onDayClick(day)}
               style={{ minHeight: 80, padding: '4px 6px', border: '0.5px solid var(--border)', background: isToday ? 'var(--accent-light)' : isCurrentMonth ? 'var(--surface)' : 'var(--surface2)', cursor: 'pointer', transition: 'background 0.1s' }}
@@ -1042,7 +1048,7 @@ function MonthView({ monthDate, bookings, onDayClick, onBookingClick }) {
                 <div key={b.id} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onBookingClick(b) }}
                   title={[b.booked_on_behalf_of || b.user_name, b.title, b.notes].filter(Boolean).join(' · ')}
                   style={{ fontSize: 10, background: statusBg[b.status], color: statusColor[b.status], borderRadius: 3, padding: '1px 4px', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                  {fmtTime(b.start_time)} {b.booked_on_behalf_of || b.user_name}
+                  {new Date(b.start_time) < dayStart ? 'cont.' : fmtTime(b.start_time)} {b.booked_on_behalf_of || b.user_name}
                 </div>
               ))}
               {dayBookings.length > 3 && <div style={{ fontSize: 10, color: 'var(--text3)' }}>+{dayBookings.length - 3} more</div>}
@@ -2637,11 +2643,14 @@ function BookingCalendar({ session, tourOpen = false }) {
     }
     const scopedIds = orgEqIdsRef.current
     if (scopedIds !== null && scopedIds.length === 0) { setBookings([]); return }
+    // Every booking that OVERLAPS the dates on screen (starts before the end,
+    // ends after the start). Filtering on the start alone dropped a multi-day
+    // booking from every week after the one it began in.
 
     // Manager viewing a specific labUser — show all org equipment bookings for that labUser
     if (filterLabUser) {
       let q = sb.from('equipment_bookings').select(BOOKING_COLS)
-        .gte('start_time', start).lt('start_time', end)
+        .lt('start_time', end).gt('end_time', start)
         .eq('user_id', filterLabUser.id).order('start_time')
       if (scopedIds && scopedIds.length > 0) q = q.in('equipment_id', scopedIds)
       if (selectedEq.length > 0) q = q.in('equipment_id', selectedEq)
@@ -2654,7 +2663,7 @@ function BookingCalendar({ session, tourOpen = false }) {
     if (selectedEq.length > 0) {
       // Show all bookings for the selected equipment so users can see availability
       const { data, error } = await sb.from('equipment_bookings').select(BOOKING_COLS)
-        .gte('start_time', start).lt('start_time', end)
+        .lt('start_time', end).gt('end_time', start)
         .in('equipment_id', selectedEq).order('start_time')
       if (error) console.error('[loadBookings] error:', error)
       setBookings((data || []).filter(b => b.status !== 'cancelled'))

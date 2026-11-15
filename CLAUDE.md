@@ -2590,3 +2590,12 @@ belong to the MATERIAL, which still asks for them.
   certificates of ACTIVE users of the org only — uploads by deleted users
   (3 in each DB in Nov 2026) are shown nowhere and kept the dot on for good.
   Equipment = pending `retraining_requests`. Re-checked on every sub-tab switch.
+
+## Booking calendar loads bookings that OVERLAP the view (Nov 2026, both apps)
+
+`loadBookings` (BookingEquipment.jsx) asks for `start_time < end AND end_time >
+start` of the day / week / month on screen. It filtered on the start alone,
+so a multi-day booking vanished from every week after the one it began in
+(Mahala's Centrifuge booking, Nov 13 → 17). Month view now lists a booking on
+every day it covers ("cont." after its first day). Week band, Timeline and
+Agenda already clamped to the visible range.
