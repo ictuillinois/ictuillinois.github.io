@@ -2599,3 +2599,9 @@ so a multi-day booking vanished from every week after the one it began in
 (Mahala's Centrifuge booking, Nov 13 → 17). Month view now lists a booking on
 every day it covers ("cont." after its first day). Week band, Timeline and
 Agenda already clamped to the visible range.
+- Multi-day bookings are ALSO drawn in each day column they cover (striped
+  block, own lane, click opens it, not draggable). Shown in the band only, the
+  hours they hold looked free (Nov 14 2026). They stay out of the GROUP_AFTER
+  clusters, or one booking covering the whole day would merge every booking
+  of that day into one block.
+

@@ -872,10 +872,12 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
             {(() => {
               const dayStart = new Date(days[di]); dayStart.setHours(0, 0, 0, 0)
               const dayEnd   = new Date(days[di]); dayEnd.setHours(24, 0, 0, 0)
-              // All bookings that touch this day, sorted by start (multi-day
-              // ones are drawn in the band above, not in the column)
+              // All bookings that touch this day, sorted by start. Multi-day
+              // ones are in the band above AND here (striped), so the hours
+              // they hold read as taken: drawn in the band only, an
+              // instrument looked free all day long while it was booked.
               const visible = bookings
-                .filter(b => !isMultiDay(b) && new Date(b.end_time) > dayStart && new Date(b.start_time) < dayEnd)
+                .filter(b => new Date(b.end_time) > dayStart && new Date(b.start_time) < dayEnd)
                 .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
               // Greedy lane assignment: find first lane whose last booking ends before this one starts
               const laneOf = new Map()
@@ -903,10 +905,12 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
               }
               // Overlap clusters (bookings chained by overlapping times). One
               // needing more than GROUP_AFTER lanes is drawn as a single block.
+              // Multi-day bookings stay out: covering the whole day, one would
+              // chain every booking of the day into a single block.
               const clusterOf = new Map()
               const clusters = []
               let cur = null
-              for (const b of visible) {
+              for (const b of visible.filter(x => !isMultiDay(x))) {
                 const s = +new Date(b.start_time), e = +new Date(b.end_time)
                 if (cur && s < cur.e) { cur.items.push(b); cur.e = Math.max(cur.e, e) }
                 else { cur = { s, e, items: [b] }; clusters.push(cur) }
@@ -943,12 +947,28 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
                 )
               })
               return [...groupBlocks, ...bookings.map(b => {
-                if (isMultiDay(b)) return null
                 if ((clusterOf.get(b.id)?.lanes || 0) > GROUP_AFTER) return null
                 const seg = getBookingSegment(b, di)
                 if (!seg) return null
                 const lane  = laneOf.get(b.id) ?? 0
                 const total = totalOf.get(b.id) ?? 1
+                // A multi-day booking's hours on this day: striped, not
+                // draggable (it changes through the booking's Edit)
+                if (isMultiDay(b)) {
+                  const c = statusColor[b.status]
+                  return (
+                    <div key={`${b.id}-${di}`} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onBookingClick(b) }} {...bindHover(b)}
+                      style={{ position: 'absolute', top: seg.top + 1, left: total > 1 ? `calc(2px + ${lane} * (100% - 4px) / ${total})` : 2, right: total > 1 ? `calc(2px + ${total - lane - 1} * (100% - 4px) / ${total})` : 2, height: seg.height,
+                        background: `repeating-linear-gradient(135deg, ${statusBg[b.status]} 0 7px, transparent 7px 13px)`, border: `1px solid ${c}60`, borderLeft: `3px solid ${c}`,
+                        borderRadius: [seg.isStart ? '4px' : '0', seg.isEnd ? '4px' : '0', seg.isEnd ? '4px' : '0', seg.isStart ? '4px' : '0'].join(' '),
+                        padding: '2px 4px', fontSize: 10, overflow: 'hidden', zIndex: 2, cursor: 'pointer' }}>
+                      <div style={{ fontWeight: 700, color: c, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'var(--surface)', borderRadius: 3, padding: '0 3px', display: 'inline-block', maxWidth: '100%' }}>
+                        {b.booked_on_behalf_of || b.user_name} · {eqLabel(b.equipment_id)}
+                      </div>
+                      {seg.height > 30 && <div style={{ color: c, fontSize: 9, marginTop: 1 }}><span style={{ background: 'var(--surface)', borderRadius: 3, padding: '0 3px' }}>{seg.isStart ? `${fmtTime(b.start_time)} → multi-day` : seg.isEnd ? `multi-day → ${fmtTime(b.end_time)}` : 'multi-day · all day'}</span></div>}
+                    </div>
+                  )
+                }
                 const br = [
                   seg.isStart ? '4px' : '0',
                   seg.isEnd ? '4px' : '0',
