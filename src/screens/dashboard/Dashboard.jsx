@@ -195,18 +195,39 @@ function CardGridView({ modules, onNavigate, mileageUrl, labSafetyUrl, isAdmin, 
       // everything would hand an unassigned lab user the manager-only set.
       : allMods.filter(m => !m.labManagerOnly)
     // Then apply labUser's personal visibility toggle (active_modules, level #4)
+    // In the lab user's own order (active_modules), so a drag sticks — this
+    // list used to follow the fixed module order and lab users could not
+    // drag at all
     const visibleMods = activeModules === null || activeModules === undefined
       ? assignedMods
       : assignedMods.filter(m => activeModules.includes(m.key))
+          .sort((a, b) => activeModules.indexOf(a.key) - activeModules.indexOf(b.key))
+    const shownMods = visibleMods.filter(m => !m.locked || (m.screen && labUserAccess?.has(m.screen)) || labUserAllowedPool?.has(m.key))
+    // Reorder the cards on screen; saved keys not shown here (not granted
+    // yet) keep their place at the end rather than being dropped
+    function dropLabUser(targetIdx) {
+      if (dragSrc === null || dragSrc === targetIdx) { setDragSrc(null); setDragOver(null); return }
+      const next = [...shownMods]
+      const [moved] = next.splice(dragSrc, 1)
+      next.splice(targetIdx, 0, moved)
+      setDragSrc(null)
+      setDragOver(null)
+      const keys = next.map(m => m.key)
+      onReorder?.([...keys, ...(activeModules || []).filter(k => !keys.includes(k))])
+    }
     return (
       <>
         <IconHint />
-        <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(visibleMods.length) }}>
-          {visibleMods.map(m => {
-            const grantedByAdmin = m.locked && ((m.screen && labUserAccess?.has(m.screen)) || labUserAllowedPool?.has(m.key))
-            if (m.locked && !grantedByAdmin) return null
-            return <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)} />
-          })}
+        <div className="module-icon-grid" style={{ height: '100%', maxHeight: gridMaxHeight(shownMods.length) }}>
+          {shownMods.map((m, idx) => (
+            <ModuleCard key={m.key} m={m} imgUrl={moduleImages[m.key]} onClick={() => m.external ? setConfirmExternal({ url: m.key === 'mileage' ? mileageUrl : labSafetyUrl }) : onNavigate(m.screen)}
+              onDragStart={onReorder ? () => setDragSrc(idx) : undefined}
+              onDragOver={onReorder ? () => setDragOver(idx) : undefined}
+              onDrop={onReorder ? () => dropLabUser(idx) : undefined}
+              onDragEnd={onReorder ? () => { setDragSrc(null); setDragOver(null) } : undefined}
+              isDragging={dragSrc === idx}
+              isDragOver={dragOver === idx && dragSrc !== idx} />
+          ))}
         </div>
         {confirmExternal && <ExternalLinkModal url={confirmExternal.url} onConfirm={() => { window.open(confirmExternal.url, '_blank'); setConfirmExternal(null) }} onCancel={() => setConfirmExternal(null)} />}
       </>
@@ -1072,7 +1093,7 @@ export default function Dashboard() {
           ? <SafetyGate onGoToTraining={() => { setScreen('training'); setSidebarSubTab('safety') }} onRefresh={checkSafetyProgress} />
           : <>
               {isLabUser && view==='dashboard' && <LabUserDashboardView session={session} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} moduleImages={moduleImages} activeModules={activeModules} labUserAllowedPool={labUserAllowedPool} />}
-              {isLabUser && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isLabUser={true} activeModules={activeModules} labUserAccess={userAccess} labUserAllowedPool={labUserAllowedPool} />}
+              {isLabUser && view==='grid'      && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={false} onEditUrl={()=>{}} moduleImages={moduleImages} isLabUser={true} activeModules={activeModules} labUserAccess={userAccess} labUserAllowedPool={labUserAllowedPool} onReorder={saveModuleOrder} />}
               {!isLabUser && view==='grid'     && <CardGridView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} isAdmin={isAdmin} onEditUrl={(type)=>{setEditingUrl(type);setUrlInput(type==='mileage'?mileageUrl:labSafetyUrl)}} moduleImages={moduleImages} isLabUser={false} activeModules={activeModules} customLinks={isSolo ? customLinks : []} onReorder={saveModuleOrder} />}
               {!isLabUser && view==='dashboard' && <DashboardView modules={modules} onNavigate={s=>setScreen(s)} mileageUrl={mileageUrl} labSafetyUrl={labSafetyUrl} moduleImages={moduleImages} />}
             </>
