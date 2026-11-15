@@ -879,10 +879,16 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
               const visible = bookings
                 .filter(b => new Date(b.end_time) > dayStart && new Date(b.start_time) < dayEnd)
                 .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
-              // Greedy lane assignment: find first lane whose last booking ends before this one starts
+              // Greedy lane assignment: find first lane whose last booking ends before this one starts.
+              // Multi-day bookings get their own lanes behind the others (below)
+              // — sharing lanes with the day's short bookings made them a sliver
+              // all day long, even at hours when nothing else is booked.
+              const single = visible.filter(x => !isMultiDay(x))
+              const multi = visible.filter(isMultiDay)
+              const mLane = new Map(multi.map((x, i) => [x.id, i]))
               const laneOf = new Map()
               const laneEnd = []
-              for (const b of visible) {
+              for (const b of single) {
                 const bStart = new Date(b.start_time)
                 const bEnd   = new Date(b.end_time)
                 let lane = laneEnd.findIndex(end => bStart >= end)
@@ -892,11 +898,11 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
               }
               // For each booking, count how many lanes overlap with its time span
               const totalOf = new Map()
-              for (const b of visible) {
+              for (const b of single) {
                 const bStart = new Date(b.start_time)
                 const bEnd   = new Date(b.end_time)
                 let maxLane = laneOf.get(b.id)
-                for (const b2 of visible) {
+                for (const b2 of single) {
                   if (new Date(b2.start_time) < bEnd && new Date(b2.end_time) > bStart) {
                     maxLane = Math.max(maxLane, laneOf.get(b2.id))
                   }
@@ -910,7 +916,7 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
               const clusterOf = new Map()
               const clusters = []
               let cur = null
-              for (const b of visible.filter(x => !isMultiDay(x))) {
+              for (const b of single) {
                 const s = +new Date(b.start_time), e = +new Date(b.end_time)
                 if (cur && s < cur.e) { cur.items.push(b); cur.e = Math.max(cur.e, e) }
                 else { cur = { s, e, items: [b] }; clusters.push(cur) }
@@ -956,12 +962,13 @@ function WeekView({ weekStart, dayCount = 7, onDayClick, bookings, onSlotClick, 
                 // draggable (it changes through the booking's Edit)
                 if (isMultiDay(b)) {
                   const c = statusColor[b.status]
+                  const ml = mLane.get(b.id) ?? 0, mt = multi.length
                   return (
                     <div key={`${b.id}-${di}`} onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onBookingClick(b) }} {...bindHover(b)}
-                      style={{ position: 'absolute', top: seg.top + 1, left: total > 1 ? `calc(2px + ${lane} * (100% - 4px) / ${total})` : 2, right: total > 1 ? `calc(2px + ${total - lane - 1} * (100% - 4px) / ${total})` : 2, height: seg.height,
+                      style={{ position: 'absolute', top: seg.top + 1, left: mt > 1 ? `calc(2px + ${ml} * (100% - 4px) / ${mt})` : 2, right: mt > 1 ? `calc(2px + ${mt - ml - 1} * (100% - 4px) / ${mt})` : 2, height: seg.height,
                         background: `repeating-linear-gradient(135deg, ${statusBg[b.status]} 0 7px, transparent 7px 13px)`, border: `1px solid ${c}60`, borderLeft: `3px solid ${c}`,
                         borderRadius: [seg.isStart ? '4px' : '0', seg.isEnd ? '4px' : '0', seg.isEnd ? '4px' : '0', seg.isStart ? '4px' : '0'].join(' '),
-                        padding: '2px 4px', fontSize: 10, overflow: 'hidden', zIndex: 2, cursor: 'pointer' }}>
+                        padding: '2px 4px', fontSize: 10, overflow: 'hidden', zIndex: 1, cursor: 'pointer' }}>
                       <div style={{ fontWeight: 700, color: c, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'var(--surface)', borderRadius: 3, padding: '0 3px', display: 'inline-block', maxWidth: '100%' }}>
                         {b.booked_on_behalf_of || b.user_name} · {eqLabel(b.equipment_id)}
                       </div>
