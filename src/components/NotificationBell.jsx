@@ -98,8 +98,13 @@ export default function NotificationBell() {
       const url = (n.body || '').match(/https:\/\/github\.com\/\S+/)?.[0]
       if (url) window.open(url, '_blank', 'noopener')
     } else if (['vehicle_request', 'vehicle_form', 'vehicle_decision'].includes(n.type)) {
+      // "<name> requested a vehicle: …" / "<name> uploaded a vehicle form: …"
+      // (to managers): open that person on the Vehicle tab. vehicle_decision
+      // goes to the lab user, who only ever sees themselves.
       setScreen('training')
       setSidebarSubTab('golf')
+      const who = (n.title || '').match(/^(.+?) (requested a vehicle|uploaded a vehicle form)\b/)?.[1]
+      if (who && who !== 'A lab user') setPendingTrainingUser(who)
     } else if (['locker_request', 'locker_assigned', 'locker_declined'].includes(n.type)) {
       setScreen('training')
       setSidebarSubTab('locker')

@@ -2584,6 +2584,9 @@ belong to the MATERIAL, which still asks for them.
   title ("<name> uploaded / submitted / skipped …") into
   `pendingTrainingUser`; the hub matches it against `name` OR the full name
   (senders use either). Two people with that name → nobody is opened.
+  Vehicle alerts to managers ("<name> requested a vehicle: …" / "<name>
+  uploaded a vehicle form: …") open that person on the Vehicle tab (`golf`);
+  they were missed when this was first built (fixed Nov 16 2026).
 - "skipped safety training" = the lab user pressed "I'll do this later" on
   the sign-in Safety Training Required box. Nothing was bypassed.
 - Sidebar dots (Layout.jsx `trainingBadges`): Documents counts waiting
