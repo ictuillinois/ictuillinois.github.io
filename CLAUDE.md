@@ -1847,7 +1847,7 @@ As of Oct 12 2026 every row above has been run where marked, in both databases (
 again after adding any new SQL function. Its last query lists what is still
 open; empty = done.
 
-- **Storage was writable signed-out.** `fix_storage_buckets.sql` gave `anon`
+- **Storage was writable signed-out.** `fix_storage_buckets.sql` (deleted Nov 2026 — never recreate it) gave `anon`
   INSERT/UPDATE/DELETE on every bucket — anyone could delete the lab's files.
   Anon now has exactly one storage policy, `anon_support_screenshot` (INSERT
   into `project-files/support/`, for the signed-out Contact Us form). Never
@@ -2614,3 +2614,13 @@ Agenda already clamped to the visible range.
   clusters, or one booking covering the whole day would merge every booking
   of that day into one block.
 
+
+## SQL files in the repo root (cleaned Nov 16 2026)
+
+Old one-off fixes that were already applied and referenced nowhere were
+deleted (fix_*.sql, schema-fix*.sql, schema_fresh / schema_org_migration,
+*_schema_sync, safety_required_steps, add_requires_exam, …). They are in git
+history if ever needed. A fresh database is rebuilt from the weekly backup
+(ICT-Lab) or rls_phase1.sql + the setup files in the table above, not from
+those. Keep a new one-off fix out of the root once it has run in both
+databases, unless CLAUDE.md or the code points at it.
