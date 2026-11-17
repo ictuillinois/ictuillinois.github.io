@@ -108,6 +108,14 @@ export function isVehicle(eq) {
   return /vehicle/i.test(eq?.category || '')
 }
 
+// The golf cart is the one vehicle with its own paperwork: the Operator's
+// Brief (campus UNLICENSED motorized vehicles) and the Golf Cart Manual. A
+// truck, van or SUV needs only the Driver Approval Form (Nov 2026). Matched by
+// name — org_vehicles has no type column — so keep "golf" in its name.
+export function isGolfCart(name) {
+  return /golf/i.test(name || '')
+}
+
 // Retraining (Nov 2026): due on an instrument the person last BOOKED more than
 // 3 months ago, unless they were (re)trained on it within those 3 months.
 // Booking used to look at bookings only, so a logged retraining never lifted

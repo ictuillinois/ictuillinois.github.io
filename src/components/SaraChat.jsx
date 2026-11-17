@@ -78,7 +78,7 @@ const FAQ = [
   {
     id: 'vehicle',
     q: 'How do I get approved to drive a lab vehicle?',
-    a: 'Open Training Records → Vehicle → Forms:\n1. Tick the vehicles you need\n2. Read the Golf Cart Manual page by page and confirm at the end\n3. Download the two forms, sign them, and upload the signed copies\nA Research Engineer approves the forms and then confirms your vehicles.',
+    a: 'Open Training Records → Vehicle → Forms:\n1. Tick the vehicles you need\n2. Download the Departmental Driver Approval Form, sign it, and upload the signed copy\n3. Golf cart only: also sign and upload the Operator\'s Brief, and read the Golf Cart Manual page by page\nA Research Engineer approves the forms and then confirms your vehicles. A truck, van or SUV needs only the Driver Approval Form.',
     keywords: ['vehicle', 'golf cart', 'golf car', 'drive', 'driving', 'car', 'cart', 'vehicle form', 'use agreement', 'manual'],
     followups: ['training', 'mileage', 'contact'],
   },

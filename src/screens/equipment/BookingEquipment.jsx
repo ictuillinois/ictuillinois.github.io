@@ -5,7 +5,7 @@ import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { sb } from '../../lib/supabase'
-import { forLabUsers, requiresTraining, isVehicle, retrainingDueIds } from '../../lib/equipmentAccess'
+import { forLabUsers, requiresTraining, isVehicle, isGolfCart, retrainingDueIds } from '../../lib/equipmentAccess'
 import { useAppStore } from '../../store/useAppStore'
 import { googleCalUrl, outlookCalUrl, downloadIcs } from '../../lib/calendarLinks'
 import { IconCalendarPlus, IconCheckCircle } from '../../components/Icons'
@@ -2437,6 +2437,9 @@ function BookingCalendar({ session, tourOpen = false }) {
   // ICT vehicles: a lab user books them once a lab manager has confirmed one of
   // their vehicle requests (Training Records → Vehicle). null = not loaded.
   const [vehicleApproved, setVehicleApproved] = useState(null)
+  // The golf cart has its own paperwork (Operator's Brief + manual), so only a
+  // confirmed GOLF CART request unlocks it — a truck approval must not.
+  const [golfCartApproved, setGolfCartApproved] = useState(false)
 
   // Below the state it reads: its dependency list is evaluated on every render,
   // and naming vehicleApproved above its useState threw "Cannot access before
@@ -2492,8 +2495,12 @@ function BookingCalendar({ session, tourOpen = false }) {
         .select('equipment_id').eq('user_id', session.userId).eq('passed_exam', true)
       setTrainedEquipmentIds(new Set((trained || []).map(t => t.equipment_id)))
       const { data: va, error: vaErr } = await sb.from('vehicle_access')
-        .select('id').eq('user_id', session.userId).eq('status', 'confirmed').limit(1)
+        .select('vehicle_id').eq('user_id', session.userId).eq('status', 'confirmed')
       setVehicleApproved(!vaErr && !!va?.length)
+      if (!vaErr && va?.length) {
+        const { data: vn } = await sb.from('org_vehicles').select('name').in('id', va.map(v => v.vehicle_id))
+        setGolfCartApproved((vn || []).some(v => isGolfCart(v.name)))
+      } else setGolfCartApproved(false)
     }
     // Load org users for manager labUser-filter dropdown
     if (canEdit(session) && session?.organizationId) {
@@ -2753,7 +2760,11 @@ function BookingCalendar({ session, tourOpen = false }) {
 
   // A vehicle, for a lab user with no confirmed vehicle request
   function isVehicleLocked(id) {
-    return session?.role === 'lab_user' && vehicleApproved === false && isVehicle(equipment.find(e => e.id === id))
+    if (session?.role !== 'lab_user') return false
+    const eq = equipment.find(e => e.id === id)
+    if (!isVehicle(eq)) return false
+    if (vehicleApproved === false) return true
+    return vehicleApproved === true && !golfCartApproved && isGolfCart(`${eq.equipment_name || ''} ${eq.nickname || ''}`)
   }
   const VEHICLE_HINT = 'Vehicles need approval first — submit your vehicle forms and request a vehicle in Training Records → Vehicle → Forms. A lab manager approves it.'
   // Anything a lab user may not select: untrained, retraining due, or a vehicle without approval

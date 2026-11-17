@@ -3,6 +3,7 @@ import { sb } from '../../lib/supabase'
 import { useAppStore } from '../../store/useAppStore'
 import { notifyVehicleManagers, notifyVehicleUser } from '../../lib/vehicleNotify'
 import StorageService, { useStorageUrl } from '../../lib/storage/StorageService'
+import { isGolfCart } from '../../lib/equipmentAccess'
 // Lazy: pdf.js is large, and only a lab user reading the manual needs it
 const PdfSteps = lazy(() => import('../../components/PdfSteps'))
 
@@ -27,14 +28,14 @@ const VEHICLE_DOCS = [
     kind: 'sign',
     name: "Campus Unlicensed Motorized Vehicle Operator's Brief",
     file: 'campus-unlicensed-motorized-vehicle-operators-brief.pdf',
-    note: 'Download, sign, upload the signed copy · your lab manager approves it',
+    note: 'Golf cart only · download, sign, upload the signed copy · your lab manager approves it',
   },
   {
     key: 'golf-cart-manual',
     kind: 'read',
     name: 'Golf Cart Manual',
     file: 'golf-cart-manual.pdf',
-    note: 'Read it step by step, then confirm you understood it — nothing to upload',
+    note: 'Golf cart only · read it step by step, then confirm you understood it — nothing to upload',
     // One title per page of the PDF, shown above that page in the step view
     steps: ['Requirements, scope of use and rules', 'Before you drive', 'Driving', 'Stopping and parking', 'Switching off, returning and charging'],
   },
@@ -485,15 +486,19 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
         const shown = new Set()
         labUsers.forEach(u => accountsOf(u.id).forEach(i => shown.add(i)))
         const list = access.filter(a => !labUsers.length || shown.has(String(a.user_id)))
-        // Confirm only once the vehicle forms are done: both signed forms
-        // approved and the manual acknowledged (newest submission of each).
-        const missingFor = userId => {
+        // Confirm only once the forms THAT VEHICLE needs are done (newest
+        // submission of each): every vehicle needs the Driver Approval Form;
+        // the golf cart also needs the Operator's Brief and the manual. A truck
+        // request used to wait on golf cart paperwork the person never needed.
+        const missingFor = (userId, vehicleId) => {
           const ids = accountsOf(userId)
           const latest = k => rows.find(r => r.doc_key === k && ids.has(String(r.user_id)))
           const m = []
           if (latest('driver-approval')?.status !== 'approved') m.push('Driver Approval Form approved')
-          if (latest('operators-brief')?.status !== 'approved') m.push("Operator's Brief approved")
-          if (latest('golf-cart-manual')?.status !== 'acknowledged') m.push('Golf Cart Manual read')
+          if (isGolfCart(vehicleName(vehicleId))) {
+            if (latest('operators-brief')?.status !== 'approved') m.push("Operator's Brief approved")
+            if (latest('golf-cart-manual')?.status !== 'acknowledged') m.push('Golf Cart Manual read')
+          }
           return m
         }
         return (
@@ -502,7 +507,7 @@ export default function VehicleAgreement({ labUsers = [], session, isManager, on
             {list.length === 0 ? (
               <div style={{ fontSize: 13, color: 'var(--text3)', padding: '4px 0 8px' }}>No vehicle requests.</div>
             ) : list.map(a => {
-              const missing = a.status === 'requested' ? missingFor(a.user_id) : []
+              const missing = a.status === 'requested' ? missingFor(a.user_id, a.vehicle_id) : []
               const style = a.status === 'confirmed' ? APPROVED_STYLE : a.status === 'declined' ? DENIED_STYLE : PENDING_STYLE
               return (
                 <div key={a.id} className="va-row" style={{ marginBottom: 8 }}>

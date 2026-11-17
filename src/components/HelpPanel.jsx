@@ -57,7 +57,7 @@ const HELP_CONTENT = {
       'Safety: watch the safety video, read the safety guide and complete DRS training, then watch both videos and pass the test. A lab manager approves each step',
       T('Some modules stay locked until your safety training is approved', 'labuser'),
       'Lab User Documents: upload a certificate; a lab manager approves it',
-      'Vehicle → Forms: tick the vehicles you need, read the Golf Cart Manual page by page, then download, sign and upload the two forms',
+      'Vehicle → Forms: tick the vehicles you need, then download, sign and upload the Driver Approval Form. For the golf cart, also sign the Operator\'s Brief and read the Golf Cart Manual page by page',
       T('Vehicle → Training records: confirm requested vehicles once that person\'s forms are approved. Add or remove vehicles in the ICT vehicle list', 'manager'),
       'Equipment: training per instrument. Equipment you have not used for 3 months needs retraining before you can book it',
       T('Equipment: once a lab user passes the exam, run the training session, then press ✓ Confirm training done to open booking. Someone who could not pass (or did not take) the exam: Skip the exam → training session', 'manager'),

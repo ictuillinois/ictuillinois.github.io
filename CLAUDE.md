@@ -1731,7 +1731,10 @@ areas; one tick is required to save:
   and admins only — `VehicleList.jsx`): table `org_vehicles`. Lab users tick
   the vehicles they need at the top of Forms (`vehicle_access`, status
   requested → confirmed / declined). A lab manager confirms on the Vehicle → Training records
-  tab (`VehicleAgreement view="requests"`), only once that person's two forms are approved and the manual read. A lab
+  tab (`VehicleAgreement view="requests"`), only once the forms THAT vehicle needs are done: every vehicle needs
+  the Driver Approval Form approved; the golf cart (`isGolfCart()` — name
+  contains "golf") also needs the Operator's Brief approved and the manual
+  read (Nov 16 2026 — a truck request used to wait on golf cart paperwork). A lab
   user cannot confirm themselves (policy + guard_training_approval trigger).
   "Remove" sets `is_active = false` — never delete a vehicle someone asked
   for. SQL: `vehicle_list_setup.sql` (after training_privacy.sql). The
@@ -2224,8 +2227,9 @@ dot · Vehicle / Equipment / Alarm / Locker dots.
 - `isVehicle(eq)` (lib/equipmentAccess.js): category matches /vehicle/i
   (ICT-vehicles). For a lab user, a vehicle is bookable only with at least one
   CONFIRMED `vehicle_access` row (confirming already requires their forms
-  approved + manual read). Any confirmed vehicle unlocks every ICT vehicle
-  (user's choice, Oct 23). Vehicles need no equipment training and get no
+  approved). Any confirmed vehicle unlocks every ICT vehicle (user's choice,
+  Oct 23) EXCEPT a golf cart, which needs a confirmed golf cart request —
+  its paperwork differs (Nov 16 2026). Vehicles need no equipment training and get no
   3-month retraining (`requiresTraining` returns false). Badge: VEHICLE
   APPROVAL REQUIRED. The lock also holds for Select all (it used to tick
   untrained equipment too) and for a QR-scan arrival.
