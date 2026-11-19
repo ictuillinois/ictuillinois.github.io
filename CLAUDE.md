@@ -2624,3 +2624,17 @@ history if ever needed. A fresh database is rebuilt from the weekly backup
 (ICT-Lab) or rls_phase1.sql + the setup files in the table above, not from
 those. Keep a new one-off fix out of the root once it has run in both
 databases, unless CLAUDE.md or the code points at it.
+
+## Booking: lab users book only under their own projects (Nov 2026, both apps)
+
+`loadBookableProjects(session)` (BookingEquipment.jsx) feeds the project
+list in both booking forms (BookingModal and the several-instruments bar).
+A lab user gets ONLY projects they are assigned to — in
+`projects.lab_user_ids`, named as `pi_user_id`, or in their
+`users.assigned_project_ids` — across every users row sharing their email.
+They used to get every active project in the organization (a lab user booked
+7 times under a project she was not on). Lab managers and admins still get
+all of the organization's projects. A "Project" booking must now name a
+project even when the list is empty — with none, the lab user is told to
+pick Thesis / Other or ask to be added (`NO_PROJECT_MSG`). UI rule only:
+the equipment_bookings policy does not check the project.

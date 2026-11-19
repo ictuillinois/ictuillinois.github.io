@@ -171,6 +171,34 @@ function ResponsibleCheck({ checked, onChange, small = false }) {
   )
 }
 
+
+// Projects a person may book under. Lab users: ONLY projects they are
+// assigned to — listed in projects.lab_user_ids, named as PI, or in their
+// users.assigned_project_ids — across every users row sharing their email.
+// They used to get every active project in the organization, and booked
+// under projects they had nothing to do with (Nov 2026). Lab managers and
+// admins still see all of the organization's projects.
+async function loadBookableProjects(session) {
+  const isSolo = session.loginMode === 'solo' || session.role === 'solo'
+  let q = sb.from('projects').select('id, name, project_id, pi_user_id, lab_user_ids').eq('status', 'active').order('project_id')
+  if (isSolo) q = q.eq('solo_owner_id', session.userId)
+  else if (session.organizationId) q = q.eq('organization_id', session.organizationId)
+  else q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`)
+  const { data } = await q
+  const all = data || []
+  if (session.role !== 'lab_user') return all
+  const ids = new Set([String(session.userId)])
+  const assigned = new Set()
+  const email = (session.email || '').trim()
+  let rq = sb.from('users').select('id, assigned_project_ids')
+  rq = email ? rq.ilike('email', email) : rq.eq('id', session.userId)
+  if (session.organizationId) rq = rq.eq('organization_id', session.organizationId)
+  const { data: rows } = await rq
+  ;(rows || []).forEach(r => { ids.add(String(r.id)); (r.assigned_project_ids || []).forEach(a => assigned.add(String(a))) })
+  return all.filter(p => assigned.has(String(p.id)) || ids.has(String(p.pi_user_id)) || (p.lab_user_ids || []).some(x => ids.has(String(x))))
+}
+const NO_PROJECT_MSG = "You are not assigned to any active project. Choose Thesis or Other, or ask your lab manager to add you to the project."
+
 function BookingModal({ booking, equipmentList, selectedEquipment, session, onSave, onClose, onAdjustTime, initialSlot, photoRequired, panel, defaultBehalfOf = '', onBooked }) {
   const { toast } = useAppStore()
 
@@ -208,14 +236,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
       if (session?.organizationId) q = q.eq('organization_id', session.organizationId)
       q.then(({ data }) => setLabUsers(data || []))
     }
-    if (session?.userId) {
-      const isSolo = session.loginMode === 'solo' || session.role === 'solo'
-      let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('project_id')
-      if (isSolo) { q = q.eq('solo_owner_id', session.userId) }
-      else if (session.organizationId) { q = q.eq('organization_id', session.organizationId) }
-      else { q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`) }
-      q.then(({ data }) => setProjects(data || []))
-    }
+    if (session?.userId) loadBookableProjects(session).then(setProjects)
   }, [])
 
   // Fetch special note when equipment selection changes
@@ -262,7 +283,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
     if (new Date(form.end_time) <= new Date(form.start_time)) { toast('End time must be after start time.'); return }
     if (conflict) { toast('This time slot conflicts with an existing booking.'); return }
     if (!form.purposeType) { toast('Select a purpose: Project, Thesis, or Other.'); return }
-    if (form.purposeType === 'project' && !form.purposeProjectId && projects.length > 0) { toast('Select a project.'); return }
+    if (form.purposeType === 'project' && !form.purposeProjectId) { toast(projects.length ? 'Select a project.' : NO_PROJECT_MSG); return }
     if (form.purposeType === 'other' && !form.purposeOther.trim()) { toast('Describe the reason for the booking.'); return }
     if (!responsible) { toast('Tick the box to confirm you are responsible for this booking.'); return }
     setSaving(true)
@@ -393,7 +414,7 @@ function BookingModal({ booking, equipmentList, selectedEquipment, session, onSa
           {form.purposeType === 'project' && (
             <div style={{ marginTop: 10 }}>
               {projects.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8 }}>No active projects found. Create one in Project &amp; Material first.</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8 }}>{session?.role === 'lab_user' ? NO_PROJECT_MSG : 'No active projects found. Create one in Project & Material first.'}</div>
               ) : (
                 <select
                   value={form.purposeProjectId}
@@ -2402,12 +2423,7 @@ function BookingCalendar({ session, tourOpen = false }) {
   useEffect(() => { loadEquipment(); loadNotifications() }, [])
   useEffect(() => {
     if (!session?.userId) return
-    const isSolo = session.loginMode === 'solo' || session.role === 'solo'
-    let q = sb.from('projects').select('id, name, project_id').eq('status', 'active').order('project_id')
-    if (isSolo) q = q.eq('solo_owner_id', session.userId)
-    else if (session.organizationId) q = q.eq('organization_id', session.organizationId)
-    else q = q.or(`pi_user_id.eq.${session.userId},lab_user_ids.cs.{${session.userId}}`)
-    q.then(({ data }) => setProjects(data || []))
+    loadBookableProjects(session).then(setProjects)
   }, [session?.userId])
   useEffect(() => { loadBookings() }, [selectedEq, weekStart, monthDate, dayDate, calView, filterLabUser])
   useEffect(() => { loadBookings() }, [])
@@ -2912,7 +2928,7 @@ function BookingCalendar({ session, tourOpen = false }) {
 
   async function bookAllFromDraft() {
     if (!multiDraftPurpose) { toast('Select a purpose for the bookings.'); return }
-    if (multiDraftPurpose === 'project' && projects.length > 0 && !multiDraftProjectId) { toast('Select a project.'); return }
+    if (multiDraftPurpose === 'project' && !multiDraftProjectId) { toast(projects.length ? 'Select a project.' : NO_PROJECT_MSG); return }
     if (multiDraftPurpose === 'other' && !multiDraftOther.trim()) { toast('Describe the reason.'); return }
     if (!multiResponsible) { toast('Tick the box to confirm you are responsible for these bookings.'); return }
     const allSet = draftEq.every(id => multiDraftSlots[id])
@@ -3116,7 +3132,7 @@ function BookingCalendar({ session, tourOpen = false }) {
                 {multiDraftPurpose === 'project' && (
                   <div style={{ marginTop: 6 }}>
                     {projects.length === 0 ? (
-                      <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>No active projects found. Create one in Project &amp; Material first.</div>
+                      <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 6 }}>{session?.role === 'lab_user' ? NO_PROJECT_MSG : 'No active projects found. Create one in Project & Material first.'}</div>
                     ) : (
                       <select value={multiDraftProjectId} onChange={e => setMultiDraftProjectId(e.target.value)} style={{ fontSize: 12, width: '100%' }}>
                         <option value=''>— Select project —</option>
