@@ -31,6 +31,38 @@ function fmtDT(d) {
   return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// A stored time as a datetime-local value, in the viewer's own time zone
+export function toLocalInput(d) {
+  if (!d) return ''
+  const x = new Date(d)
+  if (isNaN(x)) return ''
+  x.setMinutes(x.getMinutes() - x.getTimezoneOffset())
+  return x.toISOString().slice(0, 16)
+}
+
+// Nov 2026: a lab manager can change a training session's day / time at any
+// stage — proposed, countered by the lab user, or already accepted. The new
+// time is a NEW proposal: the lab user is told (bell + opt-in email) and
+// accepts it or proposes another, so nobody turns up at a time only one side
+// agreed to. The trainer (proposed_by) and any skipped exam are kept.
+export async function rescheduleTraining(sched, localValue, notes, eqName) {
+  const when = new Date(localValue)
+  if (!localValue || isNaN(when)) return { error: 'pick the new day and time' }
+  const prev = sched.confirmed_date || sched.counter_date || sched.proposed_date
+  const patch = {
+    proposed_date: when.toISOString(), status: 'proposed',
+    counter_date: null, confirmed_date: null,
+    notes: (notes || '').trim() || null, updated_at: new Date().toISOString(),
+  }
+  const { data, error } = await sb.from('training_schedule').update(patch).eq('id', sched.id).select('id')
+  if (error || !data?.length) return { error: error ? error.message : 'nothing was changed' }
+  const msg = `Training time changed: ${eqName} is now ${fmtDT(when)}${prev ? ` (was ${fmtDT(prev)})` : ''}${sched.proposed_by ? ` with ${sched.proposed_by}` : ''}. Please accept the new time or propose another.${patch.notes ? ` Note: ${patch.notes}` : ''}`
+  const { error: nErr } = await sb.from('booking_notifications').insert({ booking_id: null, user_id: sched.user_id, type: 'training_scheduled', message: msg, read: false })
+  if (nErr) console.warn('Notification insert failed:', nErr.message)
+  await sendTrainingEmail(sched.user_id, 'training_approved', `Training time changed — ${eqName}`, 'Your training time has changed', msg)
+  return { patch }
+}
+
 // ══════════════════════════════════════════════════════════════
 // TRAINING REQUESTS PANEL (admin/labManagers view in Training Records)
 // forUserId: only show requests from that user (hub Equipment tab,
@@ -501,7 +533,7 @@ export function UserTrainingSchedule({ session }) {
           </div>
         )
       })}
-      {confirmed.filter(s => !dismissed.has(s.id)).map(sched => {
+      {confirmed.filter(s => !dismissed.has(s.id) && !dismissed.has(`${s.id}@${s.confirmed_date}`)).map(sched => {
         // Nov 2026: this banner is where a lab user learns what to do before
         // the session — it used to say only "review the SOP" with a plain link,
         // and never mentioned the exam they must pass.
@@ -525,7 +557,7 @@ export function UserTrainingSchedule({ session }) {
         )
         return (
           <div key={sched.id} style={{ background: '#E1F5EE', border: '1px solid #9FE1CB', borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12, position: 'relative', display: 'grid', gap: 10 }}>
-            <button onClick={() => dismissConfirmed(sched.id)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#085041', opacity: 0.5, lineHeight: 1, padding: 4 }} title="Dismiss">✕</button>
+            <button onClick={() => dismissConfirmed(`${sched.id}@${sched.confirmed_date}`)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#085041', opacity: 0.5, lineHeight: 1, padding: 4 }} title="Dismiss">✕</button>
             <div style={{ paddingRight: 24 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: '#085041' }}>✓ Training session confirmed: {eqName}</div>
               <div style={{ fontSize: 13, color: '#085041', marginTop: 2 }}>

@@ -2638,3 +2638,16 @@ all of the organization's projects. A "Project" booking must now name a
 project even when the list is empty — with none, the lab user is told to
 pick Thesis / Other or ask to be added (`NO_PROJECT_MSG`). UI rule only:
 the equipment_bookings policy does not check the project.
+
+## Training session time can be changed at any stage (Nov 2026, both apps)
+
+Each session row in a lab user's Equipment training table (EquipmentTraining
+in TrainingRecords.jsx) has **Change time**, for proposed, countered AND
+already-accepted sessions. `rescheduleTraining()` (TrainingSchedule.jsx) sets
+the new `proposed_date`, puts the session back to `status = 'proposed'`
+(counter / confirmed dates cleared) and tells the lab user (bell
+`training_scheduled` + opt-in email, "now … (was …)"). The lab user then
+accepts it or proposes another — a changed time is a new proposal, so
+nobody turns up at a time only one side agreed to. The trainer and a skipped
+exam are kept. A dismissed "session confirmed" banner is remembered per
+`<id>@<confirmed_date>`, so it shows again for the new time.

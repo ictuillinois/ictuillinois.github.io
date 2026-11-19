@@ -1,8 +1,8 @@
-import { IconEye, IconEyeOff } from '../../components/Icons'
+import { IconEye, IconEyeOff, IconCalendar } from '../../components/Icons'
 import HelpPanel from '../../components/HelpPanel'
 import ScrollTabs from '../../components/ScrollTabs'
 import React from 'react'
-import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab } from './TrainingSchedule'
+import { TrainingRequestsPanel, UserTrainingSchedule, ExamTab, rescheduleTraining, toLocalInput } from './TrainingSchedule'
 import SafetyTab, { SAFETY_DOC_NAMES } from '../labsafety/LabSafety'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { sb } from '../../lib/supabase'
@@ -806,6 +806,11 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
   const [tests, setTests] = useState([])
   const [skipping, setSkipping] = useState(null)
   const [skipReason, setSkipReason] = useState('')
+  // Change a session's day / time (any stage): the open box, its new time + note
+  const [rescheduling, setRescheduling] = useState(null)
+  const [resDate, setResDate] = useState('')
+  const [resNotes, setResNotes] = useState('')
+  const [resSaving, setResSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const equipImportRef = useRef(null)
   const [equipSubTab, setEquipSubTab] = useState('training')
@@ -1150,6 +1155,20 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
     sb.from('notifications').insert({ user_id: u.id, type: 'exam_skipped', title: `Exam skipped: ${eqName}`, body, read: false })
       .then(null, e => console.warn('[notify] insert failed:', e?.message || e))
     toast(`Exam skipped — ${firstName(u)} goes straight to the training session`)
+  }
+
+  async function saveReschedule(sched, u, eqName) {
+    if (!resDate) { toast('Pick the new day and time.'); return }
+    if (new Date(resDate) < new Date()) { toast('That time has already passed.'); return }
+    const now = toLocalInput(sched.confirmed_date || sched.counter_date || sched.proposed_date)
+    if (now === resDate && (resNotes.trim() || null) === (sched.notes || null)) { toast('Nothing changed — that is the current time.'); return }
+    setResSaving(true)
+    const { patch, error } = await rescheduleTraining(sched, resDate, resNotes, eqName)
+    setResSaving(false)
+    if (error) { toast('Could not change the time: ' + error); return }
+    setTrainingSchedules(prev => prev.map(x => x.id === sched.id ? { ...x, ...patch } : x))
+    setRescheduling(null)
+    toast(`Time changed — ${firstName(u)} was notified to accept it`)
   }
 
   async function approveTraining({ userId, username, equipmentId, scheduleId, requestId, sched = null }) {
@@ -1501,6 +1520,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                             <td style={{ color: 'var(--text3)' }}>—</td>
                             {canManage && (
                               <td>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                 {isConfirmed && (
                                   <button className="btn btn-sm btn-primary" style={{ fontSize: 11, whiteSpace: 'nowrap', opacity: canConfirm ? 1 : 0.5 }} disabled={!canConfirm}
                                     title={canConfirm ? 'Confirm once the training session has happened' : `${firstName(u)} has to pass the exam first, or skip it`}
@@ -1508,6 +1528,12 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                                     ✓ Confirm training done
                                   </button>
                                 )}
+                                <button className="btn btn-sm" style={{ fontSize: 11, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                  title={`Change the day or time — ${firstName(u)} is notified`}
+                                  onClick={() => { setSkipping(null); setRescheduling(sched.id); setResDate(toLocalInput(dateVal)); setResNotes(sched.notes || '') }}>
+                                  <IconCalendar size={13} /> Change time
+                                </button>
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -1522,7 +1548,7 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                                 </span>
                                 {examState === 'waiting' && skipping !== sched.id && (
                                   <button className="btn btn-sm" style={{ fontSize: 11, border: '1px solid #7dd3fc', background: '#e0f2fe', color: '#0369a1' }}
-                                    onClick={() => { setSkipping(sched.id); setSkipReason('') }}>Skip the exam → training session</button>
+                                    onClick={() => { setRescheduling(null); setSkipping(sched.id); setSkipReason('') }}>Skip the exam → training session</button>
                                 )}
                               </div>
                               {skipping === sched.id && (
@@ -1541,6 +1567,21 @@ function EquipmentTraining({ labUsers, session, hideChrome = false, onChanged })
                                   <div style={{ display: 'flex', gap: 8 }}>
                                     <button className="btn btn-sm btn-primary" onClick={() => skipExam(sched, u)}>Skip the exam</button>
                                     <button className="btn btn-sm" onClick={() => setSkipping(null)}>Cancel</button>
+                                  </div>
+                                </div>
+                              )}
+                              {rescheduling === sched.id && (
+                                <div style={{ background: 'var(--surface2)', borderTop: '1px solid var(--border)', padding: '12px 14px', display: 'grid', gap: 8, fontSize: 13 }}>
+                                  <b>Change the {eqName} training time for {firstName(u)}</b>
+                                  <span style={{ color: 'var(--text2)' }}>Now: {dateVal ? when : 'no time set'}. {firstName(u)} gets a notification and is asked to accept the new time{isConfirmed ? ' again' : ''}.</span>
+                                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <input type="datetime-local" value={resDate} onChange={e => setResDate(e.target.value)} style={{ width: 'auto', fontSize: 13 }} />
+                                    <input value={resNotes} onChange={e => setResNotes(e.target.value)} maxLength={120}
+                                      placeholder="Note (optional), e.g. Meet at Binder Lab" style={{ flex: 1, minWidth: 200, fontSize: 13 }} />
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="btn btn-sm btn-primary" disabled={resSaving} onClick={() => saveReschedule(sched, u, eqName)}>{resSaving ? 'Saving…' : `Save and notify ${firstName(u)}`}</button>
+                                    <button className="btn btn-sm" onClick={() => setRescheduling(null)}>Cancel</button>
                                   </div>
                                 </div>
                               )}
